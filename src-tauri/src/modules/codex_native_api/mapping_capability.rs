@@ -2,6 +2,92 @@
 use super::*;
 use crate::modules::codex_native_api::{capabilities, diagnostics::CapabilityFallbackTrace};
 
+// Keep evidence of a rejected route even when no replacement can be selected.
+// This deliberately inspects only protocol tags: no tool names, schemas,
+// arguments, conversation text, credentials or account identities are retained.
+fn failure_diagnostics(body: &Value, required: &[String], unsupported: &[String], reason: &str) -> Value {
+    fn capability_ids(values: &[String]) -> Vec<&str> {
+        let mut result: Vec<_> = values.iter().map(|value| {
+            if capabilities::IDS.contains(&value.as_str()) {
+                value.as_str()
+            } else {
+                "unknown_tool"
+            }
+        }).collect();
+        result.sort_unstable();
+        result.dedup();
+        result
+    }
+    fn shape(value: &Value, source: &str) -> Value {
+        let kind = value.get("type").and_then(Value::as_str).unwrap_or("missing");
+        let kind = match kind {
+            "function" | "custom" | "namespace" | "tool_search" | "allowed_tools"
+            | "web_search" | "web_search_preview" | "web_search_preview_2025_03_11"
+            | "image_generation" | "file_search" | "code_interpreter" | "computer"
+            | "computer_use" | "computer_use_preview" | "mcp" | "programmatic_tool_calling"
+            | "function_call" | "function_call_output" | "custom_tool_call" | "custom_tool_call_output"
+            | "tool_search_call" | "tool_search_output" | "web_search_call" | "image_generation_call"
+            | "file_search_call" | "code_interpreter_call" | "computer_call" | "mcp_call"
+            | "mcp_list_tools" | "mcp_approval_request" | "mcp_approval_response"
+            | "additional_tools" | "message" | "reasoning" | "input_image" | "image_url"
+            | "input_file" | "input_audio" | "audio" | "audio_url" | "input_video"
+            | "video" | "video_url" | "input_text" | "output_text" | "text" | "missing" => kind,
+            _ => "unknown",
+        };
+        let execution = match value.get("execution") {
+            None => "missing",
+            Some(Value::String(value)) if value == "client" => "client",
+            Some(Value::String(value)) if value == "server" => "server",
+            _ => "unknown",
+        };
+        serde_json::json!({"source":source,"type":kind,"execution":execution})
+    }
+    fn visit(value: &Value, source: &str, depth: usize, features: &mut Vec<Value>, truncated: &mut bool) {
+        if depth > 16 || features.len() >= 128 {
+            *truncated = true;
+            return;
+        }
+        if let Some(values) = value.as_array() {
+            for value in values {
+                visit(value, source, depth + 1, features, truncated);
+                if *truncated { break; }
+            }
+        } else if value.is_object() {
+            let feature = shape(value, source);
+            if !features.contains(&feature) { features.push(feature); }
+            // These containers carry declarations, never parameter schemas.
+            if matches!(value["type"].as_str(), Some("namespace" | "allowed_tools" | "additional_tools" | "tool_search_output")) {
+                if let Some(tools) = value.get("tools") {
+                    visit(tools, source, depth + 1, features, truncated);
+                }
+            }
+        }
+    }
+    let mut features = Vec::new();
+    let mut truncated = false;
+    for source in ["tools", "tool_choice", "input"] {
+        if let Some(value) = body.get(source) {
+            visit(value, source, 0, &mut features, &mut truncated);
+        }
+    }
+    serde_json::json!({
+        "trigger_stage": match reason { "preflight" => "preflight", "upstream_unsupported" => "upstream_unsupported", _ => "unknown" },
+        "required": capability_ids(required),
+        "unsupported": capability_ids(unsupported),
+        "features": features,
+        "truncated": truncated,
+    })
+}
+
+fn with_failure_diagnostics(mut error: ServiceError, diagnostics: &Value, stage: &str) -> ServiceError {
+    let mut diagnostics = diagnostics.clone();
+    diagnostics["failure_stage"] = serde_json::json!(stage);
+    let mut details = error.response_error.take().filter(Value::is_object)
+        .unwrap_or_else(|| serde_json::json!({}));
+    details["capability_diagnostics"] = diagnostics;
+    error.with_error_details(details)
+}
+
 pub(super) struct Selection {
     pub context: RequestIdentity,
     pub route: Route,
@@ -45,6 +131,7 @@ pub(super) async fn select(
             enabled: decision.enabled,
         });
     }
+    let diagnostics = failure_diagnostics(&body, &request.required_capabilities, &decision.unsupported, reason);
     if pinned || request.target_account_id.is_some() {
         return Err(capabilities::failure("capability_fallback_pinned", "The required capability is unavailable on this pinned account; the original conversation was preserved"));
     }
@@ -121,7 +208,7 @@ pub(super) async fn select(
         let mut target = match route(state, caller, request.clone()).await {
             Ok(target) => target,
             Err(error) if error.status == 503 && last_incompatible.is_some() => break,
-            Err(error) => return Err(error),
+            Err(error) => return Err(with_failure_diagnostics(error, &diagnostics, "candidate_selection")),
         };
         if request.excluded_account_ids.contains(&target.account_id) {
             return Err(capabilities::failure(
@@ -175,7 +262,7 @@ pub(super) async fn select(
                 "No compatible capability fallback account is available",
             )
         })
-    })?;
+    }).map_err(|error| with_failure_diagnostics(error, &diagnostics, "candidate_compatibility"))?;
     // Retain the full, validated evidence while changing only the upstream owner.
     context.start_rebuild_generation(&plan);
     let trace = CapabilityFallbackTrace {
@@ -244,3 +331,7 @@ pub(crate) async fn retry(state: &AppState, prepared: &mut Prepared) -> Result<b
     *prepared = next;
     Ok(true)
 }
+
+#[cfg(test)]
+#[path = "mapping_capability_diagnostics_tests.rs"]
+mod diagnostics_tests;

@@ -52,6 +52,27 @@ function tauriArgs(mode, selectedTarget, configFile) {
   return args;
 }
 
+function nativeRegressionArgs(selectedTarget) {
+  if (!platforms.some(p => p.target === selectedTarget && p.native_mac === '1')) {
+    throw new Error('Native gateway regressions require a thin macOS build target');
+  }
+  // One test binary and one invocation reuse the application release dependencies.
+  // libtest accepts multiple OR filters. Serialize fixtures sharing runtime state;
+  // real-account acceptance tests are neither selected nor explicitly unignored.
+  return [
+    'test', '--locked', '--release', '--target', selectedTarget,
+    '-p', 'cockpit-tools', '--lib', '--', '--test-threads=1',
+    'modules::codex_native_api::capabilities::',
+    'modules::codex_native_api::capability_fallback_http_tests::',
+    'modules::codex_native_api::mapping::capability::diagnostics_tests::',
+    'modules::codex_native_api::chat_upstream::',
+    'modules::codex_native_api::native_chat::',
+    'modules::codex_local_access::native_capability_tests::',
+    'modules::codex_local_access::native_capability_integration_tests::',
+    'native_credits', 'native_admission', 'native_gateway_credits',
+  ];
+}
+
 function tauri(mode, selectedTarget) {
   if (mode === 'build') {
     const rust = execFileSync('rustc', ['-vV'], { encoding: 'utf8' });
@@ -125,15 +146,16 @@ function main(argv) {
   if (process.env.GITHUB_ACTIONS !== 'true') throw new Error('Application compilation and packaging run in GitHub Actions only.');
   const selectedTarget = target();
   if (mode === 'build') tauri('build', selectedTarget);
+  else if (mode === 'native-regressions') run('cargo', nativeRegressionArgs(selectedTarget));
   else if (mode === 'stage-universal') stageInputs({ ...identity(), target: selectedTarget, outputDir: path.join(root, 'universal-inputs', selectedTarget) });
   else if (mode === 'universal') {
     mergeInputs({ ...identity(), inputsDir: path.join(root, 'universal-inputs') });
     tauri('bundle', selectedTarget);
   } else if (mode === 'package') packageOutputs(selectedTarget);
-  else throw new Error('Usage: cloud-build.cjs plan [platform] | build | stage-universal | universal | package');
+  else throw new Error('Usage: cloud-build.cjs plan [platform] | build | native-regressions | stage-universal | universal | package');
 }
 
 if (require.main === module) {
   try { main(process.argv.slice(2)); } catch (error) { console.error(error); process.exitCode = 1; }
 }
-module.exports = { buildPlan, platforms, tauriArgs, releaseDirectory };
+module.exports = { buildPlan, platforms, tauriArgs, nativeRegressionArgs, releaseDirectory };

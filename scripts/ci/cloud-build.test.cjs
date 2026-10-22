@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const crypto = require('node:crypto');
 const test = require('node:test');
-const { buildPlan, platforms, tauriArgs, releaseDirectory } = require('./cloud-build.cjs');
+const { buildPlan, platforms, tauriArgs, nativeRegressionArgs, releaseDirectory } = require('./cloud-build.cjs');
 const { verifyBuild } = require('./cloud-publish.cjs');
 
 test('default selects only this Mac architecture on its native standard runner', () => {
@@ -42,9 +42,42 @@ test('cloud builds share formal release Cargo output layouts', () => {
 });
 
 test('the cloud command refuses accidental local compilation', () => {
-  const result = spawnSync(process.execPath, [path.join(__dirname, 'cloud-build.cjs'), 'build'], { encoding: 'utf8', env: { ...process.env, GITHUB_ACTIONS: 'false' } });
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /GitHub Actions only/);
+  for (const mode of ['build', 'native-regressions']) {
+    const result = spawnSync(process.execPath, [path.join(__dirname, 'cloud-build.cjs'), mode], { encoding: 'utf8', env: { ...process.env, GITHUB_ACTIONS: 'false' } });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /GitHub Actions only/);
+  }
+});
+
+test('native gateway regressions reuse the thin application target and isolate synthetic fixtures', () => {
+  for (const platform of platforms.filter(p => p.native_mac === '1')) {
+    const args = nativeRegressionArgs(platform.target);
+    assert.deepEqual(args.slice(0, 9), [
+      'test', '--locked', '--release', '--target', platform.target,
+      '-p', 'cockpit-tools', '--lib', '--',
+    ]);
+    assert.ok(args.includes('--test-threads=1'));
+    assert.ok(!args.includes('--ignored') && !args.includes('--include-ignored'));
+    for (const name of ['capabilities', 'capability_fallback_http_tests', 'mapping::capability::diagnostics_tests', 'chat_upstream', 'native_chat', 'native_capability_tests', 'native_capability_integration_tests', 'native_credits', 'native_admission', 'native_gateway_credits']) {
+      assert.ok(args.some(arg => arg.includes(name)), `Missing ${name} coverage`);
+    }
+  }
+  assert.throws(() => nativeRegressionArgs('universal-apple-darwin'), /thin macOS/);
+  assert.throws(() => nativeRegressionArgs('x86_64-unknown-linux-gnu'), /thin macOS/);
+});
+
+test('native gateway regressions gate packaging after the application has built its sidecar', () => {
+  const workflow = fs.readFileSync(path.join(__dirname, '../../.github/workflows/build-matrix.yml'), 'utf8');
+  const build = workflow.indexOf('run: node scripts/ci/cloud-build.cjs build');
+  const regressions = workflow.indexOf('run: node scripts/ci/cloud-build.cjs native-regressions');
+  const universal = workflow.indexOf('run: node scripts/ci/cloud-build.cjs stage-universal');
+  const archive = workflow.indexOf('run: node scripts/ci/cloud-build.cjs package');
+  assert.ok(build >= 0 && regressions > build && universal > regressions && archive > regressions);
+  const step = workflow.slice(workflow.lastIndexOf('      - name:', regressions), regressions);
+  assert.match(step, /if: runner\.os == 'macOS'/);
+  assert.match(step, /CLOUD_BUILD_TARGET: \$\{\{ matrix\.target \}\}/);
+  assert.match(step, /COCKPIT_NATIVE_APP_BUILD: '1'/);
+  assert.match(step, /COCKPIT_SKIP_CLIPROXY_BUILD: '1'/);
 });
 
 test('publication rejects wrong provenance, tampered assets and unlisted files', () => {

@@ -345,6 +345,18 @@ async fn capability_fallback_disabled_acl_no_backup_and_unsafe_history_do_not_se
                 error["error"]["code"],
                 "subscription_sharing_unsupported_capability"
             );
+        } else if !unsafe_history {
+            let diagnostic = &error["error"]["capability_diagnostics"];
+            assert_eq!(diagnostic["trigger_stage"], "preflight");
+            assert_eq!(diagnostic["failure_stage"], "candidate_selection");
+            assert_eq!(diagnostic["required"], json!(["code_interpreter", "function"]));
+            assert_eq!(diagnostic["unsupported"], json!(["code_interpreter"]));
+            assert!(diagnostic["features"].as_array().unwrap().contains(
+                &json!({"source":"tools","type":"code_interpreter","execution":"missing"})
+            ));
+            for private in ["write", "same-model", "root", "primary", "caller", "restricted", "Use the requested capability."] {
+                assert!(!diagnostic.to_string().contains(private));
+            }
         }
         assert!(captures.lock().unwrap().is_empty());
         assert!(host

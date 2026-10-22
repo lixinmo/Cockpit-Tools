@@ -156,6 +156,13 @@ jobs:
           COCKPIT_NATIVE_APP_BUILD: ${{ matrix.native_mac }}
           COCKPIT_SKIP_CLIPROXY_BUILD: '0'
         run: node scripts/ci/cloud-build.cjs build
+      - name: Native gateway capability, chat bridge and Credits regressions
+        if: runner.os == 'macOS'
+        env:
+          CLOUD_BUILD_TARGET: ${{ matrix.target }}
+          COCKPIT_NATIVE_APP_BUILD: '1'
+          COCKPIT_SKIP_CLIPROXY_BUILD: '1'
+        run: node scripts/ci/cloud-build.cjs native-regressions
       - name: Prepare verified Universal inputs
         if: needs.plan.outputs.universal == 'true' && runner.os == 'macOS'
         env:
