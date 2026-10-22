@@ -73,7 +73,12 @@ pub async fn clear_local_access_pool_failure(
 fn is_account_pool_unavailable_error(event: &SidecarAuthResultEvent) -> bool {
     matches!(
         event.error_code.as_deref().map(str::trim),
-        Some("auth_not_found" | "auth_unavailable")
+        Some(
+            "auth_not_found"
+                | "auth_unavailable"
+                | "credits_policy_blocked"
+                | "credits_quota_unconfirmed"
+        )
     ) || event
         .error_message
         .as_deref()

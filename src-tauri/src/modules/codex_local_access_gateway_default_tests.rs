@@ -167,3 +167,75 @@ fn native_gateway_default_catalog_reads_do_not_migrate_revision_snapshots() {
     );
     assert!(initialized.native_gateway_default_migrated);
 }
+
+#[test]
+fn native_gateway_credits_migration_preserves_settings_on_native() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("collection.json");
+    let mut original = old_collection(Some("sidecar"));
+    original["creditsPolicy"] = json!("default");
+    original["accountCreditsAllowed"] = json!({"account-a": true});
+    std::fs::write(&path, original.to_string()).unwrap();
+    let loaded = load_collection_for_runtime_from_path(&path).unwrap().unwrap();
+    assert_eq!(loaded.gateway_mode, CodexLocalAccessGatewayMode::Native);
+    assert!(loaded.native_gateway_default_migrated);
+    let saved: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    for key in ["creditsPolicy", "accountCreditsAllowed", "futureField", "apiKey", "port"] {
+        assert_eq!(saved[key], original[key]);
+    }
+    let first = std::fs::read(&path).unwrap();
+    load_collection_for_runtime_from_path(&path).unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), first);
+}
+
+#[test]
+fn native_gateway_credits_recovers_migrated_go_without_losing_policy() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("collection.json");
+    let mut original = old_collection(Some("sidecar"));
+    original["nativeGatewayDefaultMigrated"] = json!(true);
+    original["creditsPolicy"] = json!("strict_regular");
+    std::fs::write(&path, original.to_string()).unwrap();
+    let loaded = load_collection_for_runtime_from_path(&path).unwrap().unwrap();
+    assert_eq!(loaded.gateway_mode, CodexLocalAccessGatewayMode::Native);
+    assert_eq!(loaded.credits_policy, crate::models::codex_local_access::CodexLocalAccessCreditsPolicy::StrictRegular);
+    assert!(native_patch_mode(&std::fs::read_to_string(&path).unwrap(), CodexLocalAccessGatewayMode::Sidecar).unwrap_err().contains("CREDITS_REQUIRES_NATIVE"));
+}
+
+#[tokio::test]
+async fn native_gateway_credits_accepts_restricted_native_profile_configuration() {
+    let mut raw = old_collection(Some("native"));
+    raw["accountCreditsAllowed"] = json!({"account-a": false});
+    let host = NativeHostBridge::for_collection(serde_json::from_value(raw).unwrap());
+    let collection = host.collection().await.unwrap();
+    assert_eq!(collection.account_credits_allowed.get("account-a"), Some(&false));
+}
+
+#[test]
+fn native_gateway_credits_later_native_choice_wins_against_initial_local_migration() {
+    for _ in 0..8 {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("collection.json");
+        let mut original = old_collection(Some("sidecar"));
+        original["creditsPolicy"] = json!("default");
+        std::fs::write(&path, original.to_string()).unwrap();
+        let barrier = Arc::new(std::sync::Barrier::new(2));
+        std::thread::scope(|scope| {
+            let barrier = &barrier;
+            let path = &path;
+            scope.spawn(move || {
+                barrier.wait();
+                migrate_native_gateway_default_on_disk(path).unwrap();
+            });
+            scope.spawn(move || {
+                barrier.wait();
+                update_string_atomic(path, |current| {
+                    native_patch_mode(current.unwrap(), CodexLocalAccessGatewayMode::Native)
+                }).unwrap();
+            });
+        });
+        let loaded = load_collection_for_runtime_from_path(&path).unwrap().unwrap();
+        assert_eq!(loaded.gateway_mode, CodexLocalAccessGatewayMode::Native);
+        assert!(loaded.native_gateway_default_migrated);
+    }
+}

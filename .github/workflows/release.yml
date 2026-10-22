@@ -6,6 +6,12 @@ on:
       - "v*"
   workflow_dispatch:
 
+env:
+  ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+
+permissions:
+  contents: read
+
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
@@ -16,6 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: read
     outputs:
       version: ${{ steps.app_version.outputs.VERSION }}
     env:
@@ -34,7 +41,7 @@ jobs:
       - name: ⚙️ Node.js setup
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: 📖 Read app version
         id: app_version
@@ -51,6 +58,18 @@ jobs:
           EXPECTED_TAG="v${{ steps.app_version.outputs.VERSION }}"
           if [ "${GITHUB_REF_NAME}" != "${EXPECTED_TAG}" ]; then
             echo "Tag (${GITHUB_REF_NAME}) does not match package.json version (${EXPECTED_TAG})."
+            exit 1
+          fi
+
+      - name: Require successful cloud validation of this exact commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERIFIED="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow build-matrix.yml --commit "$GITHUB_SHA" --status success --json event --jq '[.[] | select(.event != "pull_request")] | length')"
+          if [ "$VERIFIED" -lt 1 ]; then
+            echo "Run Cloud Build successfully on this exact commit before creating a versioned release."
             exit 1
           fi
 
@@ -140,7 +159,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: release-metadata
-          retention-days: 7
+          retention-days: 1
           if-no-files-found: error
           path: |
             release-notes.md
@@ -176,11 +195,11 @@ jobs:
       - name: ⚙️ Node.js setup
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: "npm"
 
       - name: 📦 Install frontend dependencies
-        run: npm install
+        run: npm ci
 
       - name: 🔄 Sync versions
         run: npm run sync-version
@@ -193,7 +212,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          npx tauri build --ci
+          npx tauri build --ci --config '{"build":{"beforeBuildCommand":"node scripts/prepare-tauri.cjs && node scripts/sync-version.js && node node_modules/typescript/bin/tsc && node node_modules/vite/bin/vite.js build"}}'
 
       - name: 📦 Build Windows portable archive
         shell: bash
@@ -254,10 +273,11 @@ jobs:
     # Parallel with Windows / macOS Intel after prepare (no hard platform deps).
     needs:
       - prepare-release
-    runs-on: macos-latest
+    runs-on: macos-15
     permissions:
       contents: write
     env:
+      COCKPIT_NATIVE_APP_BUILD: "1"
       GH_REPO: ${{ github.repository }}
       VERSION: ${{ needs.prepare-release.outputs.version }}
     steps:
@@ -283,11 +303,11 @@ jobs:
       - name: ⚙️ Node.js setup
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: "npm"
 
       - name: 📦 Install frontend dependencies
-        run: npm install
+        run: npm ci
 
       - name: 🔄 Sync versions
         run: npm run sync-version
@@ -300,7 +320,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          node scripts/tauri.cjs build --ci --target aarch64-apple-darwin
+          node scripts/tauri.cjs build --ci --target aarch64-apple-darwin --config '{"build":{"beforeBuildCommand":"node scripts/prepare-tauri.cjs && node scripts/sync-version.js && node node_modules/typescript/bin/tsc && node node_modules/vite/bin/vite.js build"}}'
 
       - name: 📦 Prepare Universal binary inputs
         shell: bash
@@ -377,10 +397,11 @@ jobs:
     # Parallel with Windows / macOS Apple Silicon after prepare.
     needs:
       - prepare-release
-    runs-on: macos-latest
+    runs-on: macos-15-intel
     permissions:
       contents: write
     env:
+      COCKPIT_NATIVE_APP_BUILD: "1"
       GH_REPO: ${{ github.repository }}
       VERSION: ${{ needs.prepare-release.outputs.version }}
     steps:
@@ -406,11 +427,11 @@ jobs:
       - name: ⚙️ Node.js setup
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: "npm"
 
       - name: 📦 Install frontend dependencies
-        run: npm install
+        run: npm ci
 
       - name: 🔄 Sync versions
         run: npm run sync-version
@@ -423,7 +444,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          node scripts/tauri.cjs build --ci --target x86_64-apple-darwin
+          node scripts/tauri.cjs build --ci --target x86_64-apple-darwin --config '{"build":{"beforeBuildCommand":"node scripts/prepare-tauri.cjs && node scripts/sync-version.js && node node_modules/typescript/bin/tsc && node node_modules/vite/bin/vite.js build"}}'
 
       - name: 📦 Prepare Universal binary inputs
         shell: bash
@@ -502,7 +523,7 @@ jobs:
       - prepare-release
       - build-macos-aarch64
       - build-macos-x86_64
-    runs-on: macos-latest
+    runs-on: macos-15
     permissions:
       contents: write
     env:
@@ -520,11 +541,11 @@ jobs:
       - name: ⚙️ Node.js setup
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: "npm"
 
       - name: 📦 Install frontend dependencies
-        run: npm install
+        run: npm ci
 
       - name: 🔄 Sync versions
         run: npm run sync-version
@@ -636,11 +657,11 @@ jobs:
       - name: ⚙️ Node.js setup
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: "npm"
 
       - name: 📦 Install frontend dependencies
-        run: npm install
+        run: npm ci
 
       - name: 🔄 Sync versions
         run: npm run sync-version
@@ -653,7 +674,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          npx tauri build --ci
+          npx tauri build --ci --config '{"build":{"beforeBuildCommand":"node scripts/prepare-tauri.cjs && node scripts/sync-version.js && node node_modules/typescript/bin/tsc && node node_modules/vite/bin/vite.js build"}}'
 
       - name: 📥 Download release metadata
         uses: actions/download-artifact@v4
@@ -722,7 +743,7 @@ jobs:
       - name: ⚙️ Node.js setup
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: 📥 Download release metadata
         uses: actions/download-artifact@v4
@@ -808,7 +829,7 @@ jobs:
       - name: ⚙️ Node.js setup
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: 📥 Download release assets
         env:
@@ -863,7 +884,7 @@ jobs:
       - name: ⚙️ Node.js setup
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: 🚀 Publish release
         env:
@@ -895,6 +916,7 @@ jobs:
             --legacy
 
   update-homebrew-cask:
+    if: github.repository == 'jlcodes99/cockpit-tools'
     name: 🍺 Update Homebrew Cask
     needs:
       - prepare-release

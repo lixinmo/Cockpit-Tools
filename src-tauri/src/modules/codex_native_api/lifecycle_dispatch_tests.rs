@@ -10,6 +10,8 @@ fn dispatch_route(account_id: &str) -> Route {
         official_fallback_registration_id: None,
         official_fallback_authorization_revision: None,
         authorization_scope_fingerprint: None,
+        quota_identity: None,
+        send_guard: None,
         official_fallback_failure: None,
         base_url: "http://127.0.0.1:1/v1".into(),
         model: format!("model-{account_id}"),

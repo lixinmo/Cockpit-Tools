@@ -1,4 +1,7 @@
 // Shared transport policy for native HTTP and WebSocket requests.
+#[path = "codex_native_connect_retry.rs"]
+mod native_connect_retry;
+
 const NATIVE_HTTP_CLIENT_CACHE_LIMIT: usize = 128;
 
 struct NativeHttpClientEntry {
@@ -152,12 +155,13 @@ fn native_transport_fingerprint(
         ])
     });
     let material = json!({
-        "version":4,"account":account.id,"owner":context.owner,
+        "version":5,"account":account.id,"owner":context.owner,
         "profile":[context.profile.version,context.profile.scope,context.profile.installation_id,context.profile.revision],
         "base":native_transport_endpoint(context.base_url),
         "protocol":match context.wire_api { native_contract::WireApi::Responses=>"responses",native_contract::WireApi::Chat=>"chat" },
         "codex_responses_alpn":native_codex_responses_alpn(account, context),
         "http1_only":context.http1_only,
+        "connection_setup_retry":"CT-CONNECT-RETRY-001/native-v1;https-chatgpt-only;no-upgrade;3;200,400ms",
         "compact":endpoint(context.compact_endpoint),"websocket":endpoint(context.websocket_endpoint),
         "websocket_enabled":account.api_supports_websockets,
         "credentials":[account.token_generation,native_transport_header_digest(context.headers,agent),agent_material],
@@ -323,8 +327,9 @@ async fn native_http_client(
     {
         return Ok((client, proxy, proxy_route, identity));
     }
-    let mut builder = native_http_client_builder(
-        native_codex_responses_alpn(account, context),
+    let mut builder = native_connect_retry::configure(
+        native_http_client_builder(native_codex_responses_alpn(account, context), context.http1_only),
+        context.base_url,
         context.http1_only,
     )
     .redirect(reqwest::redirect::Policy::none())

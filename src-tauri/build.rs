@@ -165,6 +165,15 @@ fn build_cockpit_cliproxy_sidecar() {
     let manifest_dir =
         PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR is required"));
     let target = std::env::var("TARGET").expect("TARGET is required");
+    let native_only = std::env::var("COCKPIT_NATIVE_APP_BUILD").ok().as_deref() == Some("1");
+    println!("cargo:rerun-if-env-changed=COCKPIT_NATIVE_APP_BUILD");
+    if native_only {
+        let host = std::env::var("HOST").expect("HOST is required");
+        assert!(
+            target == host && target.ends_with("-apple-darwin"),
+            "native app builds require the macOS host target"
+        );
+    }
     println!("cargo:rustc-env=COCKPIT_RUST_TARGET={target}");
     let sidecar_dir = manifest_dir.join("../sidecars/cockpit-cliproxy");
     let output_dir = sidecar_dir.join("bin");
@@ -182,7 +191,7 @@ fn build_cockpit_cliproxy_sidecar() {
         panic!("unsupported sidecar build target: {target}");
     };
     build_go_sidecar(&sidecar_dir, &output_dir, &target, goos, goarch);
-    if cfg!(target_os = "macos") && target.contains("apple-darwin") {
+    if !native_only && cfg!(target_os = "macos") && target.contains("apple-darwin") {
         build_macos_universal_sidecar(&sidecar_dir, &output_dir);
     }
 }

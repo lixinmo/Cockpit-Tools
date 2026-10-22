@@ -2354,6 +2354,17 @@
       "windowHint": "Os limites seguem a duração real: uma semana ou mais usa o limite semanal. Contas com apenas cota semanal verificam somente essa cota. Sem duração, mantém-se o mapeamento das janelas principal e secundária.",
       "rule": "Saldo curto <= {{shortCycle}}% ou semanal <= {{weekly}}%"
     },
+    "credits": {
+      "title": "Controle de uso de créditos",
+      "policy": "Política global (salva imediatamente)",
+      "default": "Padrão",
+      "prefer": "Priorizar a cota regular",
+      "strict": "Somente cota regular",
+      "allow": "Permitir créditos",
+      "description": "O modo padrão mantém o roteamento existente. Priorizar a cota regular permite créditos somente depois que todas as contas Codex do grupo da chave API atual esgotarem a cota regular. Somente cota regular bloqueia créditos. Desativar os créditos de uma conta sempre tem prioridade.",
+      "boundary": "Os registros de cota são válidos por 5 minutos. As cotas de contas restritas são atualizadas automaticamente antes da seleção quando são desconhecidas, antigas ou foram redefinidas (até 9 segundos, agrupando leituras simultâneas). Se a atualização falhar, a conta será pausada com segurança; consulte o diagnóstico do grupo de contas para obter detalhes. Solicitações em andamento não podem ser retiradas. Uma solicitação que ultrapasse o limite da cota ou o uso simultâneo por outros clientes ainda pode consumir créditos no provedor; limites absolutos de gastos devem ser configurados no provedor.",
+      "strictHint": "O modo Somente cota regular bloqueia créditos para todas as contas. Os seletores de cada conta são mantidos para as outras políticas."
+    },
     "launchErrors": {
       "sessionRestoreFailed": "A reparação das sessões falhou e a restauração está incompleta. Inicialização interrompida; verifique os logs e backups antes de tentar novamente.",
       "sessionCheckTimeout": "A verificação das sessões excedeu o tempo. Inicialização interrompida; tente novamente ou consulte os logs.",
@@ -3166,6 +3177,9 @@
       "resetCredits": "Redef. {{count}}",
       "resetCreditsTitle": "Resets restantes para a janela de 5 horas: {{count}}",
       "resetCreditConfirm": "Confirmar?",
+      "autoConsumeResetDescription": "A opção e o limite se aplicam apenas a esta conta Codex. Enquanto o Cockpit Tools estiver em execução e o computador não estiver em suspensão, a cota será verificada em segundo plano aproximadamente uma vez por minuto. Se a porcentagem semanal restante for igual ou inferior ao limite, será usado um Banked Reset com a data de expiração mais próxima. A cota de 5 horas é ignorada; se não houver resets disponíveis, nada acontece. Outro uso automático só é possível depois que a cota semanal restante atualizada superar o limite. Desativado por padrão.",
+      "autoConsumeResetThreshold": "Limite da cota semanal restante",
+      "autoConsumeResetInvalidThreshold": "Insira um número inteiro de 0 a 99.",
       "resetCreditDialogTitle": "Redefinir seu uso?",
       "resetCreditDialogDesc": "Redefina o limite de taxa para continuar trabalhando sem interrupções. Redefinições disponíveis: {{count}}.",
       "resetCreditDialogAction": "Redefinir uso",

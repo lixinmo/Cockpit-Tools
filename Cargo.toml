@@ -5,7 +5,7 @@ members = [
     "crates/cockpit-cli",
 ]
 resolver = "2"
-exclude = ["vendor/tao"]
+exclude = ["vendor/tao", "vendor/hyper-util-0.1.20", "vendor/reqwest-0.12.28"]
 
 [workspace.dependencies]
 # Common dependencies with shared versions
@@ -53,3 +53,7 @@ junction = "2.0"
 # Backport only the upstream Windows input-lock fix; see vendor/tao/COCKPIT-PATCH.md.
 [patch.crates-io]
 tao = { path = "vendor/tao" }
+
+# Native setup-only retry hooks; exact baselines and delta documented in vendor crates.
+hyper-util = { path = "vendor/hyper-util-0.1.20" }
+reqwest = { path = "vendor/reqwest-0.12.28" }

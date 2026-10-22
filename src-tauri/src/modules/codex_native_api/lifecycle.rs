@@ -9,7 +9,7 @@ use std::{
 use tokio::sync::{oneshot, watch, Notify, OwnedSemaphorePermit};
 
 use super::{
-    contract::{Caller, Host, RequestReport, Route, ServiceError},
+    contract::{Caller, Host, RequestReport, Route, ServiceError, UpstreamAdmissionGuard},
     diagnostics::{DiagnosticAttempt, DiagnosticContext, DiagnosticPayload},
 };
 
@@ -87,6 +87,7 @@ pub(super) struct RequestTracker {
     capacity: Option<Arc<tokio::sync::Semaphore>>,
     route_permit: Option<Arc<dyn Send + Sync>>,
     rebuild_abort: Option<Arc<AtomicBool>>,
+    send_guard: Option<Arc<dyn UpstreamAdmissionGuard>>,
     quota_account: Option<String>,
     quota_started: Instant,
 }
@@ -97,6 +98,7 @@ struct PendingDispatch {
     report: RequestReport,
     attempt: DiagnosticAttempt,
     transport_identity: Option<String>,
+    send_guard: Option<Arc<dyn UpstreamAdmissionGuard>>,
     quota_account: Option<String>,
     proxy_route: Option<serde_json::Value>,
 }
@@ -107,6 +109,7 @@ struct DispatchCheckpoint {
     report: Option<RequestReport>,
     installation_profile: Option<crate::modules::codex_api_identity::InstallationProfile>,
     transport_identity: Option<String>,
+    send_guard: Option<Arc<dyn UpstreamAdmissionGuard>>,
     quota_account: Option<String>,
     quota_started: Instant,
     diagnostics: Option<DiagnosticCheckpoint>,
@@ -201,6 +204,7 @@ impl RequestTracker {
             capacity,
             route_permit: None,
             rebuild_abort: None,
+            send_guard: None,
             quota_account: None,
             quota_started: Instant::now(),
         }
@@ -230,6 +234,7 @@ impl RequestTracker {
         self.dispatch_open = false;
         self.dispatch_checkpoint = None;
         self.pending_dispatch = None;
+        self.send_guard = None;
         self.quota_account = None;
         self.transport_identity = None;
         self.capture_payloads = capture_payloads;
@@ -363,6 +368,7 @@ impl RequestTracker {
             report: self.report.clone(),
             installation_profile: self.installation_profile.clone(),
             transport_identity: self.transport_identity.clone(),
+            send_guard: self.send_guard.clone(),
             quota_account: self.quota_account.clone(),
             quota_started: self.quota_started,
             diagnostics: self.diagnostics.as_ref().map(|context| DiagnosticCheckpoint {
@@ -380,6 +386,7 @@ impl RequestTracker {
         let next = pending.as_ref().map(|pending| pending.attempt.clone());
         if let Some(pending) = pending {
             self.transport_identity = pending.transport_identity;
+            self.send_guard = pending.send_guard;
             self.quota_account = pending.quota_account;
             self.installation_profile = pending.attempt.account_identity;
             self.report = Some(pending.report);
@@ -409,6 +416,7 @@ impl RequestTracker {
                 report: report.clone(),
                 attempt: attempt.clone(),
                 transport_identity: self.transport_identity.clone(),
+                send_guard: self.send_guard.clone(),
                 quota_account: self.quota_account.clone(),
                 proxy_route: self.diagnostics.as_ref().and_then(|context| context.proxy_route.clone()),
             }));
@@ -449,6 +457,7 @@ impl RequestTracker {
         self.report = checkpoint.report;
         self.installation_profile = checkpoint.installation_profile;
         self.transport_identity = checkpoint.transport_identity;
+        self.send_guard = checkpoint.send_guard;
         self.quota_account = checkpoint.quota_account;
         self.quota_started = checkpoint.quota_started;
         // The same candidate can be tried again without another routed call.
@@ -492,13 +501,33 @@ impl RequestTracker {
     }
 
     pub(super) fn quota_headers(&self, headers: &axum::http::HeaderMap) {
-        if let (Some(account_id), Some(snapshot)) = (&self.quota_account,
-            super::rate_limits::QuotaSnapshot::from_headers(headers)) {
+        if let Some(guard) = &self.send_guard {
+            guard.observe_headers(headers, self.quota_started);
+        }
+        if let Some(snapshot) = super::rate_limits::QuotaSnapshot::from_headers(headers) {
+            self.observe_quota(snapshot);
+        }
+    }
+
+    fn observe_quota(&self, snapshot: super::rate_limits::QuotaSnapshot) {
+        // An in-flight response belongs to the sent route, never a later
+        // pending candidate or a newly selected credential/workspace.
+        if let Some(guard) = &self.send_guard {
+            guard.observe_rate_limits(snapshot.clone(), self.quota_started);
+        }
+        if let Some(account_id) = &self.quota_account {
             self.host.observe_rate_limits(account_id, snapshot, self.quota_started);
         }
     }
 
     pub(super) fn check_quota_before_send(&self) -> Result<(), ServiceError> {
+        let guard = match &self.pending_dispatch {
+            Some(candidate) => candidate.send_guard.as_ref(),
+            None => self.send_guard.as_ref(),
+        };
+        if let Some(guard) = guard {
+            guard.check().map_err(|error| error.with_upstream_not_sent(true))?;
+        }
         // Routing stages a candidate without recording a send. Fence that exact
         // candidate, including an official route whose quota account is None.
         let account_id = match &self.pending_dispatch {
@@ -514,9 +543,11 @@ impl RequestTracker {
     }
 
     pub(super) fn quota_event(&self, event: &serde_json::Value) {
-        if let (Some(account_id), Some(snapshot)) = (&self.quota_account,
-            super::rate_limits::QuotaSnapshot::from_event(event)) {
-            self.host.observe_rate_limits(account_id, snapshot, self.quota_started);
+        if let Some(guard) = &self.send_guard {
+            guard.observe_event(event, self.quota_started);
+        }
+        if let Some(snapshot) = super::rate_limits::QuotaSnapshot::from_event(event) {
+            self.observe_quota(snapshot);
         }
     }
 
@@ -776,6 +807,7 @@ impl RequestTracker {
             report,
             attempt,
             transport_identity: route.transport_identity.clone(),
+            send_guard: route.send_guard.clone(),
             quota_account: (route.chatgpt && !route.chatgpt_plan).then(|| route.account_id.clone()),
             proxy_route: route.proxy_route.clone(),
         }));
@@ -901,6 +933,7 @@ impl RequestTracker {
         self.idle();
         self.route_permit = None;
         self.pending_dispatch = None;
+        self.send_guard = None;
         let diagnostics = self.finish_diagnostic(status, success, error.as_deref());
         let downstream = self.downstream.take();
         if let Some(mut report) = self.report.take() {
@@ -999,6 +1032,7 @@ impl RequestTracker {
         self.idle();
         self.route_permit = None;
         self.pending_dispatch = None;
+        self.send_guard = None;
         let diagnostics = self.finish_diagnostic(200, true, None);
         self.report = None;
         self.persist(None, diagnostics, None).await;

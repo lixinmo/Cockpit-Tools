@@ -2354,6 +2354,17 @@
       "windowHint": "Le soglie seguono la durata effettiva: una settimana o più usa la soglia settimanale. Gli account con sola quota settimanale verificano solo quella. Senza durata resta la corrispondenza tra finestra principale e secondaria.",
       "rule": "Residuo breve <= {{shortCycle}}% o settimanale <= {{weekly}}%"
     },
+    "credits": {
+      "title": "Controllo dell’uso dei crediti",
+      "policy": "Criterio globale (salvataggio immediato)",
+      "default": "Predefinito",
+      "prefer": "Preferisci la quota ordinaria",
+      "strict": "Solo quota ordinaria",
+      "allow": "Consenti crediti",
+      "description": "La modalità predefinita mantiene l’instradamento esistente. Preferisci la quota ordinaria consente i crediti solo dopo che tutti gli account Codex nel gruppo della chiave API attuale hanno esaurito la quota ordinaria. Solo quota ordinaria blocca i crediti. La disattivazione dei crediti per un account ha sempre la precedenza.",
+      "boundary": "Le istantanee della quota restano valide per 5 minuti. Prima della selezione, la quota degli account soggetti a restrizioni viene aggiornata automaticamente se è sconosciuta, obsoleta o è stata reimpostata (fino a 9 secondi, raggruppando le letture simultanee). Se l’aggiornamento non riesce, l’account viene sospeso in sicurezza; consulta la diagnostica del gruppo di account per i dettagli. Le richieste in corso non possono essere ritirate. Una richiesta che supera il limite di quota o l’uso simultaneo da altri client può comunque consumare crediti presso il fornitore; i limiti di spesa assoluti vanno configurati presso il fornitore.",
+      "strictHint": "La modalità Solo quota ordinaria blocca i crediti per tutti gli account. Gli interruttori degli account vengono conservati per gli altri criteri."
+    },
     "launchErrors": {
       "sessionRestoreFailed": "Riparazione delle sessioni non riuscita e ripristino incompleto. Avvio interrotto; controlla registri e backup prima di riprovare.",
       "sessionCheckTimeout": "Tempo scaduto per il controllo delle sessioni. Avvio interrotto; riprova o controlla i registri.",
@@ -3166,6 +3177,9 @@
       "resetCredits": "Reset {{count}}",
       "resetCreditsTitle": "Reset rimasti per la finestra di 5 ore: {{count}}",
       "resetCreditConfirm": "Confermare?",
+      "autoConsumeResetDescription": "L’interruttore e la soglia si applicano solo a questo account Codex. Quando Cockpit Tools è in esecuzione e il computer non è in sospensione, la quota viene controllata in background circa una volta al minuto. Se la percentuale settimanale residua è pari o inferiore alla soglia, viene usato un Banked Reset con la scadenza più vicina. La quota di 5 ore viene ignorata; se non ci sono reset disponibili, non viene eseguita alcuna azione. Un nuovo utilizzo automatico è possibile solo dopo che la quota settimanale residua aggiornata ha superato la soglia. Disattivato per impostazione predefinita.",
+      "autoConsumeResetThreshold": "Soglia della quota settimanale residua",
+      "autoConsumeResetInvalidThreshold": "Inserisci un numero intero da 0 a 99.",
       "resetCreditDialogTitle": "Reimpostare il tuo utilizzo?",
       "resetCreditDialogDesc": "Reimposta il limite di frequenza per continuare a lavorare senza interruzioni. Reset disponibili: {{count}}.",
       "resetCreditDialogAction": "Reimposta utilizzo",

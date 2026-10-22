@@ -47,6 +47,8 @@ impl Host for TestHost {
                 official_fallback_registration_id: None,
                 official_fallback_authorization_revision: None,
                 authorization_scope_fingerprint: None,
+                quota_identity: None,
+                send_guard: None,
                 official_fallback_failure: None,
                 base_url: self.base.clone(),
                 model: request.model,

@@ -59,6 +59,7 @@ impl Host for Recorder {
 }
 
 include!("lifecycle_dispatch_tests.rs");
+include!("lifecycle_admission_tests.rs");
 
 fn usage() -> Value {
     json!({"input_tokens": 17, "output_tokens": 23, "total_tokens": 40})

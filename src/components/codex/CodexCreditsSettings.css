@@ -1,0 +1,25 @@
+.codex-credits-settings p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.codex-credits-settings .codex-credits-account {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.codex-credits-account > span {
+  overflow-wrap: anywhere;
+}
+
+.codex-credits-account small {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.codex-credits-settings p[role="alert"] {
+  color: var(--danger, #c0392b);
+}

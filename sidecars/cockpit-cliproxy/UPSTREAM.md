@@ -265,3 +265,13 @@ unrecorded historical connection.
 3. Preserve Cockpit-specific executor identity, token ownership, account routing,
    quota, and request-policy compatibility shims.
 4. Run the focused Codex executor/Live tests, sidecar tests, and a sidecar build.
+
+## Cockpit local patch guard
+
+This vendored tree also carries `CT-CONNECT-RETRY-001`, Cockpit's bounded
+same-account connection-setup retry. Before replacing or reconciling the uTLS
+transport during an upstream sync, read
+`docs/local-patches/same-account-connect-retry.md` from the repository root.
+Confirm upstream has not added an equivalent retry loop (stacking them can
+multiply attempts), then run `scripts/verify-cockpit-connect-retry.sh` after the
+sync.

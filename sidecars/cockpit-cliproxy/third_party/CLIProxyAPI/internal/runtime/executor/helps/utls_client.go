@@ -27,8 +27,10 @@ import (
 // providers that require a browser-like TLS and HTTP/2 transport. Each request
 // gets a dedicated connection that is closed with the response body.
 type utlsRoundTripper struct {
-	dialer   proxy.Dialer
-	proxyURL string
+	dialer    proxy.Dialer
+	proxyURL  string
+	connectFn utlsConnectionFactory
+	waitFn    utlsRetryWaiter
 }
 
 type closeConnectionBody struct {
@@ -84,6 +86,11 @@ func (t *utlsRoundTripper) createConnection(ctx context.Context, host, addr stri
 	}
 	conn, errDial := contextDialer.DialContext(ctx, "tcp", addr)
 	if errDial != nil {
+		if conn != nil {
+			if errClose := conn.Close(); errClose != nil {
+				log.Debugf("utls: close partial dial connection: %v", errClose)
+			}
+		}
 		return nil, fmt.Errorf("utls: dial upstream: %w", errDial)
 	}
 
@@ -100,12 +107,8 @@ func (t *utlsRoundTripper) createConnection(ctx context.Context, host, addr stri
 		return nil, fmt.Errorf("utls: TLS handshake: %w", errHandshake)
 	}
 
-	tr := &http2.Transport{}
-	h2Conn, errClientConn := tr.NewClientConn(tlsConn)
+	h2Conn, errClientConn := newUtlsHTTP2ClientConnection(ctx, tlsConn)
 	if errClientConn != nil {
-		if errClose := tlsConn.Close(); errClose != nil {
-			return nil, fmt.Errorf("utls: initialize HTTP/2 connection: %w; close TLS connection: %v", errClientConn, errClose)
-		}
 		return nil, fmt.Errorf("utls: initialize HTTP/2 connection: %w", errClientConn)
 	}
 
@@ -117,6 +120,33 @@ func (t *utlsRoundTripper) createConnection(ctx context.Context, host, addr stri
 	return h2Conn, nil
 }
 
+func newUtlsHTTP2ClientConnection(ctx context.Context, conn net.Conn) (*http2.ClientConn, error) {
+	cancelDone := make(chan struct{})
+	stopCancel := context.AfterFunc(ctx, func() {
+		_ = conn.Close()
+		close(cancelDone)
+	})
+
+	h2Conn, errClientConn := (&http2.Transport{}).NewClientConn(conn)
+	cancelRan := !stopCancel()
+	if cancelRan {
+		<-cancelDone
+	}
+	if errContext := ctx.Err(); errContext != nil {
+		if h2Conn != nil {
+			_ = h2Conn.Close()
+		} else if !cancelRan {
+			_ = conn.Close()
+		}
+		return nil, errContext
+	}
+	if errClientConn != nil {
+		_ = conn.Close()
+		return nil, errClientConn
+	}
+	return h2Conn, errClientConn
+}
+
 func (t *utlsRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	hostname := req.URL.Hostname()
 	port := req.URL.Port()
@@ -125,8 +155,15 @@ func (t *utlsRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 	}
 	addr := net.JoinHostPort(hostname, port)
 
-	h2Conn, err := t.createConnection(req.Context(), hostname, addr)
+	h2Conn, err := t.createConnectionWithRetry(req.Context(), hostname, addr)
 	if err != nil {
+		// No RoundTripper received the body when connection setup failed, so this
+		// transport owns the close required by the http.RoundTripper contract.
+		if req.Body != nil {
+			if errClose := req.Body.Close(); errClose != nil {
+				log.Debugf("utls: close request body after connection setup failure: %v", errClose)
+			}
+		}
 		return nil, err
 	}
 

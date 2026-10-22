@@ -2354,6 +2354,17 @@
       "windowHint": "Eşikler gerçek süreye göre belirlenir: bir hafta veya daha uzun süre haftalık eşiği kullanır. Yalnızca haftalık kotası olan hesaplarda sadece bu kota kontrol edilir. Süre yoksa birincil/ikincil pencere eşlemesi korunur.",
       "rule": "Kısa dönem kalan <= {{shortCycle}}% veya haftalık kalan <= {{weekly}}%"
     },
+    "credits": {
+      "title": "Kredi kullanım denetimi",
+      "policy": "Genel politika (hemen kaydedilir)",
+      "default": "Varsayılan",
+      "prefer": "Normal kotaya öncelik ver",
+      "strict": "Yalnızca normal kota",
+      "allow": "Kredilere izin ver",
+      "description": "Varsayılan mod mevcut yönlendirmeyi korur. Normal kotaya öncelik ver modu, yalnızca geçerli API anahtarı havuzundaki tüm Codex hesaplarının normal kotası tükendiğinde kredilere izin verir. Yalnızca normal kota modu kredileri engeller. Bir hesap için kredilerin kapatılması her zaman önceliklidir.",
+      "boundary": "Kota anlık görüntüleri 5 dakika geçerlidir. Kotası bilinmeyen, güncelliğini yitirmiş veya sıfırlanmış kısıtlı hesaplar seçilmeden önce otomatik olarak yenilenir (en fazla 9 saniye; eşzamanlı okumalar birleştirilir). Yenileme başarısız olursa hesap güvenli şekilde duraklatılır; ayrıntılar için hesap havuzu tanılamasına bakın. Devam eden istekler geri alınamaz. Kota sınırını aşan bir istek veya diğer istemcilerin eşzamanlı kullanımı sağlayıcıda yine de kredi harcayabilir; kesin harcama sınırları sağlayıcı tarafında ayarlanmalıdır.",
+      "strictHint": "Yalnızca normal kota modu tüm hesaplar için kredileri engeller. Hesap anahtarlarının ayarları diğer politikalar için korunur."
+    },
     "launchErrors": {
       "sessionRestoreFailed": "Oturum onarımı başarısız oldu ve yedek geri yükleme tamamlanmadı. Başlatma durduruldu; yeniden denemeden önce günlükleri ve yedekleri inceleyin.",
       "sessionCheckTimeout": "Oturum denetimi zaman aşımına uğradı. Başlatma durduruldu; yeniden deneyin veya günlükleri inceleyin.",
@@ -3166,6 +3177,9 @@
       "resetCredits": "Sıfırlama {{count}}",
       "resetCreditsTitle": "5 saatlik pencere için kalan sıfırlama: {{count}}",
       "resetCreditConfirm": "Onayla?",
+      "autoConsumeResetDescription": "Anahtar ve eşik yalnızca bu Codex hesabı için geçerlidir. Cockpit Tools çalışırken ve bilgisayar uyku modunda değilken kota arka planda yaklaşık dakikada bir kontrol edilir. Haftalık kalan yüzde eşikte veya altındaysa son kullanma tarihi en yakın olan bir Banked Reset kullanılır. 5 saatlik kota dikkate alınmaz; kullanılabilir sıfırlama yoksa hiçbir işlem yapılmaz. Bir sonraki otomatik kullanım için yenilenen haftalık kalan kotanın önce eşiğin üzerine çıkması gerekir. Varsayılan olarak kapalıdır.",
+      "autoConsumeResetThreshold": "Haftalık kalan kota eşiği",
+      "autoConsumeResetInvalidThreshold": "0 ile 99 arasında bir tam sayı girin.",
       "resetCreditDialogTitle": "Kullanım sıfırlansın mı?",
       "resetCreditDialogDesc": "Hız sınırını sıfırlayarak kesintisiz çalışmaya devam edin. Kullanılabilir sıfırlama: {{count}}.",
       "resetCreditDialogAction": "Kullanımı sıfırla",

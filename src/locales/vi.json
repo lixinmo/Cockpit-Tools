@@ -2354,6 +2354,17 @@
       "windowHint": "Ngưỡng dựa trên thời lượng thực tế: từ một tuần trở lên dùng ngưỡng tuần. Tài khoản chỉ có hạn mức tuần chỉ kiểm tra hạn mức đó. Khi thiếu thời lượng, giữ ánh xạ cửa sổ chính/phụ.",
       "rule": "Còn lại ngắn hạn <= {{shortCycle}}% hoặc tuần <= {{weekly}}%"
     },
+    "credits": {
+      "title": "Kiểm soát sử dụng credit",
+      "policy": "Chính sách chung (lưu ngay)",
+      "default": "Mặc định",
+      "prefer": "Ưu tiên hạn mức thông thường",
+      "strict": "Chỉ dùng hạn mức thông thường",
+      "allow": "Cho phép dùng credit",
+      "description": "Chế độ mặc định giữ nguyên cách định tuyến hiện tại. Ưu tiên hạn mức thông thường chỉ cho phép dùng credit sau khi mọi tài khoản Codex trong nhóm của khóa API hiện tại đã dùng hết hạn mức thông thường. Chỉ dùng hạn mức thông thường sẽ chặn credit. Việc tắt credit cho từng tài khoản luôn được ưu tiên.",
+      "boundary": "Ảnh chụp trạng thái hạn mức có hiệu lực trong 5 phút. Hạn mức của tài khoản bị hạn chế được tự động cập nhật trước khi chọn nếu chưa rõ, đã cũ hoặc vừa đặt lại (tối đa 9 giây, gộp các lượt đọc đồng thời). Nếu cập nhật thất bại, tài khoản sẽ được tạm dừng an toàn; xem chẩn đoán nhóm tài khoản để biết chi tiết. Không thể thu hồi yêu cầu đang xử lý. Yêu cầu vượt qua ranh giới hạn mức hoặc việc các ứng dụng khác sử dụng đồng thời vẫn có thể tiêu tốn credit ở nhà cung cấp; cần đặt giới hạn chi tiêu tuyệt đối tại nhà cung cấp.",
+      "strictHint": "Chế độ Chỉ dùng hạn mức thông thường chặn credit cho mọi tài khoản. Các công tắc của từng tài khoản được giữ lại cho các chính sách khác."
+    },
     "launchErrors": {
       "sessionRestoreFailed": "Sửa phiên thất bại và khôi phục bản sao lưu chưa hoàn tất. Đã dừng khởi chạy; hãy kiểm tra nhật ký và bản sao lưu trước khi thử lại.",
       "sessionCheckTimeout": "Kiểm tra phiên đã hết thời gian chờ. Đã dừng khởi chạy; hãy thử lại hoặc xem nhật ký.",
@@ -3166,6 +3177,9 @@
       "resetCredits": "Lượt đặt lại {{count}}",
       "resetCreditsTitle": "Lượt đặt lại còn lại cho cửa sổ 5 giờ: {{count}}",
       "resetCreditConfirm": "Xác nhận?",
+      "autoConsumeResetDescription": "Công tắc và ngưỡng chỉ áp dụng cho tài khoản Codex này. Khi Cockpit Tools đang chạy và máy tính không ở chế độ ngủ, hạn mức được kiểm tra trong nền khoảng mỗi phút một lần. Nếu phần trăm hạn mức tuần còn lại bằng hoặc thấp hơn ngưỡng, một Banked Reset có ngày hết hạn gần nhất sẽ được sử dụng. Bỏ qua hạn mức 5 giờ; không làm gì nếu không có Reset khả dụng. Chỉ có thể tự động sử dụng lần tiếp theo sau khi hạn mức tuần còn lại được cập nhật và vượt ngưỡng. Mặc định tắt.",
+      "autoConsumeResetThreshold": "Ngưỡng hạn mức tuần còn lại",
+      "autoConsumeResetInvalidThreshold": "Nhập số nguyên từ 0 đến 99.",
       "resetCreditDialogTitle": "Đặt lại mức dùng?",
       "resetCreditDialogDesc": "Đặt lại giới hạn tốc độ để tiếp tục làm việc không gián đoạn. Lượt đặt lại còn lại: {{count}}.",
       "resetCreditDialogAction": "Đặt lại mức dùng",

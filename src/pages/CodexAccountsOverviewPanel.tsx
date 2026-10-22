@@ -28,6 +28,7 @@ import type { CodexAccountsViewProps } from "./CodexAccountsView";
 import { CodexAddAccountDialog } from "./CodexAddAccountDialog";
 import { useCodexPelicanStore } from "../stores/useCodexPelicanStore";
 import { CodexRecycleBinModal } from "../components/CodexRecycleBinModal";
+import { CodexAutoConsumeResetSettings } from "../components/codex/CodexAutoConsumeResetSettings";
 import { emitAccountsChanged } from "../utils/accountSyncEvents";
 import { PELICAN_GROUPS_CHANGED } from "../components/codex/pelican/PelicanResults";
 
@@ -2472,6 +2473,11 @@ export function CodexAccountsOverviewPanel(props: CodexAccountsViewProps) {
                       </span>
                     </div>
                   )}
+                  <CodexAutoConsumeResetSettings
+                    key={resetCreditConfirmAccount.id}
+                    accountId={resetCreditConfirmAccount.id}
+                    disabled={isResetCreditConfirmSubmitting}
+                  />
                   <div className="codex-reset-credit-confirm-details">
                     <div className="codex-reset-credit-confirm-details-title">
                       {t("codex.quota.resetCreditDetailsTitle", "重置次数明细")}

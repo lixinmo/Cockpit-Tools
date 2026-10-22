@@ -3,6 +3,7 @@ import type {
   CodexLocalAccessChatMessage,
   CodexLocalAccessChatResult,
   CodexLocalAccessCustomRoutingRule,
+  CodexLocalAccessCreditsPolicy,
   CodexLocalAccessAccountModelRule,
   CodexLocalAccessAppendAccountsResult,
   CodexLocalAccessClientBaseUrlHost,
@@ -213,6 +214,16 @@ export async function updateCodexLocalAccessRoutingStrategy(
   return await invoke("codex_local_access_update_routing_strategy", {
     strategy,
   });
+}
+
+export async function updateCodexLocalAccessCreditsPolicy(
+  patch: {
+    policy?: CodexLocalAccessCreditsPolicy;
+    accountId?: string;
+    allowed?: boolean;
+  },
+): Promise<CodexLocalAccessState> {
+  return invoke("codex_local_access_update_credits_policy", patch);
 }
 
 export async function updateCodexLocalAccessCustomRouting(

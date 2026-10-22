@@ -1,0 +1,118 @@
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -65,6 +65,7 @@
+ ]
+ 
+ [features]
++cockpit-connect-retry = ["hyper-util/cockpit-connect-retry"]
+ __rustls = [
+     "dep:hyper-rustls",
+     "dep:tokio-rustls",
+--- a/src/async_impl/client.rs
++++ b/src/async_impl/client.rs
+@@ -182,6 +182,8 @@
+     auto_sys_proxy: bool,
+     redirect_policy: redirect::Policy,
+     retry_policy: crate::retry::Builder,
++    #[cfg(feature = "cockpit-connect-retry")]
++    cockpit_connect_retry: Option<fn(&(dyn std::error::Error + 'static)) -> bool>,
+     referer: bool,
+     read_timeout: Option<Duration>,
+     timeout: Option<Duration>,
+@@ -309,6 +311,8 @@
+                 auto_sys_proxy: true,
+                 redirect_policy: redirect::Policy::default(),
+                 retry_policy: crate::retry::Builder::default(),
++                #[cfg(feature = "cockpit-connect-retry")]
++                cockpit_connect_retry: None,
+                 referer: true,
+                 read_timeout: None,
+                 timeout: None,
+@@ -1005,6 +1009,10 @@
+             Some(format!("{:?}", &config.redirect_policy))
+         };
+ 
++        #[cfg(feature = "cockpit-connect-retry")]
++        if let Some(classify) = config.cockpit_connect_retry {
++            builder.cockpit_connect_retry(classify, config.connect_timeout);
++        }
+         let hyper_client = builder.build(connector_builder.build(config.connector_layers));
+         let hyper_service = HyperService {
+             hyper: hyper_client,
+@@ -1017,7 +1025,10 @@
+             p
+         };
+ 
+-        let retry_policy = config.retry_policy.into_policy();
++        #[allow(unused_mut)]
++        let mut retry_policy = config.retry_policy.into_policy();
++        #[cfg(feature = "cockpit-connect-retry")]
++        { retry_policy.cockpit_setup_only = config.cockpit_connect_retry.is_some(); }
+ 
+         let svc = tower::retry::Retry::new(retry_policy.clone(), hyper_service);
+ 
+@@ -2423,6 +2434,15 @@
+         self
+     }
+ 
++    /// Cockpit's opt-in setup-only hook. No request body enters this retry.
++    /// HTTPS chatgpt.com requests (excluding upgrades) use a dedicated connection.
++    #[cfg(feature = "cockpit-connect-retry")]
++    #[doc(hidden)]
++    pub fn cockpit_connect_retry(mut self, classify: fn(&(dyn std::error::Error + 'static)) -> bool) -> ClientBuilder {
++        self.config.cockpit_connect_retry = Some(classify);
++        self
++    }
++
+     /// Adds a new Tower [`Layer`](https://docs.rs/tower/latest/tower/trait.Layer.html) to the
+     /// base connector [`Service`](https://docs.rs/tower/latest/tower/trait.Service.html) which
+     /// is responsible for connection establishment.
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -393,3 +393,10 @@
+     #[cfg(feature = "multipart")]
+     pub use self::wasm::multipart;
+ }
++
++/// Recognize reqwest's private, typed connection timeout without matching text.
++#[cfg(feature = "cockpit-connect-retry")]
++#[doc(hidden)]
++pub fn cockpit_is_connect_timeout(error: &(dyn std::error::Error + 'static)) -> bool {
++    error.is::<crate::error::TimedOut>()
++}
+--- a/src/retry.rs
++++ b/src/retry.rs
+@@ -57,6 +57,8 @@
+ /// tower::retry::Policy privately.
+ #[derive(Clone, Debug)]
+ pub(crate) struct Policy {
++    #[cfg(feature = "cockpit-connect-retry")]
++    pub(crate) cockpit_setup_only: bool,
+     budget: Option<Arc<Budget>>,
+     classifier: classify::Classifier,
+     max_retries_per_request: u32,
+@@ -204,6 +206,8 @@
+             .budget
+             .map(|p| Arc::new(Budget::new(Duration::from_secs(10), 10, p)));
+         Policy {
++            #[cfg(feature = "cockpit-connect-retry")]
++            cockpit_setup_only: false,
+             budget,
+             classifier: self.classifier,
+             max_retries_per_request: self.max_retries_per_request,
+@@ -248,6 +252,15 @@
+     }
+ 
+     fn clone_request(&mut self, req: &Req) -> Option<Req> {
++        #[cfg(feature = "cockpit-connect-retry")]
++        if self.cockpit_setup_only && req.uri().scheme_str() == Some("https")
++            && req.uri().host().is_some_and(|host| host.eq_ignore_ascii_case("chatgpt.com"))
++            && req.method() != http::Method::CONNECT && !req.headers().contains_key(http::header::UPGRADE)
++        {
++            // Do not even clone the body: the local setup contract ends at the
++            // first send, including protocol NACKs normally replayed by reqwest.
++            return None;
++        }
+         if self.retry_cnt > 0 && !self.scope.applies_to(req) {
+             return None;
+         }

@@ -157,6 +157,8 @@ impl Host for IdentityHost {
                 official_fallback_registration_id: None,
                 official_fallback_authorization_revision: None,
                 authorization_scope_fingerprint: None,
+                quota_identity: None,
+                send_guard: None,
                 official_fallback_failure: None,
                 transport_identity: None,
                 account_id: account.into(),

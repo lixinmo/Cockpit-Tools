@@ -22,6 +22,7 @@ pub(crate) fn native_api_running() -> bool {
 async fn ensure_native_gateway_locked(
     collection: &CodexLocalAccessCollection,
 ) -> Result<(), String> {
+    native_publish_credits_settings(collection);
     let bind_host = bind_host_for_collection(collection);
     let fingerprint = format!(
         "native:{}:{}:{}:{}",
@@ -123,10 +124,7 @@ fn native_patch_mode(current: &str, mode: CodexLocalAccessGatewayMode) -> Result
     {
         return Err("CHATGPT_PLAN_NATIVE_REQUIRED".into());
     }
-    value["gatewayMode"] = serde_json::to_value(mode).map_err(|error| error.to_string())?;
-    value["nativeGatewayDefaultMigrated"] = json!(true);
-    value["updatedAt"] = json!(now_ms());
-    serde_json::to_string_pretty(&value).map_err(|error| error.to_string())
+    credits_compat::patch_gateway_mode(current, mode, now_ms())
 }
 
 fn native_json_has_chatgpt_plan_reference(value: &Value) -> bool {
@@ -204,6 +202,7 @@ async fn switch_native_aware_gateway(mode: CodexLocalAccessGatewayMode) -> Resul
         // Reject before pausing or stopping the existing listener. Neither a
         // failed switch nor a stopped service may activate the sidecar grant.
         native_validate_chatgpt_plan_mode(collection, mode)?;
+        credits_compat::validate_mode(collection, mode)?;
         let previous = collection.gateway_mode;
         if previous == mode {
             return Ok(());
@@ -476,10 +475,23 @@ impl NativeHostBridge {
     async fn collection(
         &self,
     ) -> Result<CodexLocalAccessCollection, native_contract::ServiceError> {
-        match &self.collection_override {
-            Some(collection) => Ok(collection.clone()),
-            None => native_collection().await,
+        let collection = match &self.collection_override {
+            Some(collection) => collection.clone(),
+            None => native_collection().await?,
+        };
+        let mut collection = collection;
+        if self.profile_dir.is_some() {
+            // Persistent profiles must adopt later global Credits settings;
+            // an old template cannot retain a more permissive policy.
+            if let Some(current) = gateway_runtime().lock().await.collection.as_ref() {
+                collection.credits_policy = current.credits_policy;
+                collection.account_credits_allowed = current.account_credits_allowed.clone();
+                native_publish_credits_settings(current);
+            }
+        } else if self.collection_override.is_none() {
+            native_publish_credits_settings(&collection);
         }
+        Ok(collection)
     }
 }
 
@@ -611,7 +623,8 @@ fn native_scoped_account_ids(
 
 fn native_quota_allows(collection: &CodexLocalAccessCollection, account: &CodexAccount) -> bool {
     let now = now_ms();
-    if account_quota_cooldown(account, now).is_some_and(|snapshot| snapshot.active(now)) {
+    if account_quota_cooldown(account, now).is_some_and(|snapshot| snapshot.active(now)
+        && !native_credits_recovered_host_quota(account, snapshot.updated_at_ms)) {
         return false;
     }
     native_bound_quota_reserve_allows(collection, account)
@@ -765,6 +778,13 @@ async fn native_load_accounts(
 }
 
 fn native_quota(account: &CodexAccount) -> i32 {
+    if account_quota_cooldown(account, now_ms()).is_some_and(|cooldown| cooldown.active(now_ms())
+        && native_credits_recovered_host_quota(account, cooldown.updated_at_ms)) {
+        // The upstream fallback also checks this capacity before routing. A
+        // newer read proved positive capacity; runtime/model cooldowns remain
+        // separate and are still enforced by the scheduler.
+        return 1;
+    }
     account
         .quota
         .as_ref()
@@ -1513,6 +1533,10 @@ mod native_live_acceptance;
 #[cfg(test)]
 #[path = "codex_local_access_native_live_pool.rs"]
 mod native_live_pool;
+
+#[cfg(test)]
+#[path = "codex_local_access_native_credits_tests.rs"]
+mod native_credits_tests;
 
 #[cfg(test)]
 mod native_host_tests {

@@ -2354,6 +2354,17 @@
       "windowHint": "Les seuils suivent la durée réelle : une semaine ou plus utilise le seuil hebdomadaire. Les comptes avec uniquement ce quota ne vérifient que celui-ci. Sans durée, la correspondance des fenêtres principale et secondaire est conservée.",
       "rule": "Solde court <= {{shortCycle}}% ou hebdomadaire <= {{weekly}}%"
     },
+    "credits": {
+      "title": "Contrôle de l’utilisation des crédits",
+      "policy": "Politique globale (enregistrement immédiat)",
+      "default": "Par défaut",
+      "prefer": "Privilégier le quota standard",
+      "strict": "Quota standard uniquement",
+      "allow": "Autoriser les crédits",
+      "description": "Le mode par défaut conserve le routage existant. Privilégier le quota standard n’autorise les crédits qu’une fois le quota standard épuisé pour tous les comptes Codex du groupe associé à la clé API actuelle. Quota standard uniquement bloque les crédits. La désactivation des crédits pour un compte reste toujours prioritaire.",
+      "boundary": "Les instantanés de quota restent valides pendant 5 minutes. Le quota des comptes soumis à des restrictions est automatiquement actualisé avant leur sélection s’il est inconnu, obsolète ou réinitialisé (9 secondes maximum, avec regroupement des lectures simultanées). Un échec d’actualisation suspend le compte par précaution ; consultez le diagnostic du groupe de comptes pour plus de détails. Les requêtes en cours ne peuvent pas être rappelées. Une requête dépassant une limite de quota ou l’utilisation simultanée par d’autres clients peut encore consommer des crédits chez le fournisseur ; les plafonds de dépenses absolus doivent être configurés chez celui-ci.",
+      "strictHint": "Le mode Quota standard uniquement bloque les crédits pour tous les comptes. Les interrupteurs des comptes sont conservés pour les autres politiques."
+    },
     "launchErrors": {
       "sessionRestoreFailed": "La réparation des sessions a échoué et la restauration est incomplète. Démarrage arrêté ; vérifiez les journaux et les sauvegardes avant de réessayer.",
       "sessionCheckTimeout": "Le contrôle des sessions a expiré. Démarrage arrêté ; réessayez ou consultez les journaux.",
@@ -3166,6 +3177,9 @@
       "resetCredits": "Réinits {{count}}",
       "resetCreditsTitle": "Réinitialisations restantes pour la fenêtre de 5 heures : {{count}}",
       "resetCreditConfirm": "Confirmer ?",
+      "autoConsumeResetDescription": "L’interrupteur et le seuil s’appliquent uniquement à ce compte Codex. Tant que Cockpit Tools fonctionne et que l’ordinateur n’est pas en veille, le quota est vérifié en arrière-plan environ une fois par minute. Si le pourcentage hebdomadaire restant atteint le seuil ou passe en dessous, un Banked Reset ayant la date d’expiration la plus proche est utilisé. Le quota de 5 heures est ignoré ; aucune action n’est effectuée si aucun reset n’est disponible. Une nouvelle utilisation automatique nécessite que le quota hebdomadaire restant actualisé dépasse d’abord le seuil. Désactivé par défaut.",
+      "autoConsumeResetThreshold": "Seuil de quota hebdomadaire restant",
+      "autoConsumeResetInvalidThreshold": "Saisissez un entier entre 0 et 99.",
       "resetCreditDialogTitle": "Réinitialiser votre utilisation ?",
       "resetCreditDialogDesc": "Réinitialisez la limite de débit pour continuer à travailler sans interruption. Réinitialisations disponibles : {{count}}.",
       "resetCreditDialogAction": "Réinitialiser l’utilisation",

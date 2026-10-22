@@ -91,8 +91,9 @@ test("trusted main CI and release jobs share caches, with correct platform separ
   const cache = fs.readFileSync(path.join(__dirname, "../../.github/actions/host-build-cache/action.yml"), "utf8");
   assert.match(ci, /push:\s+branches:[\s\S]*?- "main"/);
   assert.match(ci, /uses: \.\/.github\/actions\/host-build-cache\s+with:\s+target: \$\{\{ matrix.cache_target \}\}/);
+  const { buildPlan } = require('../ci/cloud-build.cjs');
   for (const target of ["windows", "macos-aarch64", "macos-x86_64", "linux-x86_64", "linux-aarch64"]) {
-    assert.ok(ci.includes(`cache_target: "${target}"`));
+    assert.ok(buildPlan('all').matrix.include.some((platform) => platform.cache_target === target));
   }
   assert.match(cache, /shared-key: host-release-v2-\$\{\{ inputs.target \}\}/);
   assert.match(cache, /workspaces: "\. -> target"/);

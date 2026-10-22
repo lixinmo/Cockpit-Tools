@@ -2574,6 +2574,17 @@
       "windowHint": "Thresholds follow actual durations: a week or longer uses the weekly threshold. Weekly-only accounts check only that quota. Missing durations keep the primary/secondary mapping.",
       "rule": "Short-cycle remaining <= {{shortCycle}}% or weekly remaining <= {{weekly}}%"
     },
+    "credits": {
+      "title": "Credits usage control",
+      "policy": "Global policy (saved immediately)",
+      "default": "Default",
+      "prefer": "Prefer regular quota",
+      "strict": "Regular quota only",
+      "allow": "Allow credits",
+      "description": "Default preserves existing routing. Prefer regular quota allows credits only after every Codex account in the current API key pool exhausts its regular quota. Regular quota only blocks credits. A disabled account switch always takes precedence.",
+      "boundary": "Quota snapshots remain valid for 5 minutes. Restricted accounts with unknown, stale, or reset quota are automatically refreshed before selection (up to 9 seconds, with concurrent reads coalesced). Failed refreshes safely pause the account; see account pool diagnostics for details. In-flight requests cannot be recalled. A request crossing a quota boundary or concurrent use by other clients may still spend credits upstream; absolute spending limits must be configured upstream.",
+      "strictHint": "Regular-quota-only mode blocks credits for every account. Account switches are retained for other policies."
+    },
     "launchErrors": {
       "sessionRestoreFailed": "Session repair failed and backup restoration is incomplete. Launch stopped; inspect the logs and backups before retrying.",
       "sessionCheckTimeout": "Session checks timed out. Launch stopped; retry or inspect the logs.",
@@ -4031,6 +4042,9 @@
       "resetCredits": "Resets {{count}}",
       "resetCreditsTitle": "Resets left for the 5-hour window: {{count}}",
       "resetCreditConfirm": "Confirm?",
+      "autoConsumeResetDescription": "The switch and threshold apply only to this Codex account. While Cockpit Tools is running and the computer is awake, quota is checked in the background about once a minute. Weekly remaining at or below the threshold uses one Banked Reset with the earliest expiry. Ignores 5h quota; skips when none are available. Another automatic use requires refreshed weekly quota above the threshold first. Off by default.",
+      "autoConsumeResetThreshold": "Weekly remaining threshold",
+      "autoConsumeResetInvalidThreshold": "Enter a whole number from 0 to 99.",
       "resetCreditDialogTitle": "Reset your usage?",
       "resetCreditDialogDesc": "Reset the rate limit so you can keep working without interruption. Available resets: {{count}}.",
       "resetCreditDialogAction": "Reset usage",

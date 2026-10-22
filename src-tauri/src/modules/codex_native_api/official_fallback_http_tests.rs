@@ -55,6 +55,8 @@ impl FallbackHost {
             official_fallback_registration_id: None,
             official_fallback_authorization_revision: None,
             authorization_scope_fingerprint: official.then(|| "acl-epoch".into()),
+            quota_identity: None,
+            send_guard: None,
             official_fallback_failure: None,
             base_url: if (official && self.connect_failure.load(Ordering::SeqCst))
                 || (route == "local" && self.local_connect_failure.load(Ordering::SeqCst))

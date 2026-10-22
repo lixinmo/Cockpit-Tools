@@ -97,9 +97,7 @@ fn load_collection_for_runtime_from_path(
     let Some(parsed) = load_collection_from_path(path)? else {
         return Ok(None);
     };
-    if !parsed.native_gateway_default_migrated
-        || parsed.gateway_mode == CodexLocalAccessGatewayMode::Legacy
-    {
+    if credits_compat::needs_migration(&parsed) {
         // Only cold runtime initialization may migrate. Catalog and import reads
         // must not modify the configuration underlying their revision snapshots.
         return migrate_native_gateway_default_on_disk(path).map(Some);
@@ -115,12 +113,15 @@ fn migrate_native_gateway_default_on_disk(
         let current = current.ok_or_else(|| "API service configuration is missing".to_string())?;
         let collection: CodexLocalAccessCollection =
             serde_json::from_str(current).map_err(|error| error.to_string())?;
-        let content = if !collection.native_gateway_default_migrated
-            || collection.gateway_mode == CodexLocalAccessGatewayMode::Legacy
-        {
-            native_patch_mode(current, CodexLocalAccessGatewayMode::Native)?
-        } else {
-            current.to_string()
+        let raw: Value = serde_json::from_str(current).map_err(|error| error.to_string())?;
+        let content = match credits_compat::migration_target(&raw, &collection) {
+            Some(mode) => {
+                if mode == CodexLocalAccessGatewayMode::Native {
+                    logger::log_codex_api_info("[Credits] 将本地 Credits 策略迁移至 Native 引擎");
+                }
+                native_patch_mode(current, mode)?
+            }
+            None => current.to_string(),
         };
         loaded = Some(serde_json::from_str(&content).map_err(|error| error.to_string())?);
         Ok(content)
@@ -184,6 +185,8 @@ fn save_collection_to_path(
                             .map_err(|_| "CHATGPT_PLAN_STORAGE_FAILED")?;
                     }
                     // A stale pre-upgrade snapshot must not clear the migration marker.
+                    next.native_credits_policy_migrated |= current
+                        .get("nativeCreditsPolicyMigrated").and_then(Value::as_bool).unwrap_or(false);
                     next.native_gateway_default_migrated |= current
                         .get("nativeGatewayDefaultMigrated")
                         .and_then(Value::as_bool)
@@ -2058,8 +2061,11 @@ async fn ensure_runtime_loaded_without_start_with_profile_restore(
                 capability_fallback: Default::default(),
         multi_agent: Default::default(),
                 native_gateway_default_migrated: true,
+                native_credits_policy_migrated: true,
                 upstream_proxy_url: None,
                 routing_strategy: CodexLocalAccessRoutingStrategy::default(),
+                credits_policy: Default::default(),
+                account_credits_allowed: HashMap::new(),
                 custom_routing_rules: Vec::new(),
                 account_model_rules: Vec::new(),
                 model_aliases: Vec::new(),

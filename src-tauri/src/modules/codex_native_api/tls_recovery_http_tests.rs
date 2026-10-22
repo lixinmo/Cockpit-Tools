@@ -116,6 +116,8 @@ impl Host for TlsHost {
                 official_fallback_registration_id: (local_fallback && !reselected_official).then(|| "grant".into()),
                 official_fallback_authorization_revision: (local_fallback && !reselected_official).then(|| "epoch".into()),
                 authorization_scope_fingerprint: local_fallback.then(|| "scope".into()),
+                quota_identity: None,
+                send_guard: None,
                 official_fallback_failure: (local_fallback && !reselected_official).then(|| OfficialFallbackFailure {
                     trigger_stage: "health_pause", status: 0, code: "official_unavailable".into(), message: None, retry_after: None,
                 }),

@@ -1,4 +1,5 @@
 export type CodexLocalAccessAddressKind = "local" | "lan";
+export type CodexLocalAccessCreditsPolicy = "default" | "prefer_regular" | "strict_regular";
 export type CodexLocalAccessScope = "localhost" | "lan";
 export type CodexLocalAccessClientBaseUrlHost = "localhost" | "127.0.0.1";
 export type CodexLocalAccessImageGenerationMode =
@@ -170,8 +171,11 @@ export interface CodexLocalAccessCollection {
   imageGenerationAccountModels?: Record<string, string>;
   gatewayMode: CodexLocalAccessGatewayMode;
   nativeGatewayDefaultMigrated?: boolean;
+  nativeCreditsPolicyMigrated?: boolean;
   upstreamProxyUrl?: string | null;
   routingStrategy: CodexLocalAccessRoutingStrategy;
+  creditsPolicy?: CodexLocalAccessCreditsPolicy;
+  accountCreditsAllowed?: Record<string, boolean>;
   capabilityFallback?: CodexCapabilityFallbackConfig;
   customRoutingRules: CodexLocalAccessCustomRoutingRule[];
   accountModelRules: CodexLocalAccessAccountModelRule[];

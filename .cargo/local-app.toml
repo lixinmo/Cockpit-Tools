@@ -1,0 +1,6 @@
+# Explicitly loaded by build:app:local, never by upstream release builds.
+# Keep dependency profiles unchanged so their existing release cache is reused.
+[profile.release.package.cockpit-tools]
+opt-level = 1
+incremental = true
+codegen-units = 256

@@ -2354,6 +2354,17 @@
       "windowHint": "Los umbrales siguen la duración real: una semana o más usa el semanal. Las cuentas con solo cuota semanal comprueban únicamente esa cuota. Sin duración se conserva la asignación de ventana principal y secundaria.",
       "rule": "Restante corto <= {{shortCycle}}% o semanal <= {{weekly}}%"
     },
+    "credits": {
+      "title": "Control del uso de créditos",
+      "policy": "Política global (se guarda al instante)",
+      "default": "Predeterminado",
+      "prefer": "Priorizar la cuota habitual",
+      "strict": "Solo cuota habitual",
+      "allow": "Permitir créditos",
+      "description": "El modo predeterminado mantiene el enrutamiento actual. Priorizar la cuota habitual permite créditos solo cuando todas las cuentas Codex del grupo de la clave API actual han agotado su cuota habitual. Solo cuota habitual bloquea los créditos. Desactivar los créditos para una cuenta siempre tiene prioridad.",
+      "boundary": "Las instantáneas de cuota son válidas durante 5 minutos. Antes de seleccionar cuentas restringidas cuya cuota sea desconocida, esté desactualizada o se haya restablecido, se actualiza automáticamente (hasta 9 segundos, agrupando las consultas simultáneas). Si falla la actualización, la cuenta se pausa de forma segura; consulta los detalles en el diagnóstico del grupo de cuentas. No se pueden retirar las solicitudes en curso. Una solicitud que supere el límite de cuota o el uso simultáneo de otros clientes puede consumir créditos en el proveedor; los límites absolutos de gasto deben configurarse en el proveedor.",
+      "strictHint": "El modo Solo cuota habitual bloquea los créditos para todas las cuentas. Los interruptores de cada cuenta se conservan para las demás políticas."
+    },
     "launchErrors": {
       "sessionRestoreFailed": "Falló la reparación de sesiones y la restauración está incompleta. Inicio detenido; revisa los registros y las copias de seguridad antes de reintentar.",
       "sessionCheckTimeout": "La comprobación de sesiones agotó el tiempo. Inicio detenido; reintenta o revisa los registros.",
@@ -3166,6 +3177,9 @@
       "resetCredits": "Reinicios {{count}}",
       "resetCreditsTitle": "Reinicios restantes para la ventana de 5 horas: {{count}}",
       "resetCreditConfirm": "¿Confirmar?",
+      "autoConsumeResetDescription": "El interruptor y el umbral se aplican solo a esta cuenta de Codex. Mientras Cockpit Tools esté en ejecución y el equipo no esté suspendido, la cuota se comprueba en segundo plano aproximadamente una vez por minuto. Si el porcentaje semanal restante es igual o inferior al umbral, se usa un Banked Reset con la fecha de caducidad más próxima. Se ignora la cuota de 5 horas; si no hay resets disponibles, no se hace nada. Para otro uso automático, la cuota semanal restante actualizada debe superar primero el umbral. Desactivado por defecto.",
+      "autoConsumeResetThreshold": "Umbral de cuota semanal restante",
+      "autoConsumeResetInvalidThreshold": "Introduce un número entero de 0 a 99.",
       "resetCreditDialogTitle": "¿Restablecer tu uso?",
       "resetCreditDialogDesc": "Restablece el límite de velocidad para seguir trabajando sin interrupciones. Restablecimientos disponibles: {{count}}.",
       "resetCreditDialogAction": "Restablecer uso",

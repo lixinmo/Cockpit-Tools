@@ -358,6 +358,24 @@
     }
 
     #[test]
+    fn codex_auto_consume_reset_rejects_global_and_whole_map_patches() {
+        let mut config = UserConfig::default();
+        config
+            .codex_auto_reset
+            .patch_account("a", Some(true), Some(7))
+            .unwrap();
+        for updates in [
+            serde_json::json!({"codex_auto_consume_reset_enabled": true}),
+            serde_json::json!({"codex_auto_consume_reset_threshold": 2}),
+            serde_json::json!({"codex_auto_consume_reset_accounts": {}}),
+        ] {
+            assert!(apply_general_config_updates(&mut config, updates.as_object().unwrap()).is_err());
+            assert!(config.codex_auto_reset.for_account("a").enabled);
+            assert!(!config.codex_auto_reset.for_account("b").enabled);
+        }
+    }
+
+    #[test]
     fn general_config_patch_rejects_retired_codex_client_policy() {
         let mut config = UserConfig::default();
         let before = serde_json::to_value(&config).expect("serialize config");

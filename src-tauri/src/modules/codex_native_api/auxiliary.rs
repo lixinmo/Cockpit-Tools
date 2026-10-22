@@ -570,6 +570,7 @@ async fn websocket_tracked(
             let tracker = tracker_slot
                 .as_mut()
                 .expect("WebSocket request tracker is present");
+            tracker.check_quota_before_send()?;
             let connected = super::execution::prepare(
                 &state,
                 super::transport::connect_websocket_tracked(
@@ -594,6 +595,7 @@ async fn websocket_tracked(
                 }
             };
             tracker.upstream_response_headers(&upstream.1);
+            tracker.quota_headers(&upstream.1);
             let selected_protocol = realtime::selected_protocol(&protocols, &upstream.1)?;
             let ws = if let Some(protocol) = selected_protocol {
                 ws.protocols([protocol])
@@ -657,12 +659,15 @@ async fn relay(
         _=stop.wait()=>return Err(stopping_error()),
         _=async { match call_stop.as_mut() { Some(receiver) => { if !*receiver.borrow() { let _ = receiver.changed().await; } }, None => std::future::pending::<()>().await } }=>return Ok(()),
         next=tokio::time::timeout(state.options.idle_timeout,client.recv())=>match next {
-            Ok(Some(Ok(Message::Text(text))))=>{let mut value:Value=serde_json::from_str(&text).map_err(|_|invalid("Realtime messages must be JSON"))?;rewrite_realtime_message(&state, &mut value, &auth, &route, &model).await?;timed(&state,upstream.send(U::Text(value.to_string().into()))).await?;},
+            Ok(Some(Ok(Message::Text(text))))=>{let mut value:Value=serde_json::from_str(&text).map_err(|_|invalid("Realtime messages must be JSON"))?;rewrite_realtime_message(&state, &mut value, &auth, &route, &model).await?;
+                if !admit_realtime_response(&state, &tracker, &mut client, &value).await? { continue; }
+                timed(&state,upstream.send(U::Text(value.to_string().into()))).await?;},
             Ok(Some(Ok(Message::Binary(bytes))))=>{
                 // JSON carried in Binary frames has the same caller/model scope
                 // as Text. Opaque frames retain their bytes and the upgrade's limit.
                 let bytes=if let Ok(mut value)=serde_json::from_slice::<Value>(&bytes){
                     rewrite_realtime_message(&state,&mut value,&auth,&route,&model).await?;
+                    if !admit_realtime_response(&state, &tracker, &mut client, &value).await? { continue; }
                     value.to_string().into_bytes().into()
                 }else{bytes};
                 timed(&state,upstream.send(U::Binary(bytes))).await?;
@@ -673,8 +678,8 @@ async fn relay(
             _=>return Err(ServiceError::new(502,"realtime_client_disconnected","Realtime client disconnected")),
         },
         next=tokio::time::timeout(state.options.idle_timeout,upstream.next())=>match next {
-            Ok(Some(Ok(U::Text(text))))=>{tracker.first_response();if let Ok(value)=serde_json::from_str::<Value>(&text){if let Some(value)=value.pointer("/response/usage"){usage=Some(value.clone());tracker.capture_usage(&usage);}}timed(&state,client.send(Message::Text(text.to_string().into()))).await?;},
-            Ok(Some(Ok(U::Binary(value))))=>{tracker.first_response();timed(&state,client.send(Message::Binary(value))).await?;},
+            Ok(Some(Ok(U::Text(text))))=>{tracker.first_response();if let Ok(value)=serde_json::from_str::<Value>(&text){tracker.quota_event(&value);if let Some(value)=value.pointer("/response/usage"){usage=Some(value.clone());tracker.capture_usage(&usage);}}timed(&state,client.send(Message::Text(text.to_string().into()))).await?;},
+            Ok(Some(Ok(U::Binary(value))))=>{tracker.first_response();if let Ok(event)=serde_json::from_slice::<Value>(&value){tracker.quota_event(&event);}timed(&state,client.send(Message::Binary(value))).await?;},
             Ok(Some(Ok(U::Ping(value))))=>timed(&state,upstream.send(U::Pong(value))).await?,
             Ok(Some(Ok(U::Pong(_)|U::Frame(_))))=>{},
             Ok(None)|Ok(Some(Ok(U::Close(_))))=>return Ok(()),
@@ -687,6 +692,31 @@ async fn relay(
     }
     let _ = tokio::time::timeout(std::time::Duration::from_secs(1), upstream.close(None)).await;
     let _ = tokio::time::timeout(std::time::Duration::from_secs(1), client.close()).await;
+}
+
+/// Each explicit response.create is a new admission boundary on the existing
+/// connection. Reject only that request, keeping audio/control traffic and the
+/// socket alive; this cannot recall an in-flight response or automatic VAD work.
+async fn admit_realtime_response(
+    state: &AppState,
+    tracker: &RequestTracker,
+    client: &mut WebSocket,
+    value: &Value,
+) -> Result<bool, ServiceError> {
+    if value["type"] != "response.create" {
+        return Ok(true);
+    }
+    if let Err(error) = tracker.check_quota_before_send() {
+        let mut event = super::output_error::json_error(&error);
+        event["type"] = json!("error");
+        event["status"] = json!(error.status);
+        if let Some(delay) = error.retry_after {
+            event["retry_after"] = json!(delay.as_secs_f64());
+        }
+        timed(state, client.send(Message::Text(event.to_string().into()))).await?;
+        return Ok(false);
+    }
+    Ok(true)
 }
 use axum::extract::FromRequestParts;
 fn invalid(message: &str) -> ServiceError {

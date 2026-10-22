@@ -52,6 +52,8 @@ impl LongHistoryHost {
             official_fallback_registration_id: (!official).then(|| format!("grant-{account}")),
             official_fallback_authorization_revision: (!official).then(|| "epoch".into()),
             authorization_scope_fingerprint: Some("scope".into()),
+            quota_identity: None,
+            send_guard: None,
             official_fallback_failure: (!official).then(|| OfficialFallbackFailure {
                 trigger_stage: "health_pause",
                 status: 0,

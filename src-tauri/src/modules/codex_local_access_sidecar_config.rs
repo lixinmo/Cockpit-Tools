@@ -2414,6 +2414,7 @@ fn prepare_sidecar_launch_config_in_dir_sync(
     if !collection.official_account_bindings.is_empty() {
         return Err("CHATGPT_PLAN_NATIVE_REQUIRED".into());
     }
+    credits_compat::validate_mode(collection, CodexLocalAccessGatewayMode::Sidecar)?;
     let overridden_account_ids: HashSet<String> = account_overrides.keys().cloned().collect();
     let account_overrides = sidecar_account_snapshot(
         effective_sidecar_account_ids_with_internal(collection, api_service),

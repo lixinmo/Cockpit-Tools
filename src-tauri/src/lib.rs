@@ -559,6 +559,7 @@ pub fn run() {
             }
 
             modules::provider_token_keeper::ensure_started(app.handle().clone());
+            modules::codex_quota::ensure_auto_reset_monitor_started();
             modules::auto_local_import::ensure_started(app.handle().clone());
             // 官方客户端临时登录会留下一次性 profile，成功/失败/取消都会清理；
             // 这里额外启动巡检，兜住异常退出后残留的临时目录与钥匙串条目。
@@ -1078,6 +1079,8 @@ pub fn run() {
             modules::codex_quota_sync::set_codex_quota_sync_disabled_emails,
             commands::codex::refresh_codex_quotas_batch,
             commands::codex::get_codex_reset_credits,
+            commands::codex::get_codex_auto_reset_settings,
+            commands::codex::set_codex_auto_reset_settings,
             commands::codex::consume_codex_reset_credit,
             commands::codex::refresh_codex_subscription_info,
             commands::codex::refresh_all_codex_quotas,
@@ -1212,6 +1215,7 @@ pub fn run() {
             commands::codex::codex_local_access_kill_port,
             commands::codex::codex_local_access_update_port,
             commands::codex::codex_local_access_update_routing_strategy,
+            commands::codex::codex_local_access_update_credits_policy,
             commands::codex::codex_local_access_update_custom_routing,
             commands::codex::codex_local_access_update_account_model_rules,
             commands::codex::codex_local_access_update_model_rules,

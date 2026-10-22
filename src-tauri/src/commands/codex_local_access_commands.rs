@@ -39,6 +39,15 @@ pub async fn codex_local_access_clear_request_payloads() -> Result<u64, String> 
     codex_local_access::clear_local_access_request_payloads().await
 }
 
+#[tauri::command]
+pub async fn codex_local_access_update_credits_policy(
+    policy: Option<crate::models::codex_local_access::CodexLocalAccessCreditsPolicy>,
+    account_id: Option<String>,
+    allowed: Option<bool>,
+) -> Result<CodexLocalAccessState, String> {
+    codex_local_access::update_local_access_credits_policy(policy, account_id, allowed).await
+}
+
 /// 列出实例级本地网关（provider gateway / 混合模型路由 / 绑定 OAuth 本地网关）的只读快照。
 #[tauri::command]
 pub async fn codex_list_instance_gateways() -> Result<Vec<CodexInstanceGatewayView>, String> {

@@ -108,3 +108,6 @@ mod chatgpt_plan_http_tests;
 
 #[cfg(test)]
 mod chatgpt_plan_continuation_tests;
+
+#[cfg(test)]
+mod admission_guard_http_tests;

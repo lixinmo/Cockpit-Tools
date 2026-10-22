@@ -2354,6 +2354,17 @@
       "windowHint": "Prahy odpovídají skutečné délce: týden a více používá týdenní práh. Účty pouze s týdenní kvótou kontrolují jen ji. Bez délky se zachová mapování hlavního a vedlejšího okna.",
       "rule": "Krátkodobý zůstatek <= {{shortCycle}}% nebo týdenní zůstatek <= {{weekly}}%"
     },
+    "credits": {
+      "title": "Řízení využití kreditů",
+      "policy": "Globální pravidlo (ukládá se okamžitě)",
+      "default": "Výchozí",
+      "prefer": "Upřednostnit běžnou kvótu",
+      "strict": "Pouze běžná kvóta",
+      "allow": "Povolit kredity",
+      "description": "Výchozí režim zachovává stávající směrování. Upřednostnění běžné kvóty povolí kredity až po vyčerpání běžné kvóty všech účtů Codex ve skupině aktuálního klíče API. Režim Pouze běžná kvóta kredity blokuje. Zakázání kreditů u konkrétního účtu má vždy přednost.",
+      "boundary": "Snímky kvóty platí 5 minut. U omezených účtů s neznámou, zastaralou nebo obnovenou kvótou se kvóta před výběrem automaticky aktualizuje (nejvýše 9 sekund, souběžná čtení se slučují). Při neúspěšné aktualizaci se účet bezpečně pozastaví; podrobnosti najdete v diagnostice skupiny účtů. Probíhající požadavky nelze odvolat. Požadavek překračující hranici kvóty nebo souběžné použití jinými klienty může u poskytovatele přesto spotřebovat kredity; pevné limity útraty je nutné nastavit u poskytovatele.",
+      "strictHint": "Režim Pouze běžná kvóta blokuje kredity u všech účtů. Přepínače jednotlivých účtů se zachovají pro ostatní pravidla."
+    },
     "launchErrors": {
       "sessionRestoreFailed": "Oprava relací selhala a obnova zálohy není dokončena. Spuštění bylo zastaveno; před dalším pokusem zkontrolujte protokoly a zálohy.",
       "sessionCheckTimeout": "Kontrola relací vypršela. Spuštění bylo zastaveno; zkuste to znovu nebo zkontrolujte protokoly.",
@@ -3166,6 +3177,9 @@
       "resetCredits": "Resety {{count}}",
       "resetCreditsTitle": "Zbývající resety pro 5hodinové okno: {{count}}",
       "resetCreditConfirm": "Potvrdit?",
+      "autoConsumeResetDescription": "Přepínač a práh platí pouze pro tento účet Codex. Když Cockpit Tools běží a počítač není uspaný, kvóta se na pozadí kontroluje přibližně jednou za minutu. Pokud je zbývající týdenní kvóta na prahu nebo pod ním, použije se jeden Banked Reset s nejbližším vypršením. Kvóta na 5 hodin se ignoruje; pokud není k dispozici žádný reset, nic se neprovede. Další automatické použití je možné až poté, co aktualizovaná zbývající týdenní kvóta překročí práh. Ve výchozím stavu vypnuto.",
+      "autoConsumeResetThreshold": "Práh zbývající týdenní kvóty",
+      "autoConsumeResetInvalidThreshold": "Zadejte celé číslo od 0 do 99.",
       "resetCreditDialogTitle": "Resetovat využití?",
       "resetCreditDialogDesc": "Resetujte rychlostní limit a pokračujte bez přerušení. Dostupné resety: {{count}}.",
       "resetCreditDialogAction": "Resetovat využití",

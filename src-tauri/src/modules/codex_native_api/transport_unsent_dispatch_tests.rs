@@ -22,6 +22,8 @@ fn route(base_url: &str, account: &str) -> Route {
         official_fallback_registration_id: None,
         official_fallback_authorization_revision: None,
         authorization_scope_fingerprint: None,
+        quota_identity: None,
+        send_guard: None,
         official_fallback_failure: None,
         base_url: base_url.into(),
         model: "fixture-model".into(),

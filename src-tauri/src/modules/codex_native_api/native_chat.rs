@@ -113,6 +113,7 @@ async fn forward_with_policy(
         };
         let status = response.status();
         let headers = response.headers().clone();
+        tracker.quota_headers(&headers);
         tracker.set_retry_after(retry_after_headers(&headers));
         if let Err(error) = super::mapping::observe_headers(&state, &prepared, &headers).await {
             tracker.fail(&error).await;

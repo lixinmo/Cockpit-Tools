@@ -33,6 +33,8 @@ fn route() -> Route {
         official_fallback_registration_id: None,
         official_fallback_authorization_revision: None,
         authorization_scope_fingerprint: None,
+        quota_identity: None,
+        send_guard: None,
                 official_fallback_failure: None,
         transport_identity: Some("stable-transport".into()),
         base_url: "http://127.0.0.1:1/v1".into(),

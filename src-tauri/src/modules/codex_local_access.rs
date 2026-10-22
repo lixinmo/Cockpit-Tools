@@ -2,7 +2,14 @@
 // 业务分片只在完整顶层 item 之间切开，通过 include! 保持同一模块作用域；
 // 调用方、网关生命周期、请求转换和账号池行为均与拆分前一致。
 include!("codex_local_access_foundation.rs");
+#[path = "codex_local_access_credits_compat.rs"]
+mod credits_compat;
+#[path = "codex_local_access_credits_policy.rs"]
+pub(crate) mod credits_policy;
+#[path = "codex_local_access_credits_refresh.rs"]
+mod credits_refresh;
 include!("codex_local_access_quota_reserve.rs");
+include!("codex_local_access_native_credits.rs");
 include!("codex_local_access_quota_cooldown.rs");
 include!("codex_local_access_request_transform.rs");
 include!("codex_local_access_historical_pricing.rs");

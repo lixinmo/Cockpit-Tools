@@ -107,6 +107,13 @@ async fn native_image_route_once(
     } else {
         native_image_selection_model(&collection, &model)
     };
+    accounts.retain(|account| ids.contains(&account.id));
+    let credits_ids = if caller.id == NATIVE_INTERNAL_CALLER || !collection.image_generation_account_ids.is_empty() {
+        ids.clone()
+    } else { native_credits_scope(&collection, key) };
+    let mut credits = native_credits_pool(host, &collection, credits_ids, &accounts).await?;
+    credits.filter(caller, &model, &mut accounts).await?;
+    let credits_before_filter = accounts.iter().map(|a| a.id.clone()).collect::<Vec<_>>();
     accounts.retain(|account| {
         ids.contains(&account.id)
             && (caller.id == NATIVE_INTERNAL_CALLER || !service_account_paused(&collection, &account.id))
@@ -143,6 +150,8 @@ async fn native_image_route_once(
                     ),
                 ))
     });
+    credits.mark_removed(&credits_before_filter, &accounts, "image_or_account_policy");
+    let credits_before_cooldown = accounts.iter().map(|a| a.id.clone()).collect::<Vec<_>>();
     let mut closest_cooldown = None;
     {
         let cooldowns = host.cooldowns.lock().map_err(|_| {
@@ -171,6 +180,8 @@ async fn native_image_route_once(
             wait.is_none()
         });
     }
+    credits.mark_removed(&credits_before_cooldown, &accounts, "quota_cooldown");
+    if credits.has_policy_blocks() || (accounts.is_empty() && credits.restricted()) { credits.report(caller, &model, "credits_pool_diagnostic").await; }
     let routing_namespace =
         native_routing_namespace(caller, &model, &ids, request.target_account_id.as_deref());
     native_sort_accounts_scoped(host, &mut accounts, &collection, key, &routing_namespace);
@@ -209,6 +220,7 @@ async fn native_image_route_once(
         false,
     )
     .await?;
+    native_attach_credits_guard(&credits, &mut route)?;
     native_commit_routing_cursor(host, &routing_namespace, &route.account_id);
     if let Some(permit) = image_permit {
         route.permit = Some(Arc::new((route.permit.take(), permit)));

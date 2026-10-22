@@ -15,6 +15,8 @@ tauri-build = { version = "2", features = [] }
 swift-rs = { version = "1.0.7", features = ["build"] }
 
 [dev-dependencies]
+tower-service = "0.3"
+tokio = { version = "1", features = ["test-util"] }
 hyper = { version = "1", features = ["server", "http2"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 tempfile = "3"
@@ -43,7 +45,7 @@ multer = "3"
 zstd = "0.13"
 chrono = "0.4"
 dirs = "5.0"
-reqwest = { version = "0.12", features = ["json", "gzip", "brotli", "deflate", "zstd", "stream", "socks", "blocking", "multipart", "rustls-tls-native-roots"] }
+reqwest = { version = "0.12", features = ["cockpit-connect-retry", "json", "gzip", "brotli", "deflate", "zstd", "stream", "socks", "blocking", "multipart", "rustls-tls-native-roots"] }
 # Classify subscription TLS failures by type; macOS error Display may omit SSL/TLS.
 native-tls = "0.2"
 quick-xml = "0.40"

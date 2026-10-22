@@ -2354,6 +2354,17 @@
       "windowHint": "Progi zależą od rzeczywistego okresu: tydzień lub dłużej używa progu tygodniowego. Konta tylko z limitem tygodniowym sprawdzają wyłącznie ten limit. Bez okresu pozostaje mapowanie okna głównego i dodatkowego.",
       "rule": "Pozostało krótkookresowo <= {{shortCycle}}% lub tygodniowo <= {{weekly}}%"
     },
+    "credits": {
+      "title": "Kontrola wykorzystania kredytów",
+      "policy": "Zasada globalna (zapisywana natychmiast)",
+      "default": "Domyślnie",
+      "prefer": "Preferuj standardowy limit",
+      "strict": "Tylko standardowy limit",
+      "allow": "Zezwalaj na kredyty",
+      "description": "Tryb domyślny zachowuje dotychczasowy routing. Preferowanie standardowego limitu zezwala na kredyty dopiero po wyczerpaniu standardowego limitu wszystkich kont Codex w puli bieżącego klucza API. Tryb Tylko standardowy limit blokuje kredyty. Wyłączenie kredytów dla konkretnego konta ma zawsze pierwszeństwo.",
+      "boundary": "Migawki limitu są ważne przez 5 minut. Limity kont objętych ograniczeniami są automatycznie odświeżane przed wyborem, jeśli są nieznane, nieaktualne lub zostały zresetowane (maksymalnie 9 sekund; równoczesne odczyty są łączone). Nieudane odświeżenie bezpiecznie wstrzymuje konto; szczegóły znajdziesz w diagnostyce puli kont. Trwających żądań nie można wycofać. Żądanie przekraczające limit lub równoczesne użycie przez innych klientów może nadal zużyć kredyty u dostawcy; bezwzględne limity wydatków należy ustawić u dostawcy.",
+      "strictHint": "Tryb Tylko standardowy limit blokuje kredyty dla wszystkich kont. Ustawienia przełączników kont są zachowywane dla pozostałych zasad."
+    },
     "launchErrors": {
       "sessionRestoreFailed": "Naprawa sesji nie powiodła się, a przywracanie kopii jest niepełne. Uruchamianie zatrzymane; przed ponowną próbą sprawdź dzienniki i kopie zapasowe.",
       "sessionCheckTimeout": "Przekroczono czas sprawdzania sesji. Uruchamianie zatrzymane; spróbuj ponownie lub sprawdź dzienniki.",
@@ -3166,6 +3177,9 @@
       "resetCredits": "Resety {{count}}",
       "resetCreditsTitle": "Pozostałe resety okna 5 godzin: {{count}}",
       "resetCreditConfirm": "Potwierdzić?",
+      "autoConsumeResetDescription": "Przełącznik i próg dotyczą tylko tego konta Codex. Gdy Cockpit Tools działa, a komputer nie jest uśpiony, limit jest sprawdzany w tle mniej więcej raz na minutę. Jeśli pozostały procent limitu tygodniowego jest równy progowi lub niższy, używany jest jeden Banked Reset z najbliższą datą wygaśnięcia. Limit 5-godzinny jest pomijany; jeśli nie ma dostępnego resetu, nic się nie dzieje. Kolejne automatyczne użycie jest możliwe dopiero po tym, jak odświeżony pozostały limit tygodniowy przekroczy próg. Domyślnie wyłączone.",
+      "autoConsumeResetThreshold": "Próg pozostałego limitu tygodniowego",
+      "autoConsumeResetInvalidThreshold": "Wpisz liczbę całkowitą od 0 do 99.",
       "resetCreditDialogTitle": "Zresetować użycie?",
       "resetCreditDialogDesc": "Zresetuj limit szybkości, aby kontynuować pracę bez przerw. Dostępne resety: {{count}}.",
       "resetCreditDialogAction": "Resetuj użycie",

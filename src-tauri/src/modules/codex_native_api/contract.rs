@@ -127,6 +127,23 @@ impl ExecutionPolicy {
     }
 }
 
+/// Request-scoped admission in addition to the host's shared quota protection.
+/// Checks and observations must only access memory; routing owns any refresh.
+pub trait UpstreamAdmissionGuard: Send + Sync {
+    fn check(&self) -> Result<(), ServiceError>;
+
+    fn observe_headers(&self, _headers: &HeaderMap, _request_started: std::time::Instant) {}
+
+    fn observe_event(&self, _event: &Value, _request_started: std::time::Instant) {}
+
+    fn observe_rate_limits(
+        &self,
+        _snapshot: super::rate_limits::QuotaSnapshot,
+        _request_started: std::time::Instant,
+    ) {
+    }
+}
+
 #[derive(Clone)]
 pub struct Route {
     pub account_id: String,
@@ -146,6 +163,10 @@ pub struct Route {
     pub official_fallback_authorization_revision: Option<String>,
     /// Opaque snapshot of the caller ACL and official route authorization.
     pub authorization_scope_fingerprint: Option<String>,
+    /// Rechecked for this candidate immediately before every upstream send.
+    pub send_guard: Option<Arc<dyn UpstreamAdmissionGuard>>,
+    /// Final credential/workspace quota identity; internal, never sent upstream.
+    pub quota_identity: Option<String>,
     pub official_fallback_failure: Option<OfficialFallbackFailure>,
     /// Responses base: e.g. https://chatgpt.com/backend-api/codex or https://api.openai.com/v1.
     pub base_url: String,

@@ -25,6 +25,7 @@ import { formatCodexQuotaPoolPlanLabel, formatCodexQuotaPoolPercent, formatCodex
 import { CODEX_LOCAL_ACCESS_STATUS_KEYS, resolveCodexLocalAccessRuntimeStatus } from "../utils/codexLocalAccessStatus";
 import { SingleSelectDropdown } from "../components/SingleSelectDropdown";
 import { CodexLocalAccessModal } from "../components/CodexLocalAccessModal";
+import { CodexCreditsSettings } from "../components/codex/CodexCreditsSettings";
 import { CodexAccountPoolHealthModal } from "../components/CodexAccountPoolHealthModal";
 import { CodexStatsRangePicker } from "../components/CodexStatsRangePicker";
 import { CodexUsageTrend } from "../components/codex/CodexUsageTrend";
@@ -1734,6 +1735,15 @@ export function CodexApiServiceView(props: CodexApiServiceViewProps) {
               </div>
             </section>
 
+            <div className="codex-api-service-panel-stack">
+            <CodexCreditsSettings
+              state={state}
+              accounts={accounts}
+              busy={busy}
+              onSaved={setState}
+              maskAccountText={maskAccountText}
+            />
+
             <section className="codex-api-service-panel">
               <div className="codex-api-service-panel-head">
                 <h2 className="codex-api-service-title-with-icon">
@@ -1929,6 +1939,7 @@ export function CodexApiServiceView(props: CodexApiServiceViewProps) {
                 </label>
               </div>
             </section>
+            </div>
           </div>
         )}
 

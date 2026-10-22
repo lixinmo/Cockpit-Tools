@@ -1,0 +1,261 @@
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -46,6 +46,7 @@
+ ]
+ 
+ [features]
++cockpit-connect-retry = ["tokio", "client-legacy"]
+ __internal_happy_eyeballs_tests = []
+ client = [
+     "hyper/client",
+--- a/src/client/legacy/client.rs
++++ b/src/client/legacy/client.rs
+@@ -26,6 +26,10 @@
+ use super::pool::{self, Ver};
+ 
+ use crate::common::{lazy as hyper_lazy, timer, Exec, Lazy, SyncWrapper};
++
++#[cfg(feature = "cockpit-connect-retry")]
++#[path = "cockpit_connect_retry.rs"]
++mod cockpit_connect_retry;
+ 
+ type BoxSendFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
+ 
+@@ -47,6 +51,8 @@
+ 
+ #[derive(Clone, Copy, Debug)]
+ struct Config {
++    #[cfg(feature = "cockpit-connect-retry")]
++    cockpit_connect_retry: Option<cockpit_connect_retry::Policy>,
+     retry_canceled_requests: bool,
+     set_host: bool,
+     ver: Ver,
+@@ -276,8 +282,31 @@
+         mut req: Request<B>,
+         pool_key: PoolKey,
+     ) -> Result<Response<hyper::body::Incoming>, TrySendError<B>> {
+-        let mut pooled = self
+-            .connection_for(pool_key)
++        #[cfg(feature = "cockpit-connect-retry")]
++        let setup_policy = self.config.cockpit_connect_retry.filter(|_| {
++            pool_key.0 == Scheme::HTTPS
++                && pool_key.1.host().eq_ignore_ascii_case("chatgpt.com")
++                && req.method() != Method::CONNECT
++                && !req.headers().contains_key(hyper::header::UPGRADE)
++        });
++        #[cfg(feature = "cockpit-connect-retry")]
++        let connection = async {
++            if let Some(policy) = setup_policy {
++                // A dedicated, unpooled connection has exactly one owner. Do
++                // not detach the pool's racing connect future on cancellation.
++                let mut direct = self.clone();
++                direct.pool = pool::Pool::new(
++                    pool::Config { idle_timeout: None, max_idle_per_host: 0 },
++                    self.exec.clone(), None::<timer::Timer>,
++                );
++                cockpit_connect_retry::connect(policy, || direct.connect_to(pool_key.clone(), true)).await
++            } else {
++                self.connection_for(pool_key).await
++            }
++        };
++        #[cfg(not(feature = "cockpit-connect-retry"))]
++        let connection = self.connection_for(pool_key);
++        let mut pooled = connection
+             .await
+             // `connection_for` already retries checkout errors, so if
+             // it returns an error, there's not much else to retry
+@@ -395,7 +424,7 @@
+         // Return a single connection if pooling is not enabled
+         if !self.pool.is_enabled() {
+             return self
+-                .connect_to(pool_key)
++                .connect_to(pool_key, false)
+                 .await
+                 .map_err(ClientConnectError::Normal);
+         }
+@@ -414,7 +443,7 @@
+         //   connection future is spawned into the runtime to complete,
+         //   and then be inserted into the pool as an idle connection.
+         let checkout = self.pool.checkout(pool_key.clone());
+-        let connect = self.connect_to(pool_key);
++        let connect = self.connect_to(pool_key, false);
+         let is_ver_h2 = self.config.ver == Ver::Http2;
+ 
+         // The order of the `select` is depended on below...
+@@ -484,6 +513,7 @@
+     fn connect_to(
+         &self,
+         pool_key: PoolKey,
++        _setup_owned: bool,
+     ) -> impl Lazy<Output = Result<pool::Pooled<PoolClient<B>, PoolKey>, Error>> + Send + Unpin
+     {
+         let executor = self.exec.clone();
+@@ -549,14 +579,17 @@
+                                     trace!(
+                                         "http2 handshake complete, spawning background dispatcher task"
+                                     );
+-                                    executor.execute(
+-                                        conn.map_err(|e| debug!("client connection error: {}", e))
+-                                            .map(|_| ()),
+-                                    );
++                                    let dispatcher = conn.map_err(|e| debug!("client connection error: {}", e)).map(|_| ());
++                                    #[cfg(feature = "cockpit-connect-retry")]
++                                    let mut setup_dispatch = cockpit_connect_retry::SetupDispatch::spawn(&executor, dispatcher, _setup_owned);
++                                    #[cfg(not(feature = "cockpit-connect-retry"))]
++                                    executor.execute(dispatcher);
+ 
+                                     // Wait for 'conn' to ready up before we
+                                     // declare this tx as usable
+                                     tx.ready().await.map_err(Error::tx)?;
++                                    #[cfg(feature = "cockpit-connect-retry")]
++                                    setup_dispatch.disarm();
+                                     PoolTx::Http2(tx)
+                                 }
+                                 #[cfg(not(feature = "http2"))]
+@@ -581,8 +614,7 @@
+                                     // Spawn the connection task in the background using the executor.
+                                     // The task manages the HTTP/1.1 connection, including upgrades (e.g., WebSocket).
+                                     // Errors are sent via err_tx to ensure they can be checked if the sender (tx) fails.
+-                                    executor.execute(
+-                                        conn.with_upgrades()
++                                    let dispatcher =                                         conn.with_upgrades()
+                                             .map_err(|e| {
+                                                 // Log the connection error at debug level for diagnostic purposes.
+                                                 debug!("client connection error: {:?}", e);
+@@ -592,8 +624,11 @@
+                                                 // (e.g., if the receiver is dropped, which is handled later).
+                                                 let _ =err_tx.send(e);
+                                             })
+-                                            .map(|_| ()),
+-                                    );
++                                            .map(|_| ());
++                                    #[cfg(feature = "cockpit-connect-retry")]
++                                    let mut setup_dispatch = cockpit_connect_retry::SetupDispatch::spawn(&executor, dispatcher, _setup_owned);
++                                    #[cfg(not(feature = "cockpit-connect-retry"))]
++                                    executor.execute(dispatcher);
+                                     // Log that the client is waiting for the connection to be ready.
+                                     // Readiness indicates the sender (tx) can accept a request without blocking.
+                                     trace!("waiting for connection to be ready");
+@@ -610,6 +645,8 @@
+                                             // Drop the error receiver, as it’s no longer needed since the sender is ready.
+                                             // This prevents waiting for errors that won’t occur in a successful case.
+                                             drop(err_rx);
++                                            #[cfg(feature = "cockpit-connect-retry")]
++                                            setup_dispatch.disarm();
+                                             // Wrap the sender in PoolTx::Http1 for use in the connection pool.
+                                             PoolTx::Http1(tx)
+                                         }
+@@ -1031,6 +1068,8 @@
+         let exec = Exec::new(executor);
+         Self {
+             client_config: Config {
++                #[cfg(feature = "cockpit-connect-retry")]
++                cockpit_connect_retry: None,
+                 retry_canceled_requests: true,
+                 set_host: true,
+                 ver: Ver::Auto,
+@@ -1535,6 +1574,13 @@
+     #[cfg_attr(docsrs, doc(cfg(feature = "http2")))]
+     pub fn http2_max_send_buf_size(&mut self, max: usize) -> &mut Self {
+         self.h2_builder.max_send_buf_size(max);
++        self
++    }
++
++    #[cfg(feature = "cockpit-connect-retry")]
++    #[doc(hidden)]
++    pub fn cockpit_connect_retry(&mut self, classify: fn(&(dyn StdError + 'static)) -> bool, timeout: Option<Duration>) -> &mut Self {
++        self.client_config.cockpit_connect_retry = Some(cockpit_connect_retry::Policy { classify, timeout });
+         self
+     }
+ 
+--- /dev/null
++++ b/src/client/legacy/cockpit_connect_retry.rs
+@@ -0,0 +1,88 @@
++//! CT-CONNECT-RETRY-001: the request body is not available to this module.
++//! This opt-in boundary ends before PoolClient::try_send_request is invoked.
++
++use super::{Error, ErrorKind};
++use crate::common::Exec;
++use futures_util::future::{AbortHandle, Abortable};
++use std::{error::Error as StdError, future::Future, io, time::Duration};
++
++pub(super) type Classifier = fn(&(dyn StdError + 'static)) -> bool;
++
++#[derive(Clone, Copy, Debug)]
++pub(super) struct Policy {
++    pub classify: Classifier,
++    pub timeout: Option<Duration>,
++}
++
++pub(super) async fn connect<T, F, Fut>(policy: Policy, mut attempt: F) -> Result<T, Error>
++where
++    F: FnMut() -> Fut,
++    Fut: Future<Output = Result<T, Error>>,
++{
++    let run = async {
++        for index in 0..3 {
++            match attempt().await {
++                Ok(connection) => return Ok(connection),
++                Err(error) => {
++                    if index == 2 || !(policy.classify)(&error) {
++                        return Err(error);
++                    }
++                    tokio::time::sleep(Duration::from_millis(200 << index)).await;
++                }
++            }
++        }
++        unreachable!("fixed connection setup budget")
++    };
++    // One connect deadline surrounds all attempts and waits. The caller's
++    // request deadline/cancellation drops this entire future, never a detached
++    // connection retry task. biased preserves deadline precedence if both wake.
++    if let Some(timeout) = policy.timeout {
++        tokio::select! {
++            biased;
++            _ = tokio::time::sleep(timeout) => Err(Error {
++                kind: ErrorKind::Connect,
++                source: Some(Box::new(io::Error::new(io::ErrorKind::TimedOut, "connection setup deadline elapsed"))),
++                connect_info: None,
++            }),
++            result = run => result,
++        }
++    } else {
++        run.await
++    }
++}
++
++/// During HTTP/2 ready/handshake, a spawned dispatcher owns the partial socket.
++/// Dropping the setup future must also drop that dispatcher and socket. After
++/// setup succeeds, normal sender/response ownership takes over.
++pub(super) struct SetupDispatch(Option<AbortHandle>);
++
++impl SetupDispatch {
++    pub fn spawn(
++        executor: &Exec,
++        future: impl Future<Output = ()> + Send + 'static,
++        owned: bool,
++    ) -> Self {
++        if owned {
++            let (abort, registration) = AbortHandle::new_pair();
++            executor.execute(async move {
++                let _ = Abortable::new(future, registration).await;
++            });
++            Self(Some(abort))
++        } else {
++            executor.execute(future);
++            Self(None)
++        }
++    }
++
++    pub fn disarm(&mut self) {
++        self.0 = None;
++    }
++}
++
++impl Drop for SetupDispatch {
++    fn drop(&mut self) {
++        if let Some(abort) = self.0.take() {
++            abort.abort();
++        }
++    }
++}

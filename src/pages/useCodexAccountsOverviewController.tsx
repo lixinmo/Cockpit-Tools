@@ -5,7 +5,7 @@ import { RefreshCw, RotateCw } from "lucide-react";
 import * as codexService from "../services/codexService";
 import * as codexLocalAccessService from "../services/codexLocalAccessService";
 import { type CodexAccountGroup } from "../services/codexAccountGroupService";
-import { hasCodexAccountStructure, hasCodexAccountName, isCodexApiKeyAccount, isCodexChatgptPlanAccount, isCodexAgentIdentityAccount, isCodexNewApiAccount, isCodexTeamLikePlan } from "../types/codex";
+import { hasCodexAccountStructure, hasCodexAccountName, isCodexApiKeyAccount, isCodexChatgptPlanAccount, isCodexNewApiAccount, isCodexTeamLikePlan } from "../types/codex";
 import { summarizeCodexQuotaErrorMessage } from "../utils/codexQuotaError";
 import { buildCodexAccountPresentation } from "../presentation/platformAccountPresentation";
 import { formatCodexWindowStatsText } from "../utils/codexWindowStats";
@@ -1651,12 +1651,11 @@ export function useCodexAccountsOverviewController(context: Pick<ReturnType<type
     );
   
     const renderResetCreditControls = (account: CodexAccount) => {
-      if (isCodexApiKeyAccount(account) || isCodexAgentIdentityAccount(account))
-        return null;
+      if (isCodexApiKeyAccount(account)) return null;
   
       const creditDetails = getResetCreditDetails(account);
       const availableCount = getResetCreditsAvailable(account);
-      if (availableCount == null && creditDetails.length === 0) return null;
+      const hasResetCreditData = availableCount != null || creditDetails.length > 0;
   
       const displayCount =
         availableCount ?? creditDetails.filter(isAvailableResetCredit).length;
@@ -1683,7 +1682,9 @@ export function useCodexAccountsOverviewController(context: Pick<ReturnType<type
             ) : (
               <RotateCw size={13} />
             )}
-            {t("codex.quota.resetCredits", { count: displayCount })}
+            {hasResetCreditData
+              ? t("codex.quota.resetCredits", { count: displayCount })
+              : t("codex.quota.resetCreditDetailsTitle", "重置次数明细")}
           </button>
         </div>
       );

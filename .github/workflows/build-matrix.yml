@@ -1,343 +1,247 @@
-name: 🚀 Build Matrix
+name: Cloud Build
 
 on:
   workflow_dispatch:
-  pull_request:
-    branches:
-      - "main"
+    inputs:
+      platform:
+        description: Platform to build (this Mac uses macos-x86_64)
+        type: choice
+        default: macos-x86_64
+        options:
+          - macos-x86_64
+          - macos-aarch64
+          - macos-universal
+          - windows
+          - linux-x86_64
+          - linux-aarch64
+          - all
   push:
     branches:
-      # Trusted default-branch builds seed caches readable by future tags.
       - "main"
-      - "feature/build-matrix*"
-      - "feature/build-matrix/**"
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'LICENSE*'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'LICENSE*'
+
+permissions:
+  contents: read
 
 concurrency:
-  group: build-matrix-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: cloud-build-${{ github.event.pull_request.number || github.ref }}-${{ inputs.platform || 'macos-x86_64' }}
   cancel-in-progress: true
 
+env:
+  ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+  CARGO_INCREMENTAL: '0'
+
 jobs:
-  preflight-locales:
-    name: "🔍 Preflight: Check Locales"
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      universal: ${{ steps.plan.outputs.universal }}
     steps:
-      - name: 📥 Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - id: plan
+        env:
+          SELECTED_PLATFORM: ${{ inputs.platform || 'macos-x86_64' }}
+        run: node scripts/ci/cloud-build.cjs plan "$SELECTED_PLATFORM"
 
-      - name: ⚙️ Node.js setup
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: "npm"
-
-      - name: 📦 Install frontend dependencies
-        run: npm install
-
-      - name: 🔄 Sync versions
-        run: npm run sync-version
-
-      - name: 🌐 Check locales
-        run: node scripts/check_locales.cjs
-
-  preflight-typecheck:
-    name: "🔍 Preflight: Typecheck"
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
+  frontend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
-      - name: 📥 Checkout repository
-        uses: actions/checkout@v4
-
-      - name: ⚙️ Node.js setup
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: "npm"
-
-      - name: 📦 Install frontend dependencies
-        run: npm install
-
-      - name: 🔄 Sync versions
-        run: npm run sync-version
-
-      - name: 🛡️ Typecheck
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run sync-version
+      - name: Check frontend once for all selected platforms
         run: npm run typecheck
-
-  preflight-tests:
-    name: "🧪 Preflight: Regression Tests"
-    runs-on: ubuntu-22.04
-    permissions:
-      contents: read
-    steps:
-      - name: 📥 Checkout repository
-        uses: actions/checkout@v4
-
-      - name: ⚙️ Node.js setup
-        uses: actions/setup-node@v4
+      - name: Frontend and packaging regressions
+        run: |
+          npm test
+          npm run test:release
+          node --test scripts/ci/cloud-build.test.cjs
+          node scripts/check_locales.cjs
+      - name: Build frontend once
+        run: node node_modules/vite/bin/vite.js build
+      - uses: actions/upload-artifact@v4
         with:
-          node-version: 20
-          cache: "npm"
+          name: cloud-frontend
+          path: dist/
+          retention-days: 1
+          if-no-files-found: error
 
-      - name: 🐹 Go setup
-        uses: actions/setup-go@v5
+  contracts:
+    name: Native and Go contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-go@v5
         with:
           go-version-file: sidecars/cockpit-cliproxy/go.mod
-          cache-dependency-path: sidecars/cockpit-cliproxy/go.sum
-
-      - name: 📦 Install frontend dependencies
-        run: npm ci
-
-      - name: 🧪 TypeScript regression tests
-        run: npm test
-
-      - name: 🧪 Release script tests
-        run: npm run test:release
-
-      - name: 🐹 Go sidecar tests
-        run: npm run test:go
-
-  preflight-ts-windows:
-    name: "🪟 Preflight: TypeScript Tests"
-    runs-on: windows-latest
-    permissions:
-      contents: read
-    steps:
-      - name: 📥 Checkout repository
-        uses: actions/checkout@v4
-
-      - name: ⚙️ Node.js setup
-        uses: actions/setup-node@v4
+          cache-dependency-path: |
+            sidecars/cockpit-cliproxy/go.sum
+            sidecars/cockpit-cliproxy/third_party/CLIProxyAPI/go.sum
+      - uses: Swatinem/rust-cache@v2
         with:
-          node-version: 20
-          cache: "npm"
-
-      - name: 📦 Install frontend dependencies
-        run: npm ci
-
-      - name: 🧪 TypeScript regression tests
-        run: npm test
+          shared-key: cloud-contracts-v1
+          workspaces: |
+            tests/codex-native-connect-retry -> ../../target/local-app-cache/native-connect-retry-harness/target
+            tests/codex-credits-policy
+            tests/codex-auto-reset
+          save-if: ${{ github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch }}
+      - name: Fetch Native harness dependencies before offline verification
+        run: cargo fetch --locked --manifest-path tests/codex-native-connect-retry/Cargo.toml
+      - name: Native setup-only retry contract
+        run: bash scripts/verify-native-connect-retry.sh
+      - name: Go reference retry contract
+        run: bash scripts/verify-cockpit-connect-retry.sh
+      - name: Credits policy and Auto Reset contracts
+        run: |
+          cargo test --locked --manifest-path tests/codex-credits-policy/Cargo.toml
+          cargo test --locked --manifest-path tests/codex-auto-reset/Cargo.toml
 
   build:
-    name: "🏗️ Build: ${{ matrix.label }}"
-    needs: [preflight-locales, preflight-typecheck, preflight-tests, preflight-ts-windows]
-    runs-on: ${{ matrix.platform }}
-    permissions:
-      contents: read
+    name: Build ${{ matrix.label }}
+    needs: [plan, frontend]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - label: "macos-aarch64"
-            cache_target: "macos-aarch64"
-            platform: "macos-latest"
-            args: "--target aarch64-apple-darwin"
-            release_dir: "target/aarch64-apple-darwin/release"
-          - label: "macos-x86_64"
-            cache_target: "macos-x86_64"
-            platform: "macos-latest"
-            args: "--target x86_64-apple-darwin"
-            release_dir: "target/x86_64-apple-darwin/release"
-          - label: "macos-universal"
-            cache_target: "macos-universal"
-            platform: "macos-latest"
-            args: "--target universal-apple-darwin"
-            release_dir: "target/universal-apple-darwin/release"
-          - label: "ubuntu-22.04"
-            cache_target: "linux-x86_64"
-            platform: "ubuntu-22.04"
-            args: ""
-            release_dir: "target/release"
-          - label: "ubuntu-24.04-arm"
-            cache_target: "linux-aarch64"
-            platform: "ubuntu-24.04-arm"
-            args: ""
-            release_dir: "target/release"
-          - label: "windows-latest"
-            cache_target: "windows"
-            platform: "windows-latest"
-            args: ""
-            release_dir: "target/release"
-
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
-      - name: 📥 Checkout repository
-        uses: actions/checkout@v4
-
-      - name: 🐧 Install system dependencies (Linux)
-        if: startsWith(matrix.platform, 'ubuntu')
+      - uses: actions/checkout@v4
+      - name: Linux system dependencies
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf pkg-config libsoup-3.0-dev javascriptcoregtk-4.1 libjavascriptcoregtk-4.1-dev
-          sudo apt-get install -y libnm-dev xdg-utils
-
-      - name: 🦀 Rust setup
-        uses: dtolnay/rust-toolchain@stable
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf pkg-config libsoup-3.0-dev libjavascriptcoregtk-4.1-dev libnm-dev xdg-utils
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
-
-      - name: 💾 Host build cache
+          targets: ${{ matrix.target }}
+      - name: Host build cache
         uses: ./.github/actions/host-build-cache
         with:
           target: ${{ matrix.cache_target }}
-
-      - name: 🧪 Test Codex context preservation
-        if: matrix.label == 'ubuntu-22.04'
-        working-directory: src-tauri
-        run: |
-          cargo test instance_configuration_save --lib
-          cargo test quick_config_catalog_only_context_preservation --lib
-
-      - name: 🐹 Go setup
-        uses: actions/setup-go@v5
+      - uses: actions/setup-go@v5
         with:
           go-version-file: sidecars/cockpit-cliproxy/go.mod
           cache-dependency-path: sidecars/cockpit-cliproxy/go.sum
-
-      - name: ⚙️ Node.js setup
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: "npm"
-
-      - name: 📦 Install frontend dependencies
-        run: npm install
-
-      - name: 🔄 Sync versions
-        run: npm run sync-version
-
-      - name: 🧪 Test core Rust library
-        if: matrix.label == 'ubuntu-22.04'
-        run: npm run test:rust:core
-
-      # Keep the private key out of PR code, dependency scripts, and third-party actions.
-      - name: 🔐 Check signing availability
-        if: github.event_name != 'pull_request'
-        id: signing
-        shell: bash
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-        run: |
-          if [ -n "${TAURI_SIGNING_PRIVATE_KEY}" ]; then
-            echo "available=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "available=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: 🏗️ Build app (Unsigned CI)
-        if: github.event_name == 'pull_request' || steps.signing.outputs.available != 'true'
-        shell: bash
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: cloud-frontend
+          path: dist
+      - name: Build selected application
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          npx tauri build --ci --config src-tauri/tauri.ci.conf.json ${{ matrix.args }} 2>&1 | tee "build-${{ matrix.label }}.log"
-
-      - name: 📜 Print unsigned build logs on failure
-        if: failure() && (github.event_name == 'pull_request' || steps.signing.outputs.available != 'true')
-        shell: bash
-        run: |
-          echo "=== UNSIGNED BUILD LOG ==="
-          if [ -f "build-${{ matrix.label }}.log" ]; then
-            tail -n 200 "build-${{ matrix.label }}.log"
-          else
-            echo "Log file not found"
-          fi
-
-      - name: 🏗️ Build app (Signed)
-        if: github.event_name != 'pull_request' && steps.signing.outputs.available == 'true'
-        shell: bash
+          CLOUD_BUILD_TARGET: ${{ matrix.target }}
+          COCKPIT_NATIVE_APP_BUILD: ${{ matrix.native_mac }}
+          COCKPIT_SKIP_CLIPROXY_BUILD: '0'
+        run: node scripts/ci/cloud-build.cjs build
+      - name: Prepare verified Universal inputs
+        if: needs.plan.outputs.universal == 'true' && runner.os == 'macOS'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: |
-          set -euo pipefail
-          npx tauri build --ci ${{ matrix.args }} 2>&1 | tee "build-${{ matrix.label }}.log"
-
-      - name: 📜 Print signed build logs on failure
-        if: failure() && github.event_name != 'pull_request' && steps.signing.outputs.available == 'true'
-        shell: bash
-        run: |
-          echo "=== BUILD LOG (SIGNED) ==="
-          if [ -f "build-${{ matrix.label }}.log" ]; then
-            tail -n 200 "build-${{ matrix.label }}.log"
-          else
-            echo "Log file not found"
-          fi
-
-      - name: 📊 Summarize build warnings
-        if: always()
-        shell: bash
-        env:
-          JOB_STATUS: ${{ job.status }}
-        run: |
-          set -euo pipefail
-          log_file="build-${{ matrix.label }}.log"
-          warnings_file="warnings-${{ matrix.label }}.txt"
-
-          if [ ! -f "$log_file" ]; then
-            : > "$warnings_file"
-            {
-              echo "### 🏗️ Build Summary: ${{ matrix.label }}"
-              echo
-              echo "❌ **The build did not produce a log; warning analysis is unavailable.**"
-              echo
-              echo "---"
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-
-          # Cargo emits ANSI color codes in CI, so normalize the log before matching.
-          if sed $'s/\033\\[[0-9;]*m//g' "$log_file" | grep -n "^warning:" > "$warnings_file"; then
-            warning_count="$(wc -l < "$warnings_file" | tr -d ' ')"
-          else
-            : > "$warnings_file"
-            warning_count="0"
-          fi
-
-          {
-            echo "### 🏗️ Build Summary: ${{ matrix.label }}"
-            echo
-            if [ "$JOB_STATUS" != "success" ]; then
-              echo "❌ **Build failed with ${warning_count} warning(s).**"
-            elif [ "${warning_count}" -eq "0" ]; then
-              echo "✅ **Build completed with 0 warnings.**"
-            else
-              echo "⚠️ **Build completed with ${warning_count} warning(s).**"
-            fi
-
-            if [ -s "$warnings_file" ]; then
-              echo
-              echo "<details>"
-              echo "<summary>🔍 Show warning logs (up to 200 lines)</summary>"
-              echo
-              echo '```text'
-              sed -n '1,200p' "$warnings_file"
-              echo '```'
-              echo "</details>"
-            fi
-            echo
-            echo "---"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: 📤 Upload build logs
-        if: always()
-        uses: actions/upload-artifact@v4
+          CLOUD_BUILD_TARGET: ${{ matrix.target }}
+        run: node scripts/ci/cloud-build.cjs stage-universal
+      - uses: actions/upload-artifact@v4
+        if: needs.plan.outputs.universal == 'true' && runner.os == 'macOS'
         with:
-          name: logs-${{ matrix.label }}
-          retention-days: 7
-          if-no-files-found: warn
-          path: |
-            build-${{ matrix.label }}.log
-            warnings-${{ matrix.label }}.txt
-
-      - name: 📤 Upload build bundles
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: bundles-${{ matrix.label }}
-          retention-days: 7
+          name: cloud-universal-${{ matrix.target }}
+          path: universal-inputs/${{ matrix.target }}/
+          retention-days: 1
+          compression-level: 1
           if-no-files-found: error
-          path: |
-            ${{ matrix.release_dir }}/bundle
+      - name: Archive application and write provenance
+        env:
+          CLOUD_BUILD_TARGET: ${{ matrix.target }}
+        run: node scripts/ci/cloud-build.cjs package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cockpit-tools-${{ matrix.label }}
+          path: cloud-assets/
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
+
+  universal:
+    name: Bundle macOS Universal without recompiling
+    if: needs.plan.outputs.universal == 'true'
+    needs: [plan, frontend, build]
+    runs-on: macos-15
+    timeout-minutes: 15
+    env:
+      CLOUD_BUILD_TARGET: universal-apple-darwin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: cloud-frontend
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: cloud-universal-aarch64-apple-darwin
+          path: universal-inputs/aarch64-apple-darwin
+      - uses: actions/download-artifact@v4
+        with:
+          name: cloud-universal-x86_64-apple-darwin
+          path: universal-inputs/x86_64-apple-darwin
+      - name: Verify, merge and bundle existing slices
+        run: node scripts/ci/cloud-build.cjs universal
+      - run: node scripts/ci/cloud-build.cjs package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cockpit-tools-macos-universal
+          path: cloud-assets/
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
+
+  publish-development:
+    name: Replace rolling development downloads
+    needs: [plan, frontend, contracts, build, universal]
+    if: >-
+      always() && !cancelled() && github.event_name != 'pull_request' &&
+      github.ref_name == github.event.repository.default_branch &&
+      needs.contracts.result == 'success' && needs.build.result == 'success' &&
+      (needs.universal.result == 'success' || needs.universal.result == 'skipped')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    concurrency:
+      group: cloud-development-publication
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: cockpit-tools-*
+          path: downloaded-builds
+      - name: Publish verified builds and remove transient artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/ci/cloud-publish.cjs

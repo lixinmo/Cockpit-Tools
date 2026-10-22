@@ -1,5 +1,8 @@
 # Cockpit Tools
 
+> **Community-maintained edition**, based on [jlcodes99/cockpit-tools](https://github.com/jlcodes99/cockpit-tools), preserving Rust Native, upstream features, and local patch contracts.
+> [Select a cloud build target](https://github.com/lixinmo/Cockpit-Tools/actions/workflows/build-matrix.yml) · [Download this edition](https://github.com/lixinmo/Cockpit-Tools/releases) · [Build, release and upstream sync guide](docs/cloud-builds.md). The default builds Intel Mac only; versioned releases cover every supported platform. Accounts and application settings remain on each user's machine. Upstream documentation and attribution follow below.
+
 English · [Portuguese (BR)](README.pt-br.md) · [简体中文](README.md)
 
 [![GitHub stars](https://img.shields.io/github/stars/jlcodes99/cockpit-tools?style=flat&color=gold)](https://github.com/jlcodes99/cockpit-tools)

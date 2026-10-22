@@ -1104,7 +1104,7 @@ async fn native_select_route_once(
     )
     .await?;
     let mut accounts = host
-        .load_routing_accounts(ids, caller.id != NATIVE_INTERNAL_CALLER && !plan.provider)
+        .load_routing_accounts(ids.clone(), caller.id != NATIVE_INTERNAL_CALLER && !plan.provider)
         .await?;
     let scope_fingerprint = native_official_scope_fingerprint(&collection, caller);
     let mut local_fallbacks = native_official_preflight_fallbacks(
@@ -1117,6 +1117,16 @@ async fn native_select_route_once(
         &mut accounts,
     )
     .await;
+    let mut credits_ids = if caller.id == NATIVE_INTERNAL_CALLER { ids.clone() }
+        else { native_credits_scope(&collection, key) };
+    if plan.provider { for id in &ids { if !credits_ids.contains(id) { credits_ids.push(id.clone()); } } }
+    let mut credits = native_credits_pool(host, &collection, credits_ids, &accounts).await?;
+    credits.filter(caller, &model, &mut accounts).await?;
+    if let Some(preferred) = request.preferred_account_id.as_ref() {
+        if let Some(member) = credits.members.iter().find(|member| &member.id == preferred) {
+            if let Some(code) = credits.code(preferred, member.official) { return Err(credits.error(code)); }
+        }
+    }
     if request
         .auxiliary
         .as_deref()
@@ -1131,6 +1141,8 @@ async fn native_select_route_once(
                 .expect("auxiliary operation checked"),
         ));
     }
+    let credits_before_accounts = accounts.clone();
+    let credits_before_filter = accounts.iter().map(|a| a.id.clone()).collect::<Vec<_>>();
     accounts.retain(|account| {
         native_eligible(account)
             && native_auxiliary_eligible(account, request.auxiliary.as_deref())
@@ -1166,7 +1178,12 @@ async fn native_select_route_once(
                     })
             })
     });
+    credits.mark_removed(&credits_before_filter, &accounts, "model_or_account_policy");
+    credits.mark_host_cooldowns(&credits_before_accounts);
+    let credits_before_capability = accounts.iter().map(|a| a.id.clone()).collect::<Vec<_>>();
     native_filter_capability_backups(&collection, &plan, &request, &mut accounts)?;
+    credits.mark_removed(&credits_before_capability, &accounts, "capability_policy");
+    let credits_before_cooldown = accounts.iter().map(|a| a.id.clone()).collect::<Vec<_>>();
     let mut closest_cooldown = None;
     {
         let cooldowns = host.cooldowns.lock().map_err(|_| {
@@ -1204,6 +1221,8 @@ async fn native_select_route_once(
             wait.is_none()
         });
     }
+    credits.mark_removed(&credits_before_cooldown, &accounts, "quota_cooldown");
+    if credits.has_policy_blocks() || (accounts.is_empty() && credits.restricted()) { credits.report(caller, &model, "credits_pool_diagnostic").await; }
     // A known continuation owner can be temporarily cooling even while another
     // account is ready. Keep its ownership pin, but expose a retryable failure
     // instead of treating that temporary absence as a broken binding.
@@ -1324,9 +1343,17 @@ async fn native_select_route_once(
         accounts.truncate(1);
     }
     drop(bindings);
-    let (position, permit) =
-        native_acquire_account_permit(host, &collection, &accounts, request.requires_permit)
-            .await?;
+    let (position, permit) = match
+        native_acquire_account_permit(host, &collection, &accounts, request.requires_permit).await {
+        Ok(selected) => selected,
+        Err(error) => {
+            if credits.restricted() {
+                for account in &accounts { credits.scheduler.insert(account.id.clone(), error.code); }
+                credits.report(caller, &model, error.code).await;
+            }
+            return Err(error);
+        }
+    };
     let account = accounts.swap_remove(position);
     let upstream_model = native_operation_model(
         &collection,
@@ -1406,6 +1433,7 @@ async fn native_select_route_once(
     } else if route.chatgpt_plan {
         route.authorization_scope_fingerprint = Some(scope_fingerprint);
     }
+    if route.send_guard.is_none() { native_attach_credits_guard(&credits, &mut route)?; }
     native_commit_routing_cursor(host, &routing_namespace, &route.account_id);
     // A settings transition invalidates old in-flight preparations too. Soft
     // state has only TTL retention; capacity never blocks new conversations.
@@ -1820,6 +1848,8 @@ async fn native_route_for_reserved_account(
         crate::modules::grok_client_version::refresh_in_background(client.clone());
     }
     Ok(native_contract::Route {
+        quota_identity: Some(native_credits_identity(&account)),
+        send_guard: None,
         official_fallback_registration_id: None,
         official_fallback_authorization_revision: None,
         authorization_scope_fingerprint: None,

@@ -2354,6 +2354,17 @@
       "windowHint": "Die Schwellen richten sich nach der tatsächlichen Dauer: Ab einer Woche gilt die Wochenschwelle. Konten mit nur einem Wochenkontingent prüfen nur dieses. Ohne Dauer bleibt die Zuordnung zum primären und sekundären Fenster bestehen.",
       "rule": "Kurzzeitrest <= {{shortCycle}}% oder Wochenrest <= {{weekly}}%"
     },
+    "credits": {
+      "title": "Credits-Nutzung steuern",
+      "policy": "Globale Richtlinie (sofort gespeichert)",
+      "default": "Standard",
+      "prefer": "Reguläres Kontingent bevorzugen",
+      "strict": "Nur reguläres Kontingent",
+      "allow": "Credits erlauben",
+      "description": "Der Standardmodus behält das bestehende Routing bei. Bei Bevorzugung des regulären Kontingents sind Credits erst erlaubt, wenn alle Codex-Konten im Pool des aktuellen API-Schlüssels ihr reguläres Kontingent aufgebraucht haben. Nur reguläres Kontingent sperrt Credits. Ein deaktivierter Credits-Schalter eines Kontos hat immer Vorrang.",
+      "boundary": "Kontingent-Snapshots sind 5 Minuten gültig. Bei eingeschränkten Konten mit unbekanntem, veraltetem oder zurückgesetztem Kontingent wird dieses vor der Auswahl automatisch aktualisiert (höchstens 9 Sekunden; gleichzeitige Abfragen werden zusammengefasst). Schlägt die Aktualisierung fehl, wird das Konto sicher pausiert; Details stehen in der Kontopool-Diagnose. Laufende Anfragen lassen sich nicht zurücknehmen. Eine Anfrage, die eine Kontingentgrenze überschreitet, oder die gleichzeitige Nutzung durch andere Clients kann beim Anbieter dennoch Credits verbrauchen; verbindliche Ausgabenlimits müssen beim Anbieter eingestellt werden.",
+      "strictHint": "Der Modus Nur reguläres Kontingent sperrt Credits für alle Konten. Die Kontoschalter bleiben für andere Richtlinien gespeichert."
+    },
     "launchErrors": {
       "sessionRestoreFailed": "Die Sitzungsreparatur ist fehlgeschlagen, die Sicherung wurde nicht vollständig wiederhergestellt. Start angehalten; vor einem erneuten Versuch Protokolle und Sicherungen prüfen.",
       "sessionCheckTimeout": "Die Sitzungsprüfung hat zu lange gedauert. Start angehalten; erneut versuchen oder Protokolle prüfen.",
@@ -3166,6 +3177,9 @@
       "resetCredits": "Rücksetz. {{count}}",
       "resetCreditsTitle": "Verbleibende Resets für das 5-Stunden-Fenster: {{count}}",
       "resetCreditConfirm": "Bestätigen?",
+      "autoConsumeResetDescription": "Der Schalter und der Schwellenwert gelten nur für dieses Codex-Konto. Solange Cockpit Tools läuft und der Computer nicht im Ruhezustand ist, wird das Kontingent etwa einmal pro Minute im Hintergrund geprüft. Wenn das verbleibende Wochenkontingent den Schwellenwert erreicht oder unterschreitet, wird ein Banked Reset mit dem frühesten Ablaufdatum verwendet. Das 5-Stunden-Kontingent wird ignoriert; ohne verfügbaren Reset geschieht nichts. Eine weitere automatische Verwendung ist erst möglich, nachdem das aktualisierte verbleibende Wochenkontingent den Schwellenwert überschritten hat. Standardmäßig deaktiviert.",
+      "autoConsumeResetThreshold": "Schwellenwert für verbleibendes Wochenkontingent",
+      "autoConsumeResetInvalidThreshold": "Gib eine ganze Zahl von 0 bis 99 ein.",
       "resetCreditDialogTitle": "Nutzung zurücksetzen?",
       "resetCreditDialogDesc": "Setze das Rate-Limit zurück, um ohne Unterbrechung weiterzuarbeiten. Verfügbare Resets: {{count}}.",
       "resetCreditDialogAction": "Nutzung zurücksetzen",

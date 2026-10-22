@@ -4,6 +4,15 @@ use std::collections::HashMap;
 pub const DEFAULT_CODEX_IMAGE_GENERATION_MODEL: &str = "gpt-image-2.5";
 pub const DEFAULT_MAX_ACCOUNT_CONCURRENCY: u16 = 2;
 
+#[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum CodexLocalAccessCreditsPolicy {
+    #[default]
+    Default,
+    PreferRegular,
+    StrictRegular,
+}
+
 fn default_image_generation_model() -> String {
     DEFAULT_CODEX_IMAGE_GENERATION_MODEL.to_string()
 }
@@ -666,10 +675,17 @@ pub struct CodexLocalAccessCollection {
     /// Marks the one-time switch to the native default. Later user choices survive upgrades.
     #[serde(default)]
     pub native_gateway_default_migrated: bool,
+    #[serde(default)]
+    pub native_credits_policy_migrated: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub upstream_proxy_url: Option<String>,
     #[serde(default)]
     pub routing_strategy: CodexLocalAccessRoutingStrategy,
+    #[serde(default)]
+    pub credits_policy: CodexLocalAccessCreditsPolicy,
+    /// Missing entries allow credits, preserving existing pools. False always wins.
+    #[serde(default)]
+    pub account_credits_allowed: HashMap<String, bool>,
     #[serde(default)]
     pub custom_routing_rules: Vec<CodexLocalAccessCustomRoutingRule>,
     #[serde(default)]

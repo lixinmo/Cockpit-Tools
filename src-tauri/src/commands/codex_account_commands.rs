@@ -2001,6 +2001,47 @@ pub async fn get_codex_reset_credits(
     codex_quota::fetch_account_reset_credits(&account_id).await
 }
 
+fn validate_auto_reset_account(account_id: &str) -> Result<(), String> {
+    if account_id.trim().is_empty() || account_id.trim() != account_id {
+        return Err("无效的 Codex 账号 ID".to_string());
+    }
+    let account =
+        codex_account::load_account(account_id).ok_or_else(|| "Codex 账号不存在".to_string())?;
+    if !crate::modules::codex_auto_reset::supports_account(&account) {
+        return Err("该账号不支持 Banked Reset".to_string());
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_codex_auto_reset_settings(
+    account_id: String,
+) -> Result<crate::modules::codex_auto_reset::Settings, String> {
+    validate_auto_reset_account(&account_id)?;
+    Ok(config::get_user_config()
+        .codex_auto_reset
+        .for_account(&account_id))
+}
+
+#[tauri::command]
+pub fn set_codex_auto_reset_settings(
+    account_id: String,
+    enabled: Option<bool>,
+    threshold: Option<i32>,
+) -> Result<crate::modules::codex_auto_reset::Settings, String> {
+    validate_auto_reset_account(&account_id)?;
+    // Modify exactly one account under the existing config transaction. Never
+    // accept a frontend snapshot of the entire map: parallel editors may be stale.
+    let saved = config::patch_user_config(|current| {
+        current
+            .codex_auto_reset
+            .patch_account(&account_id, enabled, threshold)?;
+        Ok(())
+    })?;
+    codex_quota::notify_auto_reset_settings_changed();
+    Ok(saved.codex_auto_reset.for_account(&account_id))
+}
+
 #[tauri::command]
 pub async fn consume_codex_reset_credit(account_id: String) -> Result<(), String> {
     codex_quota::consume_reset_credit(&account_id).await

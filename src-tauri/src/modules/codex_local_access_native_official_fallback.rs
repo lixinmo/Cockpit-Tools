@@ -231,6 +231,12 @@ async fn native_official_preflight_fallbacks(
     let Ok(raw) = raw else {
         return intents;
     };
+    if credits_compat::has_restrictions(collection) {
+        // Confirm the local authority before upstream's fallback capacity check;
+        // a stale exhausted host value must not hide a successful bounded read.
+        // This evidence never authorizes the independently billed official route.
+        let _ = native_credits_pool(host, collection, native_credits_scope(collection, key), &raw).await;
+    }
     for account in accounts.iter_mut() {
         let Some(id) = account.official_registration_id.as_deref() else {
             continue;
@@ -255,7 +261,14 @@ async fn native_official_preflight_fallbacks(
         else {
             continue;
         };
-        let failure = if !snapshot.available {
+        let failure = if credits_policy::restricted(collection.credits_policy,
+            collection.account_credits_allowed.get(&account.id).copied().unwrap_or(true)) {
+            Some(native_contract::OfficialFallbackFailure {
+                status: 503, code: "credits_quota_unconfirmed".into(),
+                message: Some("Official regular/credits quota cannot be verified; applying the local Credits policy to an eligible OAuth fallback".into()),
+                retry_after: None, trigger_stage: "preflight",
+            })
+        } else if !snapshot.available {
             Some(native_contract::OfficialFallbackFailure { status: 0, code: snapshot.failure_code.clone().unwrap_or_else(|| "official_unavailable".into()), message: Some("Official authorization is paused or cooling; this request did not contact the official upstream".into()), retry_after: None, trigger_stage: "health_pause" })
         } else if !native_eligible(account) {
             Some(native_contract::OfficialFallbackFailure {
@@ -399,6 +412,11 @@ async fn native_prepare_official_local_fallback(
             "Original local workspace changed",
         ));
     }
+    let credits = native_credits_pool(host, &collection, native_credits_scope(&collection, key), &[source.clone()]).await?;
+    if let Some(code) = credits.code(&source.id, false) {
+        credits.report(caller, &request.model, code).await;
+        return Err(credits.error(code));
+    }
     let upstream = native_local_fallback_model(&collection, key, &plan, &request, &source)?;
     let cooldown = host
         .cooldowns
@@ -428,7 +446,7 @@ async fn native_prepare_official_local_fallback(
         request.requires_permit,
     )
     .await?;
-    let route = native_route_for_reserved_account(
+    let mut route = native_route_for_reserved_account(
         host,
         &collection,
         source,
@@ -438,6 +456,7 @@ async fn native_prepare_official_local_fallback(
         request.auxiliary.as_deref() == Some("responses.websocket"),
     )
     .await?;
+    native_attach_credits_guard(&credits, &mut route)?;
     native_attach_official_fallback(host, caller, route, intent, scope).await
 }
 

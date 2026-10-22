@@ -1438,6 +1438,8 @@ fn apply_provider_gateway_template_settings(
             .unwrap_or(None);
     collection.upstream_proxy_url = template.upstream_proxy_url.clone();
     collection.routing_strategy = template.routing_strategy;
+    collection.credits_policy = template.credits_policy;
+    collection.account_credits_allowed = template.account_credits_allowed.clone();
     collection.model_aliases = template.model_aliases.clone();
     collection.model_pricings = template.model_pricings.clone();
     collection.excluded_models = template.excluded_models.clone();

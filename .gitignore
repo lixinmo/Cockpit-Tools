@@ -53,3 +53,30 @@ docs/plugin-architecture-proposal.md
 .qoder/
 
 sidecars/mihomo/bin/
+
+# Private local runtime/configuration and exports (never publish or cache).
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.pfx
+*.key
+*.sqlite
+*.sqlite3
+*.db
+/auth.json
+/accounts.json
+/accounts/
+/credentials.json
+/config.local.json
+/.antigravity_cockpit/
+/.cockpit_tools/
+/private/
+/local-data/
+/cloud-downloads/
+
+# Generated cloud packaging scratch (source checkout only is published).
+/cloud-assets/
+/downloaded-builds/
+/universal-inputs/

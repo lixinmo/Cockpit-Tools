@@ -424,6 +424,9 @@ pub struct UserConfig {
     /// 是否隐藏 Codex 总览中的中转站 / New API 类额度面板
     #[serde(default = "default_codex_hide_relay_quota")]
     pub codex_hide_relay_quota: bool,
+    /// 各 Codex 账号独立的自动 Reset 设置；旧全局开关不迁移为账号授权。
+    #[serde(flatten)]
+    pub codex_auto_reset: crate::modules::codex_auto_reset::Preferences,
     /// 是否显示顶部推广位
     #[serde(default = "default_top_right_ad_visible")]
     pub top_right_ad_visible: bool,
@@ -1335,6 +1338,7 @@ impl Default for UserConfig {
             codex_restart_specified_app_on_switch: default_codex_restart_specified_app_on_switch(),
             codex_local_access_entry_visible: default_codex_local_access_entry_visible(),
             codex_hide_relay_quota: default_codex_hide_relay_quota(),
+            codex_auto_reset: crate::modules::codex_auto_reset::Preferences::default(),
             top_right_ad_visible: default_top_right_ad_visible(),
             antigravity_dual_switch_no_restart_enabled:
                 default_antigravity_dual_switch_no_restart_enabled(),
@@ -2885,6 +2889,66 @@ mod tests {
         }))
         .expect("显式关闭配置反序列化应成功");
         assert!(!disabled_cfg.codex_app_ui_injection_enabled);
+    }
+
+    #[test]
+    fn codex_auto_consume_reset_defaults_off_and_preserves_saved_settings() {
+        use crate::modules::codex_auto_reset::Settings;
+        let default_cfg = UserConfig::default();
+        assert_eq!(
+            default_cfg.codex_auto_reset.for_account("a"),
+            Settings::default()
+        );
+
+        // Even the mistakenly enabled legacy GLOBAL setting cannot opt in any account.
+        let mut upgraded: UserConfig = serde_json::from_value(serde_json::json!({
+            "codex_auto_consume_reset_enabled": true,
+            "codex_auto_consume_reset_threshold": 7
+        }))
+        .expect("old global config should deserialize safely");
+        assert_eq!(
+            upgraded.codex_auto_reset.for_account("a"),
+            Settings::default()
+        );
+        assert_eq!(
+            upgraded.codex_auto_reset.for_account("b"),
+            Settings::default()
+        );
+        upgraded
+            .codex_auto_reset
+            .patch_account("a", Some(true), Some(7))
+            .unwrap();
+        upgraded
+            .codex_auto_reset
+            .patch_account("b", None, Some(3))
+            .unwrap();
+
+        let temp_dir = make_temp_dir("codex-auto-consume-reset-settings");
+        let path = temp_dir.join("config.json");
+        persist_test_config(&path, &upgraded).expect("persist isolated account settings");
+        let reloaded = load_test_config(&path);
+        assert_eq!(
+            reloaded.codex_auto_reset.for_account("a"),
+            Settings {
+                enabled: true,
+                threshold: 7
+            }
+        );
+        assert_eq!(
+            reloaded.codex_auto_reset.for_account("b"),
+            Settings {
+                enabled: false,
+                threshold: 3
+            }
+        );
+        assert_eq!(
+            reloaded.codex_auto_reset.for_account("new"),
+            Settings::default()
+        );
+        let persisted: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        assert!(persisted.get("codex_auto_consume_reset_enabled").is_none());
+        fs::remove_dir_all(temp_dir).expect("remove temp settings");
     }
 
     #[test]

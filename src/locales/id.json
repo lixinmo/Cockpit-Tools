@@ -2401,6 +2401,17 @@
       "windowHint": "Ambang mengikuti durasi sebenarnya: seminggu atau lebih memakai ambang mingguan. Akun dengan kuota mingguan saja hanya memeriksa kuota itu. Tanpa durasi, pemetaan jendela utama dan sekunder tetap dipakai.",
       "rule": "Sisa jangka pendek <= {{shortCycle}}% atau mingguan <= {{weekly}}%"
     },
+    "credits": {
+      "title": "Kontrol penggunaan kredit",
+      "policy": "Kebijakan global (langsung disimpan)",
+      "default": "Bawaan",
+      "prefer": "Utamakan kuota reguler",
+      "strict": "Hanya kuota reguler",
+      "allow": "Izinkan kredit",
+      "description": "Mode bawaan mempertahankan perutean yang ada. Utamakan kuota reguler hanya mengizinkan kredit setelah semua akun Codex dalam kumpulan kunci API saat ini menghabiskan kuota regulernya. Hanya kuota reguler memblokir kredit. Menonaktifkan kredit pada suatu akun selalu diutamakan.",
+      "boundary": "Snapshot kuota berlaku selama 5 menit. Kuota akun yang dibatasi akan diperbarui otomatis sebelum dipilih jika tidak diketahui, kedaluwarsa, atau telah direset (maksimal 9 detik, dengan pembacaan serentak digabungkan). Jika pembaruan gagal, akun dijeda dengan aman; lihat diagnostik kumpulan akun untuk detailnya. Permintaan yang sedang berjalan tidak dapat ditarik kembali. Permintaan yang melewati batas kuota atau penggunaan bersamaan oleh klien lain masih dapat menghabiskan kredit di penyedia; batas pengeluaran mutlak harus diatur di penyedia.",
+      "strictHint": "Mode Hanya kuota reguler memblokir kredit untuk semua akun. Pengaturan sakelar tiap akun tetap disimpan untuk kebijakan lain."
+    },
     "launchErrors": {
       "sessionRestoreFailed": "Perbaikan sesi gagal dan pemulihan cadangan belum selesai. Peluncuran dihentikan; periksa log dan cadangan sebelum mencoba lagi.",
       "sessionCheckTimeout": "Pemeriksaan sesi kehabisan waktu. Peluncuran dihentikan; coba lagi atau periksa log.",
@@ -3347,6 +3358,9 @@
       "resetCredits": "Reset {{count}}",
       "resetCreditsTitle": "Sisa reset untuk jendela 5 jam: {{count}}",
       "resetCreditConfirm": "Konfirmasi?",
+      "autoConsumeResetDescription": "Sakelar dan ambang batas hanya berlaku untuk akun Codex ini. Selama Cockpit Tools berjalan dan komputer tidak dalam mode tidur, kuota diperiksa di latar belakang sekitar sekali setiap menit. Jika sisa kuota mingguan sama dengan atau di bawah ambang batas, satu Banked Reset dengan tanggal kedaluwarsa terdekat akan digunakan. Kuota 5 jam diabaikan; tidak ada tindakan jika reset tidak tersedia. Penggunaan otomatis berikutnya hanya dapat terjadi setelah sisa kuota mingguan yang diperbarui kembali di atas ambang batas. Nonaktif secara default.",
+      "autoConsumeResetThreshold": "Ambang batas sisa kuota mingguan",
+      "autoConsumeResetInvalidThreshold": "Masukkan bilangan bulat dari 0 hingga 99.",
       "resetCreditDialogTitle": "Reset penggunaan Anda?",
       "resetCreditDialogDesc": "Setel ulang batas laju agar Anda bisa terus bekerja tanpa gangguan. Reset tersedia: {{count}}.",
       "resetCreditDialogAction": "Reset penggunaan",

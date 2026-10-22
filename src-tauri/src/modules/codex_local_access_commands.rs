@@ -29,8 +29,11 @@ fn new_local_access_collection() -> Result<CodexLocalAccessCollection, String> {
         capability_fallback: Default::default(),
         multi_agent: Default::default(),
         native_gateway_default_migrated: true,
+                native_credits_policy_migrated: true,
         upstream_proxy_url: None,
         routing_strategy: CodexLocalAccessRoutingStrategy::default(),
+        credits_policy: Default::default(),
+        account_credits_allowed: HashMap::new(),
         custom_routing_rules: Vec::new(),
         account_model_rules: Vec::new(),
         model_aliases: Vec::new(),
@@ -431,6 +434,41 @@ pub async fn update_local_access_routing_strategy(
         sync_runtime_collection(&mut runtime, collection);
     }
 
+    ensure_gateway_matches_runtime().await?;
+    snapshot_state().await
+}
+
+pub async fn update_local_access_credits_policy(
+    policy: Option<crate::models::codex_local_access::CodexLocalAccessCreditsPolicy>,
+    account_id: Option<String>,
+    allowed: Option<bool>,
+) -> Result<CodexLocalAccessState, String> {
+    ensure_runtime_loaded().await?;
+    {
+        // Apply deltas under the runtime lock so concurrent account toggles do
+        // not overwrite one another or the global policy.
+        let mut runtime = gateway_runtime().lock().await;
+        let mut collection = runtime.collection.clone()
+            .ok_or_else(|| "本地接入集合尚未创建".to_string())?;
+        match (account_id, allowed) {
+            (Some(id), Some(allowed)) => {
+                if !effective_sidecar_account_ids(&collection).contains(&id) {
+                    return Err("账号不在 API 服务号池中".to_string());
+                }
+                collection.account_credits_allowed.insert(id, allowed);
+            }
+            (None, None) => {},
+            _ => return Err("账号和 credits 开关必须同时指定".to_string()),
+        }
+        if let Some(policy) = policy {
+            collection.credits_policy = policy;
+        }
+        credits_compat::validate_mode(&collection, collection.gateway_mode)?;
+        collection.updated_at = now_ms();
+        save_collection_to_disk(&collection)?;
+        native_publish_credits_settings(&collection);
+        sync_runtime_collection(&mut runtime, collection);
+    }
     ensure_gateway_matches_runtime().await?;
     snapshot_state().await
 }

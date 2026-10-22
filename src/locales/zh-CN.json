@@ -2574,6 +2574,17 @@
       "windowHint": "按实际时长匹配阈值，一周及以上使用周额度阈值；只有周额度时仅检查周额度。缺少时长时沿用主/次窗口映射。",
       "rule": "短周期剩余 <= {{shortCycle}}% 或周剩余 <= {{weekly}}%"
     },
+    "credits": {
+      "title": "Credits 使用控制",
+      "policy": "全局策略（即时保存）",
+      "default": "默认情况",
+      "prefer": "优先常规额度",
+      "strict": "严格常规额度",
+      "allow": "允许使用 credits",
+      "description": "默认按原调度规则使用账号；优先常规额度需当前 API Key 号池所有账号的常规额度耗尽才允许 credits；严格常规额度禁止转入 credits。账号开关关闭始终优先。",
+      "boundary": "依据最近 5 分钟内的额度快照判断；额度未知、过期或重置后会先自动查询额度（最多等待 9 秒，并发合并）。查询失败时安全暂停该账号，具体原因见账号池诊断。无法撤销在途请求，也无法保证上游在单次请求跨越额度边界或其他客户端并发用量时不扣 credits；绝对扣费限制需在上游配置。",
+      "strictHint": "严格模式下所有账号均禁止 credits；账号开关会保留，用于切回其他策略后生效。"
+    },
     "launchErrors": {
       "sessionRestoreFailed": "会话修复失败，备份恢复未完成，已停止启动。请先检查日志和备份，再重试。",
       "sessionCheckTimeout": "会话检查超时，已停止启动。请重试，或查看日志。",
@@ -4031,6 +4042,9 @@
       "resetCredits": "重置 {{count}}",
       "resetCreditsTitle": "可用于重置当前 5 小时窗口的剩余次数：{{count}}",
       "resetCreditConfirm": "确认重置?",
+      "autoConsumeResetDescription": "开关和阈值仅对当前 Codex 账号生效。应用运行且电脑未休眠时，后台约每分钟检查额度。周额度剩余 ≤ 阈值时使用 1 张最早到期的 Banked Reset，忽略 5h。无可用 Reset 则跳过；周额度刷新并恢复到阈值以上后才可再次自动使用。默认关闭。",
+      "autoConsumeResetThreshold": "周额度剩余阈值",
+      "autoConsumeResetInvalidThreshold": "请输入 0 到 99 的整数。",
       "resetCreditDialogTitle": "要重置你的使用量吗？",
       "resetCreditDialogDesc": "重置速率限制后，可以继续不间断地工作。你还有 {{count}} 次重置可用。",
       "resetCreditDialogAction": "重置使用次数",

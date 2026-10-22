@@ -1,0 +1,139 @@
+#!/usr/bin/env node
+const fs = require('node:fs');
+const path = require('node:path');
+const crypto = require('node:crypto');
+const { execFileSync } = require('node:child_process');
+const { stageInputs, mergeInputs } = require('../release/macos-universal.cjs');
+const { stageReleaseAssets } = require('../release/stage_release_assets.cjs');
+
+const root = path.resolve(__dirname, '../..');
+const platforms = [
+  { label: 'macos-x86_64', cache_target: 'macos-x86_64', runner: 'macos-15-intel', target: 'x86_64-apple-darwin', native_mac: '1' },
+  { label: 'macos-aarch64', cache_target: 'macos-aarch64', runner: 'macos-15', target: 'aarch64-apple-darwin', native_mac: '1' },
+  { label: 'windows', cache_target: 'windows', runner: 'windows-2022', target: 'x86_64-pc-windows-msvc', native_mac: '0' },
+  { label: 'linux-x86_64', cache_target: 'linux-x86_64', runner: 'ubuntu-22.04', target: 'x86_64-unknown-linux-gnu', native_mac: '0' },
+  { label: 'linux-aarch64', cache_target: 'linux-aarch64', runner: 'ubuntu-24.04-arm', target: 'aarch64-unknown-linux-gnu', native_mac: '0' },
+];
+
+function buildPlan(selection = 'macos-x86_64') {
+  const universal = ['all', 'macos-universal'].includes(selection);
+  const include = platforms.filter(p => selection === 'all' || p.label === selection || (selection === 'macos-universal' && p.native_mac === '1'));
+  if (!include.length) throw new Error(`Unsupported platform: ${selection}`);
+  return { matrix: { include }, universal };
+}
+
+function run(command, args) {
+  execFileSync(command, args, { cwd: root, stdio: 'inherit' });
+}
+
+function target() {
+  const value = process.env.CLOUD_BUILD_TARGET;
+  if (![...platforms.map(p => p.target), 'universal-apple-darwin'].includes(value)) throw new Error('CLOUD_BUILD_TARGET must be a supported Rust target');
+  return value;
+}
+
+function version() { return JSON.parse(fs.readFileSync(path.join(root, 'package.json'))).version; }
+
+function config() {
+  const file = path.join(root, '.tmp/cloud-build/tauri.conf.json');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify({
+    build: { beforeBuildCommand: '' },
+    bundle: { createUpdaterArtifacts: false, macOS: { signingIdentity: '-' } },
+  }, null, 2));
+  return file;
+}
+
+function tauriArgs(mode, selectedTarget, configFile) {
+  const args = [path.join(root, 'node_modules/@tauri-apps/cli/tauri.js'), mode, '--ci', '--config', configFile];
+  // Match formal release target layouts so both workflows reuse the same cache.
+  if (selectedTarget.endsWith('-apple-darwin')) args.push('--target', selectedTarget, '--bundles', 'app');
+  if (mode === 'build') args.push('--', '--locked');
+  return args;
+}
+
+function tauri(mode, selectedTarget) {
+  if (mode === 'build') {
+    const rust = execFileSync('rustc', ['-vV'], { encoding: 'utf8' });
+    if (rust.match(/^host: (.+)$/m)?.[1] !== selectedTarget) throw new Error('Thin cloud builds require the selected native runner architecture');
+  }
+  run(process.execPath, tauriArgs(mode, selectedTarget, config()));
+}
+
+function releaseDirectory(selectedTarget) {
+  return selectedTarget.endsWith('-apple-darwin') ? path.join(root, 'target', selectedTarget, 'release') : path.join(root, 'target/release');
+}
+
+function identity() {
+  return { repoRoot: root, version: version(), commit: process.env.GITHUB_SHA, runId: process.env.GITHUB_RUN_ID };
+}
+
+function sha256(file) {
+  return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+}
+
+function packageOutputs(selectedTarget) {
+  const releaseDir = releaseDirectory(selectedTarget);
+  const outputDir = path.join(root, 'cloud-assets');
+  fs.rmSync(outputDir, { recursive: true, force: true });
+  fs.mkdirSync(outputDir, { recursive: true });
+  const isMac = selectedTarget.endsWith('-apple-darwin');
+  const binaries = {};
+  if (isMac) {
+    const appName = 'Cockpit Tools.app';
+    const app = path.join(releaseDir, 'bundle/macos', appName);
+    const expected = selectedTarget === 'universal-apple-darwin' ? ['arm64', 'x86_64'] : [selectedTarget.startsWith('aarch64') ? 'arm64' : 'x86_64'];
+    for (const name of ['cockpit-tools', 'cockpit-cliproxy']) {
+      const file = path.join(app, 'Contents/MacOS', name);
+      const archs = execFileSync('lipo', ['-archs', file], { encoding: 'utf8' }).trim().split(/\s+/).sort();
+      if (JSON.stringify(archs) !== JSON.stringify(expected)) throw new Error(`Unexpected architecture in ${name}: ${archs}`);
+      binaries[name] = { sha256: sha256(file), architectures: archs };
+    }
+    run('codesign', ['--verify', '--deep', '--strict', app]);
+    run('tar', ['-czf', path.join(outputDir, `Cockpit.Tools_${version()}_${selectedTarget}.app.tar.gz`), '-C', path.dirname(app), appName]);
+  } else {
+    stageReleaseAssets({ platform: selectedTarget.includes('windows') ? 'windows' : 'linux', assetsDir: path.join(releaseDir, 'bundle'), outputDir });
+    if (selectedTarget.includes('windows')) {
+      run(process.execPath, ['scripts/release/build_windows_portable.cjs', '--version', version(), '--release-dir', releaseDir, '--output-dir', outputDir]);
+    }
+  }
+  const artifacts = {};
+  for (const name of fs.readdirSync(outputDir).sort()) artifacts[name] = sha256(path.join(outputDir, name));
+  const provenance = {
+    schema: 1, version: version(), target: selectedTarget,
+    repository: process.env.GITHUB_REPOSITORY, commit: process.env.GITHUB_SHA,
+    workflowRun: `https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+    runnerOS: process.env.RUNNER_OS, runnerArchitecture: process.env.RUNNER_ARCH,
+    createdAt: new Date().toISOString(), updaterSigned: false, binaries, artifacts,
+  };
+  fs.writeFileSync(path.join(outputDir, 'provenance.json'), `${JSON.stringify(provenance, null, 2)}\n`);
+  const all = [...Object.entries(artifacts), ['provenance.json', sha256(path.join(outputDir, 'provenance.json'))]];
+  fs.writeFileSync(path.join(outputDir, 'SHA256SUMS.txt'), all.map(([name, hash]) => `${hash}  ${name}\n`).join(''));
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### ${selectedTarget}\n\nBuilt commit \`${process.env.GITHUB_SHA}\`. The **cockpit-tools-${platforms.find(p => p.target === selectedTarget)?.label || 'macos-universal'}** artifact contains the application, SHA-256 checksums and provenance.\n\nMac applications use ad-hoc signing; these development builds do not include signed updater packages. Artifacts expire after 1 day; successful default-branch builds are moved to rolling development Releases.\n`);
+  }
+}
+
+function main(argv) {
+  const [mode, selection] = argv;
+  if (mode === 'plan') {
+    const result = buildPlan(selection);
+    if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, `matrix=${JSON.stringify(result.matrix)}\nuniversal=${result.universal}\n`);
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  if (process.env.GITHUB_ACTIONS !== 'true') throw new Error('Application compilation and packaging run in GitHub Actions only.');
+  const selectedTarget = target();
+  if (mode === 'build') tauri('build', selectedTarget);
+  else if (mode === 'stage-universal') stageInputs({ ...identity(), target: selectedTarget, outputDir: path.join(root, 'universal-inputs', selectedTarget) });
+  else if (mode === 'universal') {
+    mergeInputs({ ...identity(), inputsDir: path.join(root, 'universal-inputs') });
+    tauri('bundle', selectedTarget);
+  } else if (mode === 'package') packageOutputs(selectedTarget);
+  else throw new Error('Usage: cloud-build.cjs plan [platform] | build | stage-universal | universal | package');
+}
+
+if (require.main === module) {
+  try { main(process.argv.slice(2)); } catch (error) { console.error(error); process.exitCode = 1; }
+}
+module.exports = { buildPlan, platforms, tauriArgs, releaseDirectory };
