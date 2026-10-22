@@ -1,4 +1,71 @@
 #[tokio::test]
+async fn passive_native_takeover_preserves_chat_tool_negotiation_without_reinvalidating_cache() {
+    let _lock = crate::modules::test_support::env_lock()
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
+    let _env = LocalAccessTestDataGuard::new("native-chat-catalog-maintenance");
+    let profile = make_temp_dir("native-chat-catalog-maintenance");
+    let mut account = CodexAccount::new_api_key(
+        "native-chat-catalog".into(),
+        "synthetic@example.invalid".into(),
+        "synthetic-upstream".into(),
+        crate::models::codex::CodexApiProviderMode::Custom,
+        Some("https://example.invalid/v1".into()),
+        None,
+        None,
+        vec!["step-3.7-flash".into(), "step-5-preview".into()],
+    );
+    account.api_wire_api = Some("chat_completions".into());
+    codex_account::save_account(&account).unwrap();
+    let mut index = codex_account::load_account_index();
+    index.accounts.push(crate::models::codex::CodexAccountSummary {
+        id: account.id.clone(),
+        email: account.email.clone(),
+        plan_type: None,
+        subscription_active_until: None,
+        created_at: 0,
+        last_used: 0,
+    });
+    codex_account::save_account_index(&index).unwrap();
+    let mut collection = test_local_access_collection(vec![account.id.clone()]);
+    collection.enabled = true;
+    collection.gateway_mode = CodexLocalAccessGatewayMode::Native;
+    write_local_access_profile_takeover(&profile, &collection, None, true)
+        .await
+        .unwrap();
+    let catalog_path = profile.join(super::CODEX_MANAGED_MODEL_CATALOG_FILE);
+    let expected = fs::read_to_string(&catalog_path).unwrap();
+    let expected_json: Value = serde_json::from_str(&expected).unwrap();
+    for id in ["step-3.7-flash", "step-5-preview"] {
+        let model = expected_json["models"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|model| model["slug"] == id)
+            .unwrap();
+        assert_eq!(model["use_responses_lite"], true);
+        assert_eq!(model["supports_search_tool"], false);
+    }
+    let cache = profile.join(CODEX_MODEL_CACHE_FILE);
+    fs::write(&cache, "cache sentinel").unwrap();
+    for _ in 0..2 {
+        super::maintain_local_access_profile(&profile, &collection).unwrap();
+        assert_eq!(fs::read_to_string(&catalog_path).unwrap(), expected);
+        assert_eq!(fs::read_to_string(&cache).unwrap(), "cache sentinel");
+    }
+    let mut stale = expected_json;
+    for model in stale["models"].as_array_mut().unwrap() {
+        model["use_responses_lite"] = json!(false);
+        model["supports_search_tool"] = json!(true);
+    }
+    fs::write(&catalog_path, stale.to_string()).unwrap();
+    super::maintain_local_access_profile(&profile, &collection).unwrap();
+    assert_eq!(fs::read_to_string(&catalog_path).unwrap(), expected);
+    assert!(!cache.exists());
+    fs::remove_dir_all(profile).unwrap();
+}
+
+#[tokio::test]
 async fn passive_takeover_realtime_fills_missing_sideband_for_pool_and_mixed_keys() {
     for mixed in [false, true] {
         let profile = make_temp_dir("passive-takeover-realtime-missing");

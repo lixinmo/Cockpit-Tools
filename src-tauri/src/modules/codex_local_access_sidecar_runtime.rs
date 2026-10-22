@@ -1637,6 +1637,14 @@ fn write_local_access_profile_model_catalog(
     supports_websockets: bool,
     definitions: &[ProfileModelDefinition],
 ) -> Result<(), String> {
+    write_local_access_profile_client_models(
+        profile_dir,
+        supports_websockets,
+        build_local_access_profile_client_models(definitions),
+    )
+}
+
+fn build_local_access_profile_client_models(definitions: &[ProfileModelDefinition]) -> Value {
     let pairs = definitions
         .iter()
         .map(|definition| (definition.model_id.clone(), definition.display_name.clone()))
@@ -1644,7 +1652,7 @@ fn write_local_access_profile_model_catalog(
     let mut client_models =
         codex_protocol::build_codex_client_models_response_with_model_definitions(&pairs);
     apply_profile_model_definition_overrides(&mut client_models, definitions);
-    write_local_access_profile_client_models(profile_dir, supports_websockets, client_models)
+    client_models
 }
 
 /// 客户端按 `priority` 升序展示模型，这里让 GPT 官方推荐集固定排在最前面，

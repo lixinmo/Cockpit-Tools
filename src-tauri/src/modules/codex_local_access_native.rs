@@ -1535,6 +1535,10 @@ mod native_live_acceptance;
 mod native_live_pool;
 
 #[cfg(test)]
+#[path = "codex_local_access_native_live_provider.rs"]
+mod native_live_provider;
+
+#[cfg(test)]
 #[path = "codex_local_access_native_credits_tests.rs"]
 mod native_credits_tests;
 

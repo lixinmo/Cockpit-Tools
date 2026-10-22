@@ -69,6 +69,10 @@ function nativeRegressionArgs(selectedTarget) {
     'modules::codex_native_api::native_chat::',
     'modules::codex_local_access::native_capability_tests::',
     'modules::codex_local_access::native_capability_integration_tests::',
+    'modules::codex_local_access::native_catalog_tools_tests::',
+    'passive_native_takeover_preserves_chat_tool_negotiation',
+    'parity22_http_responses_chat_restores_namespaced_custom_and_keeps_native_custom',
+    'native_provider_live_',
     'native_credits', 'native_admission', 'native_gateway_credits',
   ];
 }
@@ -87,6 +91,41 @@ function releaseDirectory(selectedTarget) {
 
 function identity() {
   return { repoRoot: root, version: version(), commit: process.env.GITHUB_SHA, runId: process.env.GITHUB_RUN_ID };
+}
+
+function nativeProbeExecutable(output) {
+  const executables = new Set(output.split(/\r?\n/).filter(Boolean).map(line => JSON.parse(line))
+    .filter(item => item.reason === 'compiler-artifact' && item.profile?.test === true
+      && item.target?.name === 'antigravity_cockpit_tools_lib' && item.executable)
+    .map(item => item.executable));
+  if (executables.size !== 1) throw new Error('Expected exactly one compiled Native test executable');
+  return [...executables][0];
+}
+
+function packageNativeProbe(selectedTarget) {
+  const args = nativeRegressionArgs(selectedTarget);
+  // Ask Cargo for this build's exact executable, never choose a stale cached file.
+  args.splice(args.indexOf('--'));
+  args.push('--no-run', '--message-format=json');
+  const output = execFileSync('cargo', args, { cwd: root, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
+  const executable = nativeProbeExecutable(output);
+  const outputDir = path.join(root, 'native-probe-assets');
+  fs.mkdirSync(outputDir, { recursive: true });
+  const file = path.join(outputDir, 'native-gateway-probe');
+  fs.copyFileSync(executable, file);
+  fs.chmodSync(file, 0o755);
+  const architectures = execFileSync('lipo', ['-archs', file], { encoding: 'utf8' }).trim().split(/\s+/);
+  const expected = selectedTarget.startsWith('aarch64') ? 'arm64' : 'x86_64';
+  if (architectures.length !== 1 || architectures[0] !== expected) throw new Error('Native probe architecture mismatch');
+  run('codesign', ['--force', '--sign', '-', file]);
+  run('codesign', ['--verify', '--strict', file]);
+  fs.writeFileSync(path.join(outputDir, 'provenance.json'), `${JSON.stringify({
+    schema: 1, repository: process.env.GITHUB_REPOSITORY, commit: process.env.GITHUB_SHA,
+    target: selectedTarget, architectures, artifact: 'native-gateway-probe',
+    workflowRun: `https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+  }, null, 2)}\n`);
+  fs.writeFileSync(path.join(outputDir, 'SHA256SUMS.txt'), ['native-gateway-probe', 'provenance.json']
+    .map(name => `${sha256(path.join(outputDir, name))}  ${name}\n`).join(''));
 }
 
 function sha256(file) {
@@ -147,15 +186,16 @@ function main(argv) {
   const selectedTarget = target();
   if (mode === 'build') tauri('build', selectedTarget);
   else if (mode === 'native-regressions') run('cargo', nativeRegressionArgs(selectedTarget));
+  else if (mode === 'package-native-probe') packageNativeProbe(selectedTarget);
   else if (mode === 'stage-universal') stageInputs({ ...identity(), target: selectedTarget, outputDir: path.join(root, 'universal-inputs', selectedTarget) });
   else if (mode === 'universal') {
     mergeInputs({ ...identity(), inputsDir: path.join(root, 'universal-inputs') });
     tauri('bundle', selectedTarget);
   } else if (mode === 'package') packageOutputs(selectedTarget);
-  else throw new Error('Usage: cloud-build.cjs plan [platform] | build | native-regressions | stage-universal | universal | package');
+  else throw new Error('Usage: cloud-build.cjs plan [platform] | build | native-regressions | package-native-probe | stage-universal | universal | package');
 }
 
 if (require.main === module) {
   try { main(process.argv.slice(2)); } catch (error) { console.error(error); process.exitCode = 1; }
 }
-module.exports = { buildPlan, platforms, tauriArgs, nativeRegressionArgs, releaseDirectory };
+module.exports = { buildPlan, platforms, tauriArgs, nativeRegressionArgs, nativeProbeExecutable, releaseDirectory };

@@ -15,6 +15,10 @@ on:
           - linux-x86_64
           - linux-aarch64
           - all
+      native_probe:
+        description: Include a native test driver for explicit local provider acceptance (no credentials)
+        type: boolean
+        default: false
   push:
     branches:
       - "main"
@@ -163,6 +167,21 @@ jobs:
           COCKPIT_NATIVE_APP_BUILD: '1'
           COCKPIT_SKIP_CLIPROXY_BUILD: '1'
         run: node scripts/ci/cloud-build.cjs native-regressions
+      - name: Package optional local Native acceptance driver
+        if: runner.os == 'macOS' && inputs.native_probe == true
+        env:
+          CLOUD_BUILD_TARGET: ${{ matrix.target }}
+          COCKPIT_NATIVE_APP_BUILD: '1'
+          COCKPIT_SKIP_CLIPROXY_BUILD: '1'
+        run: node scripts/ci/cloud-build.cjs package-native-probe
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'macOS' && inputs.native_probe == true
+        with:
+          name: native-gateway-probe-${{ matrix.label }}
+          path: native-probe-assets/
+          retention-days: 1
+          compression-level: 1
+          if-no-files-found: error
       - name: Prepare verified Universal inputs
         if: needs.plan.outputs.universal == 'true' && runner.os == 'macOS'
         env:

@@ -263,7 +263,28 @@ fn maintain_local_access_profile(
     )?;
     let definitions =
         local_access_profile_model_definitions(profile_dir, collection, &collection.api_key, true)?;
-    write_local_access_profile_model_catalog(profile_dir, supports_websockets, &definitions)?;
+    let mut client_models = build_local_access_profile_client_models(&definitions);
+    if collection.gateway_mode == CodexLocalAccessGatewayMode::Native {
+        let key = collection
+            .api_keys
+            .iter()
+            .find(|key| key.enabled && key.key.trim() == collection.api_key.trim());
+        // Maintenance already runs on a blocking worker under the profile
+        // lease. Apply the same native gates before the single catalog write,
+        // so unchanged maintenance neither restores template tool flags nor
+        // repeatedly invalidates the client's model cache.
+        let accounts = native_profile_catalog_account_ids(collection, key)
+            .iter()
+            .filter_map(|id| codex_account::load_account(id))
+            .collect::<Vec<_>>();
+        native_apply_profile_catalog_tool_capabilities(
+            &mut client_models,
+            collection,
+            key,
+            &accounts,
+        );
+    }
+    write_local_access_profile_client_models(profile_dir, supports_websockets, client_models)?;
     remember_takeover_ownership(profile_dir)
 }
 

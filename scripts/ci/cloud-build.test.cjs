@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const crypto = require('node:crypto');
 const test = require('node:test');
-const { buildPlan, platforms, tauriArgs, nativeRegressionArgs, releaseDirectory } = require('./cloud-build.cjs');
+const { buildPlan, platforms, tauriArgs, nativeRegressionArgs, nativeProbeExecutable, releaseDirectory } = require('./cloud-build.cjs');
 const { verifyBuild } = require('./cloud-publish.cjs');
 
 test('default selects only this Mac architecture on its native standard runner', () => {
@@ -42,11 +42,19 @@ test('cloud builds share formal release Cargo output layouts', () => {
 });
 
 test('the cloud command refuses accidental local compilation', () => {
-  for (const mode of ['build', 'native-regressions']) {
+  for (const mode of ['build', 'native-regressions', 'package-native-probe']) {
     const result = spawnSync(process.execPath, [path.join(__dirname, 'cloud-build.cjs'), mode], { encoding: 'utf8', env: { ...process.env, GITHUB_ACTIONS: 'false' } });
     assert.equal(result.status, 1);
     assert.match(result.stderr, /GitHub Actions only/);
   }
+});
+
+test('native probe packaging selects Cargo evidence instead of cached executable names', () => {
+  const artifact = executable => JSON.stringify({ reason: 'compiler-artifact', target: { name: 'antigravity_cockpit_tools_lib' }, profile: { test: true }, executable });
+  const dependency = JSON.stringify({ reason: 'compiler-artifact', target: { name: 'serde' }, profile: { test: false }, executable: '/not-a-test' });
+  assert.equal(nativeProbeExecutable(`${dependency}\n${artifact('/current/test')}\n`), '/current/test');
+  assert.throws(() => nativeProbeExecutable(dependency), /exactly one/);
+  assert.throws(() => nativeProbeExecutable(`${artifact('/old/test')}\n${artifact('/new/test')}`), /exactly one/);
 });
 
 test('native gateway regressions reuse the thin application target and isolate synthetic fixtures', () => {
@@ -58,7 +66,7 @@ test('native gateway regressions reuse the thin application target and isolate s
     ]);
     assert.ok(args.includes('--test-threads=1'));
     assert.ok(!args.includes('--ignored') && !args.includes('--include-ignored'));
-    for (const name of ['capabilities', 'capability_fallback_http_tests', 'mapping::capability::diagnostics_tests', 'chat_upstream', 'native_chat', 'native_capability_tests', 'native_capability_integration_tests', 'native_credits', 'native_admission', 'native_gateway_credits']) {
+    for (const name of ['capabilities', 'capability_fallback_http_tests', 'mapping::capability::diagnostics_tests', 'chat_upstream', 'native_chat', 'native_capability_tests', 'native_capability_integration_tests', 'native_catalog_tools_tests', 'passive_native_takeover_preserves_chat_tool_negotiation', 'parity22_http_responses_chat', 'native_provider_live_', 'native_credits', 'native_admission', 'native_gateway_credits']) {
       assert.ok(args.some(arg => arg.includes(name)), `Missing ${name} coverage`);
     }
   }

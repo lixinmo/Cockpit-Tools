@@ -12,14 +12,27 @@ fn native_apply_catalog_tool_capabilities(
     // A model can be scheduled on any eligible pool member, not merely the
     // first account used to supply display metadata. Plain Chat has no native
     // tool-search history bridge; SIWC and Grok have explicit client adapters.
-    if accounts
+    let eligible = accounts
         .iter()
         .filter(|account| native_model_visible(collection, key, plan, account))
-        .any(|account| {
-            native_wire_api(account).map_or(true, |wire| wire == native_contract::WireApi::Chat)
-        })
-    {
+        .collect::<Vec<_>>();
+    if eligible.iter().any(|account| {
+        native_wire_api(account).map_or(true, |wire| wire == native_contract::WireApi::Chat)
+    }) {
         model["supports_search_tool"] = json!(false);
+    }
+    if !eligible.is_empty()
+        && eligible
+            .iter()
+            .all(|account| matches!(native_wire_api(account), Ok(native_contract::WireApi::Chat)))
+    {
+        // Chat uses the existing client-tool bridge, including declarations in
+        // input.additional_tools. Negotiate that protocol for raw provider IDs
+        // as well as official model shells; the generic unknown-model template
+        // otherwise asks the client to use hosted Responses tools. This is only
+        // a catalog declaration: explicit hosted tools still face preflight.
+        // Mixed pools retain hosted declarations for eligible Responses routes.
+        model["use_responses_lite"] = json!(true);
     }
 }
 
@@ -45,6 +58,24 @@ fn native_apply_profile_catalog_tool_capabilities(
     }
 }
 
+fn native_profile_catalog_account_ids(
+    collection: &CodexLocalAccessCollection,
+    key: Option<&CodexLocalAccessApiKey>,
+) -> Vec<String> {
+    let mut ids = native_scoped_account_ids(collection, key);
+    if let Some(routing) = key.and_then(|key| key.model_routing.as_ref()) {
+        ids.extend(
+            routing
+                .routes
+                .iter()
+                .map(|route| route.provider_account_id.clone()),
+        );
+    }
+    ids.sort();
+    ids.dedup();
+    ids
+}
+
 /// Runs after existing catalog/experimental writers. Reading credentials uses
 /// the established bounded worker pool; this path does not start a listener or
 /// call any upstream service. The actual file update stays on a blocking worker.
@@ -61,17 +92,7 @@ async fn native_sync_profile_catalog_tool_capabilities(
         .api_keys
         .iter()
         .find(|key| key.enabled && key.key.trim() == api_key.trim());
-    let mut ids = native_scoped_account_ids(collection, key);
-    if let Some(routing) = key.and_then(|key| key.model_routing.as_ref()) {
-        ids.extend(
-            routing
-                .routes
-                .iter()
-                .map(|route| route.provider_account_id.clone()),
-        );
-    }
-    ids.sort();
-    ids.dedup();
+    let mut ids = native_profile_catalog_account_ids(collection, key);
     ids.retain(|id| !known_accounts.iter().any(|account| &account.id == id));
     let mut accounts = timeout(Duration::from_secs(30), native_load_accounts(ids))
         .await
