@@ -1,0 +1,191 @@
+# Native Chat client-tool negotiation
+
+## Problem and boundary
+
+Codex can choose different tool protocols for a known model shell and an unknown
+provider ID. In CLI 0.162.1, an unknown raw model without a managed catalog uses
+full Responses and includes hosted `web_search`. The generic provider template
+also sets `use_responses_lite=false`. Existing official shells may use Lite and
+client-executed function/custom/namespace tools instead.
+
+The Native Chat bridge implements client-executed tools, including declarations
+in `input.additional_tools`. It does not implement OpenAI hosted web search, file
+search, or hosted MCP. Rejecting those capabilities before dispatch is correct.
+The old generic "no compatible account" error hid which capability caused that
+rejection. A successful plain Chat request or a Go request that skipped an
+unsupported declaration is not evidence of hosted-tool compatibility.
+
+The protocol distinction follows [OpenAI Docs on tool search and additional
+tools](https://developers.openai.com/api/docs/guides/tools-tool-search): client
+tool discovery is explicitly separate from hosted discovery, and
+`additional_tools` is a developer-role input declaration. The provider baseline
+uses the function-call/result loop described in [StepFun's tool-calling
+guide](https://platform.stepfun.com/cookbook/step-5-tool-calling).
+
+## Change
+
+- Native `/v1/models` and managed profile catalogs declare
+  `use_responses_lite=true` only when at least one eligible account exists and
+  every eligible account for that model uses the Chat wire protocol.
+- Mixed Chat/Responses pools retain their existing protocol declaration, so
+  hosted capabilities can still use an eligible Responses account. Unknown wire
+  protocols, excluded accounts, and accounts outside the key scope cannot grant
+  this declaration.
+- `supports_search_tool` remains the separate client tool-discovery gate. Plain
+  Chat keeps it false because it has no complete client `tool_search` adapter.
+  It is not a web-search or hosted-MCP flag.
+- Background profile maintenance applies the same capability gates before one
+  catalog write. Unchanged maintenance does not repeatedly invalidate the model
+  cache or restore template flags.
+- Failed capability fallback exposes only allowlisted tool/history types,
+  execution tags, capability results, and trigger/failure stages in
+  `error.capability_diagnostics`. It does not capture names, schemas, arguments,
+  messages, credentials, or account identifiers.
+
+No request-time tool filtering, model remapping, wider account grant, engine
+switch, or Credits exception is introduced. An explicitly submitted hosted
+`web_search`, including one inside `additional_tools` with Lite metadata, still
+fails preflight without an upstream request. Lite is not an implementation of
+hosted web search. A separately available client search function or connector
+must provide that functionality.
+
+## Verification and activation
+
+Compilation and Rust checks run in the public repository's Cloud Build on
+standard hosted runners. The selected Native regressions cover catalog and
+profile consistency, mixed pools, permissions, maintenance cache stability,
+explicit hosted-tool rejection, Chat function/custom conversion, and Credits
+guards. Existing Native/Go retry and Credits/Auto Reset contract jobs remain.
+The test invocation uses a package-scoped `opt-level=0` override for the large
+`cockpit-tools` test crate, while retaining release dependencies and their target
+cache. The separately built App keeps its normal release optimization. The
+test driver is for protocol acceptance, not performance measurement.
+
+For bounded real-provider acceptance, Cloud Build's optional `native_probe`
+input packages the exact compiled test executable, checksums, and provenance in
+a separate one-day artifact. No real-account test runs in Actions. The ignored
+`native_provider_process_driver` can then run locally without compilation. It
+requires a private configuration, reads one existing StepFun account without
+migration, retains the saved Native/`prefer_regular` policy, limits models to the
+saved catalog, and uses a temporary listener/history database. Existing aliases
+are resolved through the production model selector; none are changed. Only
+allowlisted structural diagnostics are written by the driver.
+An existing auxiliary OAuth binding is retained as metadata, as in the production
+provider builder. It neither changes the StepFun API-key authentication nor adds
+the bound identity to the acceptance scope. The final route and send guard still
+require the original StepFun account, model, Chat protocol, and HTTPS destination.
+
+The optional `native_probe_only` mode rebuilds this test driver without producing
+another App. It uses a single standard thin-macOS runner, runs the same Native
+regression filters on the packaged executable, and retains frontend and contract
+jobs. It has a separate concurrency group and cannot publish an App or satisfy
+the formal release gate; that gate requires successful App build and archive
+steps on the exact release commit.
+
+The real acceptance checks must show Codex selecting a tool, executing a
+read-only local fixture operation, returning its result, and receiving a final
+answer for both `step-5-preview` and `step-3.7-flash`. A 200 response alone is not
+sufficient. Explicit hosted web search must still fail with its actual capability
+reason. Private acceptance configuration, history, and diagnostics stay local.
+
+The new application must be restarted to load the Rust changes. Re-activate the
+provider profile or refresh its managed model catalog, then reload the Codex
+client so it consumes the updated metadata. A `.bak` catalog is not evidence of
+the active client's configuration. Existing conversations carrying incompatible
+hosted-tool history remain subject to the normal history and capability checks.
+
+## Validation record
+
+Production App: `a741f403211e95f0fdffd04c40b56c7d766822c0`.
+Successful full Cloud Build:
+[39834828776](https://github.com/lixinmo/Cockpit-Tools/actions/runs/39834828776).
+
+The first full run,
+[39820677934](https://github.com/lixinmo/Cockpit-Tools/actions/runs/39820677934),
+built the App successfully but reached the previous 90-minute job limit while
+`rustc` was still compiling the optimized test binary. No main-library test had
+started. The scoped test-package override above and a 120-minute job limit address
+that build-time issue on the same standard runner.
+
+Completed checks in the successful full run: frontend typecheck; 1,637 frontend
+tests; 57 release-packaging tests; 9 cloud-build script tests; 97 main-library
+Native regressions; Native setup retry (18 tests); Go
+`CT-CONNECT-RETRY-001` v1.0 on linux/amd64; Credits policy (31 tests); Auto Reset
+(71 tests). Cross-platform retry checks were not requested or needed.
+
+Downloaded App provenance and archive checksums match that run and commit. Both
+the main binary and Go sidecar are `x86_64`; strict deep signature verification
+passes (ad-hoc signing, not an Apple notarization claim). SHA-256:
+
+- Main binary: `8362803810f61a3ba39814fbe00dca086acdae9dcd726d4620729ca45ef1c0fe`.
+- Go sidecar: `2c4aa4fb4091f9a65085ae9edcb86067b855aeedc3f067d66587d599e8c2e3a0`.
+- App archive: `8fb69a916d8930e838a20f26e9ff8325fcc3b827246353d16c469bdc4cb6323f`.
+
+The first local driver launch stopped before sending a request because its
+test-only eligibility guard unnecessarily rejected auxiliary OAuth metadata.
+Commit `2a3b89f49ad7350f2f8caf1bbc43825636a32749` fixes that driver guard and
+preserves the metadata, with a synthetic production-route regression for original
+credentials, account scope, Credits, and send-guard enforcement. Production Rust
+code is unchanged relative to the validated App. Driver-only cloud validation
+passed in [39846824595](https://github.com/lixinmo/Cockpit-Tools/actions/runs/39846824595):
+98 Native main-library tests, including the new binding regression, plus the
+same frontend, retry, Credits, and Auto Reset checks (10 cloud-build script
+tests). Both thin Intel artifacts have verified checksums and ad-hoc signatures.
+The formal-release gate correctly counts this driver-only run as zero successful
+App builds.
+
+Direct StepFun baseline: both `step-5-preview` and `step-3.7-flash` completed a
+real function-call/result/final-answer loop (two HTTP 200 responses per model).
+The function generated a random nonce only after receiving the model's call;
+the final answer matched that nonce. This establishes ordinary function support,
+not hosted-tool support. Only success/status summaries were retained.
+
+### Real Codex acceptance (2026-10-23, Asia/Shanghai)
+
+Codex CLI 0.162.1 used isolated ephemeral profiles and the cloud-built production
+Native host implementation, with one read-only snapshot of the original StepFun
+account. All five final cases passed:
+
+| Case | Observed result |
+| --- | --- |
+| Explicit hosted `web_search`, Step 5 | HTTP 503; `unsupported=[web_search]`; trigger `preflight`, failure `candidate_selection`; no upstream dispatch. |
+| Raw Step 5 without managed catalog | Real Codex request required `function`, `namespace`, and `web_search`; only `web_search` was unsupported; HTTP 503 before upstream dispatch. |
+| Original Step 3.7 shell (`gpt-5.6-sol`) | Real local shell execution, successful Native turns, tool-result replay, and an exact final random-fixture match. Existing alias unchanged. |
+| Raw Step 5 with served Native catalog | One successful shell read, two successful Native HTTP 200 turns, `function_call_output` replay, and exact final fixture match. |
+| Raw Step 3.7 with served Native catalog | One successful shell read, two successful Native HTTP 200 turns, `function_call_output` replay, and exact final fixture match. |
+
+Both comparison paths used the same observed client feature flags. The final
+answer check selects the last agent message, excluding intermediate commentary.
+No model mapping, account grant, saved binding, or Credits policy was changed.
+The driver verified saved Native/`prefer_regular` settings and the rejection of
+a switch to Sidecar. StepFun's ordinary API-key authentication remains outside
+ChatGPT subscription Credits, through the existing production policy.
+
+This establishes a reproduced trigger and a real client/tool/provider round trip;
+the historical failed request body was not retained, so it does not reconstruct
+every possible tool or history item from the original session. Acceptance uses
+an independent bounded listener and a startup account snapshot, not the running
+App's production listener or a test of live account revocation. Hosted MCP and
+hosted web-search execution are not claimed to be supported by plain Chat.
+
+The verified App was installed at `/Applications/Cockpit Tools.app` and restarted.
+The new process was confirmed at that exact executable path, with two application
+WebSocket Pong checks separated by sustained operation; installed binary hashes
+match the provenance above. The version remains 1.3.73, so the build commit and
+hashes identify this patch. Activate the StepFun profile/refresh its managed
+catalog and reload Codex to consume the new metadata.
+
+Post-install cleanup removed 1,393,952 KiB (about 1.33 GiB) of obsolete material;
+those cleanup targets now occupy zero space:
+
+- Two clean old source copies: 250,464 KiB. Their commit and history remain
+  reachable from the retained local/upstream Git references.
+- Renamed old App: 176,684 KiB; the new installed App remains in place.
+- Downloaded cloud artifacts and extraction copies: 683,192 KiB.
+- Synthetic acceptance profiles, diagnostics, fixtures, and temporary helpers:
+  283,612 KiB. Private driver configuration was deleted with these directories.
+
+No common project build-cache/dependency directories were present. Shared
+toolchains, runtime accounts/configuration, source, Git history/remotes, and the
+current App were retained. Saved Native/`prefer_regular` settings were confirmed
+after restart and cleanup. No local application compilation was performed.
