@@ -60,10 +60,14 @@ test('native probe packaging selects Cargo evidence instead of cached executable
 test('native gateway regressions reuse the thin application target and isolate synthetic fixtures', () => {
   for (const platform of platforms.filter(p => p.native_mac === '1')) {
     const args = nativeRegressionArgs(platform.target);
-    assert.deepEqual(args.slice(0, 9), [
+    assert.deepEqual(args.slice(0, 8), [
       'test', '--locked', '--release', '--target', platform.target,
-      '-p', 'cockpit-tools', '--lib', '--',
+      '-p', 'cockpit-tools', '--lib',
     ]);
+    assert.deepEqual(args.slice(8, 11), [
+      '--config', 'profile.release.package.cockpit-tools.opt-level=0', '--',
+    ]);
+    assert.ok(!tauriArgs('build', platform.target, 'example.json').some(arg => arg.includes('opt-level')));
     assert.ok(args.includes('--test-threads=1'));
     assert.ok(!args.includes('--ignored') && !args.includes('--include-ignored'));
     for (const name of ['capabilities', 'capability_fallback_http_tests', 'mapping::capability::diagnostics_tests', 'chat_upstream', 'native_chat', 'native_capability_tests', 'native_capability_integration_tests', 'native_catalog_tools_tests', 'passive_native_takeover_preserves_chat_tool_negotiation', 'parity22_http_responses_chat', 'native_provider_live_', 'native_credits', 'native_admission', 'native_gateway_credits']) {

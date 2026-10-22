@@ -56,12 +56,15 @@ function nativeRegressionArgs(selectedTarget) {
   if (!platforms.some(p => p.target === selectedTarget && p.native_mac === '1')) {
     throw new Error('Native gateway regressions require a thin macOS build target');
   }
-  // One test binary and one invocation reuse the application release dependencies.
+  // Reuse release dependencies but avoid optimizing this large test crate again.
+  // This invocation-only package override does not change the application build.
   // libtest accepts multiple OR filters. Serialize fixtures sharing runtime state;
   // real-account acceptance tests are neither selected nor explicitly unignored.
   return [
     'test', '--locked', '--release', '--target', selectedTarget,
-    '-p', 'cockpit-tools', '--lib', '--', '--test-threads=1',
+    '-p', 'cockpit-tools', '--lib',
+    '--config', 'profile.release.package.cockpit-tools.opt-level=0',
+    '--', '--test-threads=1',
     'modules::codex_native_api::capabilities::',
     'modules::codex_native_api::capability_fallback_http_tests::',
     'modules::codex_native_api::mapping::capability::diagnostics_tests::',
