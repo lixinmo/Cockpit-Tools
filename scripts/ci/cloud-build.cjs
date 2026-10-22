@@ -15,7 +15,10 @@ const platforms = [
   { label: 'linux-aarch64', cache_target: 'linux-aarch64', runner: 'ubuntu-24.04-arm', target: 'aarch64-unknown-linux-gnu', native_mac: '0' },
 ];
 
-function buildPlan(selection = 'macos-x86_64') {
+function buildPlan(selection = 'macos-x86_64', probeOnly = false) {
+  if (probeOnly && !['macos-x86_64', 'macos-aarch64'].includes(selection)) {
+    throw new Error('Standalone Native acceptance requires one thin macOS platform');
+  }
   const universal = ['all', 'macos-universal'].includes(selection);
   const include = platforms.filter(p => selection === 'all' || p.label === selection || (selection === 'macos-universal' && p.native_mac === '1'));
   if (!include.length) throw new Error(`Unsupported platform: ${selection}`);
@@ -105,7 +108,7 @@ function nativeProbeExecutable(output) {
   return [...executables][0];
 }
 
-function packageNativeProbe(selectedTarget) {
+function packageNativeProbe(selectedTarget, validate = false) {
   const args = nativeRegressionArgs(selectedTarget);
   // Ask Cargo for this build's exact executable, never choose a stale cached file.
   args.splice(args.indexOf('--'));
@@ -122,6 +125,10 @@ function packageNativeProbe(selectedTarget) {
   if (architectures.length !== 1 || architectures[0] !== expected) throw new Error('Native probe architecture mismatch');
   run('codesign', ['--force', '--sign', '-', file]);
   run('codesign', ['--verify', '--strict', file]);
+  if (validate) {
+    const testArgs = nativeRegressionArgs(selectedTarget);
+    run(file, testArgs.slice(testArgs.indexOf('--') + 1));
+  }
   fs.writeFileSync(path.join(outputDir, 'provenance.json'), `${JSON.stringify({
     schema: 1, repository: process.env.GITHUB_REPOSITORY, commit: process.env.GITHUB_SHA,
     target: selectedTarget, architectures, artifact: 'native-gateway-probe',
@@ -180,7 +187,7 @@ function packageOutputs(selectedTarget) {
 function main(argv) {
   const [mode, selection] = argv;
   if (mode === 'plan') {
-    const result = buildPlan(selection);
+    const result = buildPlan(selection, process.env.CLOUD_NATIVE_PROBE_ONLY === 'true');
     if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, `matrix=${JSON.stringify(result.matrix)}\nuniversal=${result.universal}\n`);
     console.log(JSON.stringify(result, null, 2));
     return;
@@ -190,12 +197,13 @@ function main(argv) {
   if (mode === 'build') tauri('build', selectedTarget);
   else if (mode === 'native-regressions') run('cargo', nativeRegressionArgs(selectedTarget));
   else if (mode === 'package-native-probe') packageNativeProbe(selectedTarget);
+  else if (mode === 'build-native-probe') packageNativeProbe(selectedTarget, true);
   else if (mode === 'stage-universal') stageInputs({ ...identity(), target: selectedTarget, outputDir: path.join(root, 'universal-inputs', selectedTarget) });
   else if (mode === 'universal') {
     mergeInputs({ ...identity(), inputsDir: path.join(root, 'universal-inputs') });
     tauri('bundle', selectedTarget);
   } else if (mode === 'package') packageOutputs(selectedTarget);
-  else throw new Error('Usage: cloud-build.cjs plan [platform] | build | native-regressions | package-native-probe | stage-universal | universal | package');
+  else throw new Error('Usage: cloud-build.cjs plan [platform] | build | native-regressions | package-native-probe | build-native-probe | stage-universal | universal | package');
 }
 
 if (require.main === module) {

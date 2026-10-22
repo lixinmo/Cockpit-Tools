@@ -42,11 +42,31 @@ test('cloud builds share formal release Cargo output layouts', () => {
 });
 
 test('the cloud command refuses accidental local compilation', () => {
-  for (const mode of ['build', 'native-regressions', 'package-native-probe']) {
+  for (const mode of ['build', 'native-regressions', 'package-native-probe', 'build-native-probe']) {
     const result = spawnSync(process.execPath, [path.join(__dirname, 'cloud-build.cjs'), mode], { encoding: 'utf8', env: { ...process.env, GITHUB_ACTIONS: 'false' } });
     assert.equal(result.status, 1);
     assert.match(result.stderr, /GitHub Actions only/);
   }
+});
+
+test('standalone Native acceptance cannot produce an untested application release', () => {
+  for (const platform of ['macos-x86_64', 'macos-aarch64']) {
+    assert.equal(buildPlan(platform, true).matrix.include.length, 1);
+  }
+  for (const platform of ['all', 'macos-universal', 'windows', 'linux-x86_64']) {
+    assert.throws(() => buildPlan(platform, true), /one thin macOS/);
+  }
+  const workflow = fs.readFileSync(path.join(__dirname, '../../.github/workflows/build-matrix.yml'), 'utf8');
+  for (const title of ['Build selected application', 'Archive application and write provenance']) {
+    assert.ok(workflow.includes(`- name: ${title}\n        if: inputs.native_probe_only != true`));
+  }
+  assert.match(workflow.slice(workflow.indexOf('  publish-development:')), /inputs\.native_probe_only != true/);
+  assert.match(workflow, /group: cloud-build-.*inputs\.native_probe_only/);
+  const release = fs.readFileSync(path.join(__dirname, '../../.github/workflows/release.yml'), 'utf8');
+  for (const step of ['Build selected application', 'Archive application and write provenance']) {
+    assert.ok(release.includes(`.name == "${step}" and .conclusion == "success"`));
+  }
+  assert.ok(workflow.indexOf('run: node scripts/ci/cloud-build.cjs build-native-probe') < workflow.indexOf('name: native-gateway-probe-${{ matrix.label }}'));
 });
 
 test('native probe packaging selects Cargo evidence instead of cached executable names', () => {

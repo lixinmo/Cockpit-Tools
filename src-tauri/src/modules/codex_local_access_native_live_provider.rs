@@ -45,6 +45,18 @@ fn destination_allowed(base: &str) -> bool {
     })
 }
 
+fn eligible_stepfun_account(account: &CodexAccount) -> bool {
+    account.is_api_key_auth()
+        && !native_is_chatgpt_plan_account(account)
+        && native_eligible(account)
+        && is_provider_gateway_eligible_account(account)
+        && account.upstream_grok_account_id.is_none()
+        && provider_gateway_wire_api_for_account(account) == "chat_completions"
+        && destination_allowed(account.api_base_url.as_deref().unwrap_or(""))
+    // An auxiliary OAuth binding does not change this account's API-key
+    // authentication. Scope and the final route still forbid that identity.
+}
+
 fn capability(value: &str) -> &str {
     match value {
         "function"
@@ -636,17 +648,8 @@ async fn native_provider_process_driver() -> Result<(), &'static str> {
         Err(_) => crate::modules::secure_account_storage::deserialize_encrypted_snapshot(&content)
             .map_err(|_| "Cannot decode selected account without migration")?,
     };
-    if account.id != config.account_id
-        || !account.is_api_key_auth()
-        || native_is_chatgpt_plan_account(&account)
-        || !native_eligible(&account)
-        || !is_provider_gateway_eligible_account(&account)
-        || account.bound_oauth_account_id.is_some()
-        || account.upstream_grok_account_id.is_some()
-        || provider_gateway_wire_api_for_account(&account) != "chat_completions"
-        || !destination_allowed(account.api_base_url.as_deref().unwrap_or(""))
-    {
-        return Err("Selected account is not an eligible unbound StepFun Chat API-key account");
+    if account.id != config.account_id || !eligible_stepfun_account(&account) {
+        return Err("Selected account is not an eligible StepFun Chat API-key account");
     }
     let gateway = provider_gateway_for_account(&account)
         .map_err(|_| "Cannot prepare saved provider configuration")?;
@@ -678,6 +681,10 @@ async fn native_provider_process_driver() -> Result<(), &'static str> {
     let mut collection =
         new_empty_local_access_collection().map_err(|_| "Cannot create acceptance collection")?;
     apply_provider_gateway_template_settings(&mut collection, &template);
+    // Preserve the saved auxiliary binding exactly as the production provider
+    // builder does, without admitting it to this listener's account scope.
+    collection.bound_oauth_account_id =
+        provider_gateway_bound_oauth_account_id_for_account(&account);
     collection.enabled = true;
     collection.port = 0;
     collection.api_key = config.key.clone();
@@ -783,4 +790,99 @@ async fn native_provider_process_driver() -> Result<(), &'static str> {
     crate::modules::codex_proxy_engine::shutdown_all();
     stopped.map_err(|_| "Provider acceptance shutdown failed")?;
     Ok(())
+}
+
+#[tokio::test]
+async fn native_provider_live_bound_metadata_keeps_original_api_key_route() {
+    let mut account = CodexAccount::new_api_key(
+        "stepfun-fixture".into(),
+        "fixture@example.invalid".into(),
+        "synthetic-stepfun-key".into(),
+        crate::models::codex::CodexApiProviderMode::Custom,
+        Some("https://api.stepfun.com/step_plan/v1".into()),
+        None,
+        None,
+        vec!["step-5-preview".into()],
+    );
+    account.api_wire_api = Some("chat_completions".into());
+    account.egress_proxy_disabled = true;
+    account.bound_oauth_account_id = Some("auxiliary-oauth-fixture".into());
+    account.tokens.access_token = "synthetic-unused-oauth-token".into();
+    assert!(eligible_stepfun_account(&account));
+    assert!(!native_credits_applies(&account));
+
+    let mut collection: CodexLocalAccessCollection = serde_json::from_value(json!({
+        "enabled":true,"port":0,"apiKey":"synthetic-local-key","accountIds":[],
+        "gatewayMode":"native","creditsPolicy":"prefer_regular","createdAt":1,"updatedAt":1,
+        "apiKeys":[{"id":"provider-live-acceptance","label":"fixture","key":"synthetic-local-key",
+            "inheritAccountPool":false,"accountIds":["stepfun-fixture"],"allowedModels":["step-5-preview"],
+            "providerGateway":{"baseUrl":"https://api.stepfun.com/step_plan/v1","apiKey":"synthetic-stepfun-key",
+                "upstreamModel":"step-5-preview","upstreamModels":["step-5-preview"],"wireApi":"chat_completions"}}]
+    })).unwrap();
+    collection.bound_oauth_account_id =
+        provider_gateway_bound_oauth_account_id_for_account(&account);
+    assert_eq!(
+        collection.bound_oauth_account_id,
+        account.bound_oauth_account_id
+    );
+    assert!(
+        credits_compat::validate_mode(&collection, CodexLocalAccessGatewayMode::Sidecar).is_err()
+    );
+    let mut inner = NativeHostBridge::for_collection(collection);
+    inner
+        .account_overrides
+        .insert(account.id.clone(), account.clone());
+    let host = ProviderHost {
+        inner,
+        account_id: account.id.clone(),
+        allowed_models: vec!["step-5-preview".into()],
+        remaining_routes: Arc::new(Semaphore::new(4)),
+        remaining_sends: Arc::new(Semaphore::new(4)),
+        reports: Mutex::new(tempfile::tempfile().unwrap()),
+    };
+    let caller = host.authorize("synthetic-local-key").await.unwrap();
+    let collection = host.inner.collection_override.as_ref().unwrap();
+    assert_eq!(
+        native_scoped_account_ids(collection, collection.api_keys.first()),
+        vec![account.id.clone()]
+    );
+    // Production route preparation builds a client but sends no HTTP request.
+    let mut route = host
+        .route(
+            &caller,
+            RouteRequest {
+                model: "step-5-preview".into(),
+                session_id: None,
+                thread_id: None,
+                parent_thread_id: None,
+                preferred_account_id: None,
+                soft_preferred_account_id: None,
+                target_account_id: None,
+                force_refresh: false,
+                image_generation_requested: false,
+                image_input: false,
+                excluded_account_ids: vec![],
+                requires_permit: false,
+                auxiliary: None,
+                required_capabilities: vec!["function".into()],
+                capability_fallback_from: None,
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(route.account_id, account.id);
+    assert_eq!(route.headers[AUTHORIZATION], "Bearer synthetic-stepfun-key");
+    assert!(!route.chatgpt && !route.chatgpt_plan);
+    assert_eq!(route.wire_api, WireApi::Chat);
+    assert!(route.send_guard.as_ref().unwrap().check().is_ok());
+    assert_eq!(
+        host.inner.account_overrides[&account.id].bound_oauth_account_id,
+        account.bound_oauth_account_id
+    );
+    host.check_route(&route, "step-5-preview").unwrap();
+    route.account_id = account.bound_oauth_account_id.unwrap();
+    assert_eq!(
+        host.check_route(&route, "step-5-preview").unwrap_err().code,
+        "acceptance_route_outside_scope"
+    );
 }

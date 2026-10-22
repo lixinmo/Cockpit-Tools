@@ -67,7 +67,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          VERIFIED="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow build-matrix.yml --commit "$GITHUB_SHA" --status success --json event --jq '[.[] | select(.event != "pull_request")] | length')"
+          VERIFIED=0
+          for RUN_ID in $(gh run list --repo "$GITHUB_REPOSITORY" --workflow build-matrix.yml --commit "$GITHUB_SHA" --status success --json event,databaseId --jq '.[] | select(.event != "pull_request") | .databaseId'); do
+            # A standalone test-driver run cannot authorize a versioned App release.
+            VERIFIED="$(gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --json jobs --jq '[.jobs[] | select(.conclusion == "success") | select(any(.steps[]; .name == "Build selected application" and .conclusion == "success")) | select(any(.steps[]; .name == "Archive application and write provenance" and .conclusion == "success"))] | length')"
+            if [ "$VERIFIED" -ge 1 ]; then break; fi
+          done
           if [ "$VERIFIED" -lt 1 ]; then
             echo "Run Cloud Build successfully on this exact commit before creating a versioned release."
             exit 1

@@ -19,6 +19,10 @@ on:
         description: Include a native test driver for explicit local provider acceptance (no credentials)
         type: boolean
         default: false
+      native_probe_only:
+        description: Validate and package only the Native acceptance driver (thin macOS, no App publication)
+        type: boolean
+        default: false
   push:
     branches:
       - "main"
@@ -37,7 +41,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cloud-build-${{ github.event.pull_request.number || github.ref }}-${{ inputs.platform || 'macos-x86_64' }}
+  group: cloud-build-${{ github.event.pull_request.number || github.ref }}-${{ inputs.platform || 'macos-x86_64' }}-${{ inputs.native_probe_only || false }}
   cancel-in-progress: true
 
 env:
@@ -56,6 +60,7 @@ jobs:
       - id: plan
         env:
           SELECTED_PLATFORM: ${{ inputs.platform || 'macos-x86_64' }}
+          CLOUD_NATIVE_PROBE_ONLY: ${{ inputs.native_probe_only || false }}
         run: node scripts/ci/cloud-build.cjs plan "$SELECTED_PLATFORM"
 
   frontend:
@@ -154,6 +159,7 @@ jobs:
           name: cloud-frontend
           path: dist
       - name: Build selected application
+        if: inputs.native_probe_only != true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CLOUD_BUILD_TARGET: ${{ matrix.target }}
@@ -161,21 +167,28 @@ jobs:
           COCKPIT_SKIP_CLIPROXY_BUILD: '0'
         run: node scripts/ci/cloud-build.cjs build
       - name: Native gateway capability, chat bridge and Credits regressions
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && inputs.native_probe_only != true
         env:
           CLOUD_BUILD_TARGET: ${{ matrix.target }}
           COCKPIT_NATIVE_APP_BUILD: '1'
           COCKPIT_SKIP_CLIPROXY_BUILD: '1'
         run: node scripts/ci/cloud-build.cjs native-regressions
       - name: Package optional local Native acceptance driver
-        if: runner.os == 'macOS' && inputs.native_probe == true
+        if: runner.os == 'macOS' && inputs.native_probe == true && inputs.native_probe_only != true
         env:
           CLOUD_BUILD_TARGET: ${{ matrix.target }}
           COCKPIT_NATIVE_APP_BUILD: '1'
           COCKPIT_SKIP_CLIPROXY_BUILD: '1'
         run: node scripts/ci/cloud-build.cjs package-native-probe
+      - name: Build and validate standalone Native acceptance driver
+        if: runner.os == 'macOS' && inputs.native_probe_only == true
+        env:
+          CLOUD_BUILD_TARGET: ${{ matrix.target }}
+          COCKPIT_NATIVE_APP_BUILD: '1'
+          COCKPIT_SKIP_CLIPROXY_BUILD: '1'
+        run: node scripts/ci/cloud-build.cjs build-native-probe
       - uses: actions/upload-artifact@v4
-        if: runner.os == 'macOS' && inputs.native_probe == true
+        if: runner.os == 'macOS' && (inputs.native_probe == true || inputs.native_probe_only == true)
         with:
           name: native-gateway-probe-${{ matrix.label }}
           path: native-probe-assets/
@@ -196,10 +209,12 @@ jobs:
           compression-level: 1
           if-no-files-found: error
       - name: Archive application and write provenance
+        if: inputs.native_probe_only != true
         env:
           CLOUD_BUILD_TARGET: ${{ matrix.target }}
         run: node scripts/ci/cloud-build.cjs package
       - uses: actions/upload-artifact@v4
+        if: inputs.native_probe_only != true
         with:
           name: cockpit-tools-${{ matrix.label }}
           path: cloud-assets/
@@ -250,6 +265,7 @@ jobs:
     needs: [plan, frontend, contracts, build, universal]
     if: >-
       always() && !cancelled() && github.event_name != 'pull_request' &&
+      inputs.native_probe_only != true &&
       github.ref_name == github.event.repository.default_branch &&
       needs.contracts.result == 'success' && needs.build.result == 'success' &&
       (needs.universal.result == 'success' || needs.universal.result == 'skipped')
