@@ -1,7 +1,7 @@
 # Cockpit Tools
 
-> **本仓库为社区维护版本**，基于 [jlcodes99/cockpit-tools](https://github.com/jlcodes99/cockpit-tools)，保留 Rust Native、上游功能及本地补丁契约。
-> [云端构建：选择单平台或全部](https://github.com/lixinmo/Cockpit-Tools/actions/workflows/build-matrix.yml) · [下载本仓库成品](https://github.com/lixinmo/Cockpit-Tools/releases) · [构建、发布与上游同步说明](docs/cloud-builds.md)。默认仅构建 Intel Mac；正式版本发布所有支持平台。账号与应用配置始终保存在使用者本机。以下上游介绍及署名保留；上游下载与本仓库下载请按需区分。
+> 这是 [jlcodes99/cockpit-tools](https://github.com/jlcodes99/cockpit-tools) 的个人维护分支。
+> [下载本分支版本](https://github.com/lixinmo/Cockpit-Tools/releases) · [GitHub Actions 构建](https://github.com/lixinmo/Cockpit-Tools/actions/workflows/build-matrix.yml)
 
 [English](README.en.md) · [Portuguese (BR)](README.pt-br.md) · 简体中文
 
