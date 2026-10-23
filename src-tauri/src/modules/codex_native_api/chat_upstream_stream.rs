@@ -311,7 +311,7 @@ impl ResponsesStreamAdapter {
                 self.reason = Some(reason.to_string());
             }
         }
-        Ok(events)
+        self.context.restore_events(events)
     }
     fn complete(&mut self, done_marker: bool) -> Result<Vec<Value>, ServiceError> {
         if self.finished {
@@ -404,8 +404,9 @@ impl ResponsesStreamAdapter {
         self.response["status"] = json!(status);
         self.response["incomplete_details"] = details;
         self.response["output"] = json!(self.output);
-        self.finished = true;
         events.push(self.event(json!({"type":if status=="incomplete"{"response.incomplete"}else{"response.completed"},"response":self.response.clone()})));
+        let events = self.context.restore_events(events)?;
+        self.finished = true;
         Ok(events)
     }
     pub fn finish(&mut self) -> Result<Vec<Value>, ServiceError> {

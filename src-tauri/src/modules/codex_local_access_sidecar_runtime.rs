@@ -1943,12 +1943,21 @@ fn write_local_access_profile_model_catalog_with_definitions(
 fn write_local_access_profile_client_models(
     profile_dir: &Path,
     supports_websockets: bool,
+    client_models: Value,
+) -> Result<(), String> {
+    write_profile_client_models(profile_dir, Some(supports_websockets), client_models, true)
+}
+
+fn write_profile_client_models(
+    profile_dir: &Path,
+    supports_websockets: Option<bool>,
     mut client_models: Value,
+    add_reserve: bool,
 ) -> Result<(), String> {
     // 只有目录里已经有官方 GPT / Codex 模型（或用户显式列出 gpt-reserve）时才追加额度兜底
     // 条目。账号池没有能承接官方模型的账号时（例如只加了 DeepSeek + Grok 账号），客户端
     // 选择器里不应再出现 GPT-5.6 Reserve。
-    if profile_catalog_allows_reserve(&client_models) {
+    if add_reserve && profile_catalog_allows_reserve(&client_models) {
         codex_protocol::ensure_codex_reserve_fallback(&mut client_models);
     }
     apply_profile_model_ordering(&mut client_models);
@@ -1957,7 +1966,9 @@ fn write_local_access_profile_client_models(
         .and_then(Value::as_array_mut)
     {
         for model in models {
-            model["prefer_websockets"] = json!(supports_websockets);
+            if let Some(supports_websockets) = supports_websockets {
+                model["prefer_websockets"] = json!(supports_websockets);
+            }
         }
     }
     let catalog = json!({
@@ -2490,6 +2501,7 @@ fn normalize_api_key_label(label: Option<&str>, fallback: &str) -> String {
 fn build_local_access_api_key(label: Option<&str>) -> CodexLocalAccessApiKey {
     let now = now_ms();
     CodexLocalAccessApiKey {
+        provider_model_bindings: None,
         id: generate_local_api_key_id(),
         label: normalize_api_key_label(label, &default_local_api_key_label()),
         key: generate_local_api_key(),
@@ -2522,6 +2534,7 @@ fn normalize_collection_api_keys(collection: &mut CodexLocalAccessCollection) ->
             collection.api_key.trim().to_string()
         };
         collection.api_keys.push(CodexLocalAccessApiKey {
+            provider_model_bindings: None,
             id: generate_local_api_key_id(),
             label: default_local_api_key_label(),
             key,

@@ -102,6 +102,38 @@ fn legacy_search_and_colliding_function_names_remain_distinct() {
 }
 
 #[test]
+fn grok_discovery_name_collisions_preserve_legacy_client_and_explicit_server_execution() {
+    for execution in [None, Some("client")] {
+        let mut search = json!({"type":"tool_search"});
+        if let Some(execution) = execution {
+            search["execution"] = json!(execution);
+        }
+        let (first, _) = prepare(json!({"tools":[search.clone()]})).unwrap();
+        let reserved = first["tools"][0]["name"].as_str().unwrap();
+        let (body, mut context) = prepare(json!({"tools":[search,
+            {"type":"function","name":reserved,"parameters":{"type":"object"}},
+            {"type":"namespace","name":"workspace","tools":[{"type":"function","name":reserved,"parameters":{"type":"object"}}]}]})).unwrap();
+        let tools = body["tools"].as_array().unwrap();
+        assert_eq!(tools.len(), 3);
+        let names = tools
+            .iter()
+            .map(|tool| tool["name"].as_str().unwrap())
+            .collect::<HashSet<_>>();
+        assert_eq!(names.len(), 3);
+        let response = json!({"output":[{"type":"function_call","name":reserved,"call_id":"ordinary","arguments":"{}"}]});
+        assert_eq!(
+            restore_event(&mut context, response.clone()).unwrap(),
+            vec![response]
+        );
+        let restored = restore_event(&mut context, json!({"output":[{"type":"function_call","name":tools[0]["name"],"call_id":"search","arguments":"{}"}]})).unwrap();
+        assert_eq!(restored[0]["output"][0]["type"], "tool_search_call");
+        assert_eq!(restored[0]["output"][0]["execution"], "client");
+    }
+    let hosted = json!({"tools":[{"type":"tool_search","execution":"server"},{"type":"function","name":"tool_search","parameters":{"type":"object"}}]});
+    assert_eq!(prepare(hosted.clone()).unwrap().0, hosted);
+}
+
+#[test]
 fn discovery_does_not_override_current_schema_or_explicitly_disabled_tools() {
     let current = json!({"type":"function","name":"lookup","parameters":{"type":"object","properties":{"new":{"type":"boolean"}}}});
     let old = json!({"type":"function","name":"lookup","parameters":{"type":"object","properties":{"old":{"type":"boolean"}}}});

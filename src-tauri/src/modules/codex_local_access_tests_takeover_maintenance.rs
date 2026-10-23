@@ -44,7 +44,7 @@ async fn passive_native_takeover_preserves_chat_tool_negotiation_without_reinval
             .find(|model| model["slug"] == id)
             .unwrap();
         assert_eq!(model["use_responses_lite"], true);
-        assert_eq!(model["supports_search_tool"], false);
+        assert_eq!(model["supports_search_tool"], true);
     }
     let cache = profile.join(CODEX_MODEL_CACHE_FILE);
     fs::write(&cache, "cache sentinel").unwrap();
@@ -56,7 +56,7 @@ async fn passive_native_takeover_preserves_chat_tool_negotiation_without_reinval
     let mut stale = expected_json;
     for model in stale["models"].as_array_mut().unwrap() {
         model["use_responses_lite"] = json!(false);
-        model["supports_search_tool"] = json!(true);
+        model["supports_search_tool"] = json!(false);
     }
     fs::write(&catalog_path, stale.to_string()).unwrap();
     super::maintain_local_access_profile(&profile, &collection).unwrap();

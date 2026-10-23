@@ -1800,6 +1800,7 @@ HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Internet Settings
     #[tokio::test]
     async fn account_pool_compaction_cleanup_does_not_enable_removed_feature() {
         let deepseek_gateway = CodexLocalAccessProviderGateway {
+            model_bindings: None,
             base_url: "https://api.deepseek.com/v1".to_string(),
             api_key: "sk-deepseek".to_string(),
             upstream_model: "deepseek-v4-pro".to_string(),
@@ -1810,6 +1811,7 @@ HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Internet Settings
             vision_routing_model: None,
         };
         let mut key = CodexLocalAccessApiKey {
+            provider_model_bindings: None,
             id: "provider_gateway_deepseek".to_string(),
             label: "Provider Gateway: deepseek".to_string(),
             key: "agt_test".to_string(),
@@ -1835,6 +1837,7 @@ HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Internet Settings
 
         // 非 GPT 账号池与 DeepSeek 账号池都不再写已移除的压缩开关。
         key.provider_gateway = Some(CodexLocalAccessProviderGateway {
+            model_bindings: None,
             base_url: "https://token-plan-cn.xiaomimimo.com/v1".to_string(),
             ..deepseek_gateway.clone()
         });
@@ -3775,10 +3778,12 @@ http_headers = { "x-cockpit-instance-id" = "default" }
     fn provider_gateway_api_key_disables_profile_websockets() {
         let mut collection = test_local_access_collection(Vec::new());
         collection.api_keys.push(CodexLocalAccessApiKey {
+            provider_model_bindings: None,
             id: "provider_gateway_deepseek".to_string(),
             label: "Provider Gateway: DeepSeek".to_string(),
             key: "deepseek-local-key".to_string(),
             provider_gateway: Some(CodexLocalAccessProviderGateway {
+                model_bindings: None,
                 base_url: "https://api.deepseek.com/v1".to_string(),
                 api_key: "sk-deepseek".to_string(),
                 upstream_model: "deepseek-v4-pro".to_string(),
@@ -3828,6 +3833,7 @@ http_headers = { "x-cockpit-instance-id" = "default" }
                 namespace: "cpa".to_string(),
                 provider_account_id: "cpa-account".to_string(),
                 provider_gateway: CodexLocalAccessProviderGateway {
+                    model_bindings: None,
                     base_url: "https://cpa.example.com/v1".to_string(),
                     api_key: "sk-cpa".to_string(),
                     upstream_model: "gpt-5.5".to_string(),

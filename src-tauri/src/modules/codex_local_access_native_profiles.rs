@@ -337,6 +337,107 @@ where
     Ok(())
 }
 
+fn native_provider_profile_selected_model(
+    profile: &Path,
+    account: &CodexAccount,
+    collection: &CodexLocalAccessCollection,
+    api_key: &str,
+    slots: &[ProviderGatewayModelSlot],
+) -> Result<Option<String>, String> {
+    let key = collection
+        .api_keys
+        .iter()
+        .find(|key| key.enabled && key.key.trim() == api_key.trim());
+    if key.is_none() && collection.api_key.trim() != api_key.trim() {
+        return Err("NATIVE_PROFILE_KEY_NOT_FOUND".into());
+    }
+    let available = |model: &str| -> Result<bool, String> {
+        let canonical = match native_model_for_key(collection, key, model) {
+            Ok(model) => model,
+            Err(error)
+                if matches!(
+                    error.code,
+                    "provider_model_binding_unresolved" | "provider_model_binding_conflict"
+                ) =>
+            {
+                return Err(format!("{}: {}", error.code, error.message));
+            }
+            Err(_) => return Ok(false),
+        };
+        let Ok(plan) = native_model_route_plan(collection, key, &canonical) else {
+            return Ok(false);
+        };
+        Ok(native_model_visible(collection, key, &plan, account)
+            && native_plan_account_model(&plan, account).is_some_and(|upstream| {
+                slots
+                    .iter()
+                    .any(|slot| slot.upstream_model.eq_ignore_ascii_case(&upstream))
+            }))
+    };
+    if let Some(content) = read_optional_profile_file(&profile_config_path(profile))? {
+        let doc = crate::modules::codex_config_format::read_codex_config_doc_from_str(&content)?;
+        let provider = doc
+            .get("model_providers")
+            .and_then(|providers| providers.get(CODEX_LOCAL_ACCESS_RUNTIME_PROVIDER_ID));
+        let owned = doc.get("model_provider").and_then(|item| item.as_str())
+            == Some(CODEX_LOCAL_ACCESS_RUNTIME_PROVIDER_ID)
+            && provider
+                .and_then(|provider| provider.get("experimental_bearer_token"))
+                .and_then(|item| item.as_str())
+                .is_some_and(|key| key.trim() == api_key.trim())
+            && provider
+                .and_then(|provider| provider.get("base_url"))
+                .and_then(|item| item.as_str())
+                .and_then(|base| Url::parse(base).ok())
+                .is_some_and(|url| {
+                    url.scheme() == "http"
+                        && matches!(
+                            url.host_str(),
+                            Some("localhost" | "127.0.0.1" | "[::1]" | "::1")
+                        )
+                        && url.path().trim_end_matches('/') == "/v1"
+                        && url.username().is_empty()
+                        && url.password().is_none()
+                        && url.query().is_none()
+                        && url.fragment().is_none()
+                })
+            && doc
+                .get("model_catalog_json")
+                .and_then(|item| item.as_str())
+                .is_some_and(is_cockpit_managed_model_catalog_name)
+            && recorded_takeover_ownership_matches(profile, &doc)? != Some(false);
+        // Port recovery may legitimately change the next listener's port. The
+        // saved key/ownership still identify this same profile and account.
+        if owned {
+            if let Some(model) = doc
+                .get("model")
+                .and_then(|item| item.as_str())
+                .map(str::trim)
+                .filter(|model| !model.is_empty())
+            {
+                if available(model)? {
+                    return Ok(Some(model.to_owned()));
+                }
+            }
+        }
+    }
+    // First activation and unavailable prior choices keep the explicit startup
+    // preference, with an allowed current model as the existing fallback.
+    let candidates = preferred_provider_gateway_slot(account, slots)
+        .into_iter()
+        .chain(slots.iter());
+    for slot in candidates {
+        if available(&slot.client_model)? {
+            return Ok(Some(slot.client_model.clone()));
+        }
+    }
+    if slots.is_empty() {
+        Ok(None)
+    } else {
+        Err("NATIVE_PROFILE_MODEL_UNAVAILABLE".into())
+    }
+}
+
 async fn native_ensure_provider_profile(
     profile: &Path,
     account: &CodexAccount,
@@ -366,6 +467,9 @@ async fn native_ensure_provider_profile(
             tokio::task::spawn_blocking(move || {
                 let profile = profile_owned.as_path();
                 let account = &account_owned;
+                let selected_model = native_provider_profile_selected_model(
+                    profile, account, &published, &key_owned, &slots,
+                )?;
                 save_profile_takeover_backup(profile, &key_owned)?;
                 runtime.block_on(write_local_access_profile_takeover(
                     profile,
@@ -381,25 +485,24 @@ async fn native_ensure_provider_profile(
                         .map(|slot| slot.client_model.clone())
                         .collect::<Vec<_>>(),
                 )?;
-                if let Some(slot) = preferred_provider_gateway_slot(account, &slots) {
-                    write_local_access_profile_model_override(profile, &slot.client_model)?;
-                }
-                if !slots.is_empty() {
-                    write_provider_gateway_model_catalog_with_templates(
-                        profile,
-                        &slots,
-                        official_catalog_json_for_provider_gateway(account)?.as_deref(),
-                        Some(account),
-                    )?;
-                }
                 codex_account::reapply_experimental_model_policy_if_enabled(profile)?;
                 reapply_deepseek_profile_config_overrides(profile, account)?;
+                if let Some(model) = &selected_model {
+                    write_local_access_profile_model_override(profile, model)?;
+                }
+                write_native_provider_profile_model_catalog(
+                    profile, &published, &key_owned, account,
+                )?;
                 runtime.block_on(native_sync_profile_catalog_tool_capabilities(
                     profile,
                     &published,
                     &key_owned,
                     std::slice::from_ref(account),
-                ))
+                ))?;
+                if let Some(model) = &selected_model {
+                    write_local_access_profile_model_override(profile, model)?;
+                }
+                remember_takeover_ownership(profile)
             })
             .await
             .map_err(|_| "NATIVE_PROFILE_WRITE_FAILED".to_string())?
@@ -525,6 +628,10 @@ async fn native_ensure_mixed_profile(
         other => other,
     }
 }
+
+#[cfg(test)]
+#[path = "codex_local_access_native_provider_profile_selection_tests.rs"]
+mod native_provider_profile_selection_tests;
 
 #[cfg(test)]
 mod native_profile_tests {

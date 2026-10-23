@@ -167,7 +167,7 @@ jobs:
           COCKPIT_SKIP_CLIPROXY_BUILD: '0'
         run: node scripts/ci/cloud-build.cjs build
       - name: Native gateway capability, chat bridge and Credits regressions
-        if: runner.os == 'macOS' && inputs.native_probe_only != true
+        if: runner.os == 'macOS' && inputs.native_probe_only != true && inputs.native_probe != true
         env:
           CLOUD_BUILD_TARGET: ${{ matrix.target }}
           COCKPIT_NATIVE_APP_BUILD: '1'
@@ -179,7 +179,7 @@ jobs:
           CLOUD_BUILD_TARGET: ${{ matrix.target }}
           COCKPIT_NATIVE_APP_BUILD: '1'
           COCKPIT_SKIP_CLIPROXY_BUILD: '1'
-        run: node scripts/ci/cloud-build.cjs package-native-probe
+        run: node scripts/ci/cloud-build.cjs build-native-probe
       - name: Build and validate standalone Native acceptance driver
         if: runner.os == 'macOS' && inputs.native_probe_only == true
         env:

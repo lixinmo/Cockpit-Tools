@@ -1786,6 +1786,7 @@ supports_websockets = false
             &profile_dir,
             super::MIXED_MODEL_ROUTING_RUNTIME_ID,
             &super::ProviderGatewayProfileState {
+                model_bindings: None,
                 api_key: api_key.to_string(),
                 port: None,
                 created_at: 1,
@@ -1898,6 +1899,7 @@ supports_websockets = false
             &profile_dir,
             super::MIXED_MODEL_ROUTING_RUNTIME_ID,
             &super::ProviderGatewayProfileState {
+                model_bindings: None,
                 api_key: api_key.to_string(),
                 port: Some(14998),
                 created_at: 1,

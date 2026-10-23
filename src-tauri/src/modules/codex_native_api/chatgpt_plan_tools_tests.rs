@@ -138,6 +138,41 @@ fn chatgpt_plan_discovery_names_do_not_shadow_real_functions_or_other_request_co
 }
 
 #[test]
+fn chatgpt_plan_discovery_reserves_nested_function_names_without_relaxing_execution() {
+    let mut body = json!({"tools":[search(),
+        {"type":"function","function":{"name":"cockpit_client_tool_search","parameters":{"type":"object"}}},
+        {"type":"namespace","name":"workspace","tools":[
+            {"type":"function","function":{"name":"read","parameters":{"type":"object"}}},
+            {"type":"function","function":{"name":"write","parameters":{"type":"object"}}}
+        ]}],"input":[]});
+    let mut context = super::prepare(&mut body).unwrap();
+    assert_eq!(
+        context.wire_name.as_deref(),
+        Some("cockpit_client_tool_search_1")
+    );
+    let group = body["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|tool| tool["type"] == "namespace")
+        .unwrap();
+    assert_eq!(group["tools"].as_array().unwrap().len(), 2);
+    let response = json!({"output":[{"type":"function_call","name":"cockpit_client_tool_search","call_id":"ordinary","arguments":"{}"}]});
+    assert_eq!(
+        restore_event(&mut context, response.clone()).unwrap(),
+        vec![response]
+    );
+    for execution in [None, Some("server")] {
+        let mut tool = json!({"type":"tool_search"});
+        if let Some(execution) = execution {
+            tool["execution"] = json!(execution);
+        }
+        let mut body = json!({"tools":[tool],"input":[]});
+        assert!(super::prepare(&mut body).is_err());
+    }
+}
+
+#[test]
 fn chatgpt_plan_hosted_tools_report_type_and_safe_param_without_echoing_schema() {
     for (body, path) in [
         (

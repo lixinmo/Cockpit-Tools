@@ -232,23 +232,6 @@ struct ProviderHost {
     reports: Mutex<std::fs::File>,
 }
 
-fn allowed_client_models(
-    collection: &CodexLocalAccessCollection,
-    allowed_upstream_models: &[String],
-) -> Vec<String> {
-    let mut models = allowed_upstream_models.to_vec();
-    // Read only the mapping already produced by the production profile builder.
-    // A client alias grants no additional upstream model or account permission.
-    models.extend(collection.model_aliases.iter().filter_map(|alias| {
-        allowed_upstream_models
-            .contains(&alias.source_model)
-            .then(|| alias.alias.clone())
-    }));
-    models.sort();
-    models.dedup();
-    models
-}
-
 impl ProviderHost {
     fn evidence(&self, value: Value) {
         if let Ok(mut file) = self.reports.lock() {
@@ -277,6 +260,10 @@ impl ProviderHost {
             )
         })?;
         let canonical = native_model_for_key(collection, Some(key), requested_model)?;
+        if MODELS.contains(&requested_model) && canonical != requested_model {
+            return Err(native_error(403, "acceptance_model_redirect_not_allowed",
+                "Acceptance requires the selected model's original identity"));
+        }
         if !self.allowed_models.contains(&canonical) {
             return Err(native_error(
                 403,
@@ -651,8 +638,9 @@ async fn native_provider_process_driver() -> Result<(), &'static str> {
     if account.id != config.account_id || !eligible_stepfun_account(&account) {
         return Err("Selected account is not an eligible StepFun Chat API-key account");
     }
-    let gateway = provider_gateway_for_account(&account)
+    let mut gateway = provider_gateway_for_account(&account)
         .map_err(|_| "Cannot prepare saved provider configuration")?;
+    gateway.model_bindings = Some(Vec::new());
     if config
         .allowed_models
         .iter()
@@ -691,9 +679,11 @@ async fn native_provider_process_driver() -> Result<(), &'static str> {
     collection.debug_logs = false;
     collection.request_payload_logging = false;
     collection.responses_websockets_enabled = template.responses_websockets_enabled;
-    apply_provider_gateway_model_slots(&mut collection, &gateway.upstream_models);
-    let client_models = allowed_client_models(&collection, &config.allowed_models);
+    // Real acceptance uses raw IDs. Synthetic regressions verify legacy alias
+    // migration without writing to the user's persistent profile state.
+    let client_models = config.allowed_models.clone();
     collection.api_keys.push(CodexLocalAccessApiKey {
+        provider_model_bindings: None,
         id: "provider-live-acceptance".into(),
         label: "Provider acceptance".into(),
         key: config.key,

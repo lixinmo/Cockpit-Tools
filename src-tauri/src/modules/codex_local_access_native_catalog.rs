@@ -6,16 +6,23 @@ fn native_public_model_entry(
     id: &str,
     upstream: &str,
 ) -> Value {
-    let template = account_model_template(account, upstream)
-        .or_else(|| codex_protocol::known_codex_model_template(upstream));
+    let template = native_declared_provider_model_metadata(account, upstream)
+        .or_else(|| (native_wire_api(account).ok() == Some(native_contract::WireApi::Responses))
+            .then(|| codex_protocol::known_codex_model_template(upstream)).flatten());
     let window = account
         .api_model_context_windows
         .get(upstream)
         .copied()
         .filter(|n| *n > 0);
     let vision = native_catalog_vision(collection, plan, account, upstream);
-    let tools = !account.is_api_key_auth() || template.is_some();
-    native_model_entry_from_metadata(id, template.as_ref(), window, vision, tools)
+    let tools = match native_capability_support(collection, account, upstream, "function") {
+        Some(CodexLocalAccessCapabilitySupport::Supported) => true,
+        Some(CodexLocalAccessCapabilitySupport::Unsupported) => false,
+        None => !account.is_api_key_auth() || template.is_some(),
+    };
+    let mut entry = native_model_entry_from_metadata(id, template.as_ref(), window, vision, tools);
+    entry["model_info"]["upstream_id"] = json!(upstream);
+    entry
 }
 
 fn native_model_entry_from_metadata(

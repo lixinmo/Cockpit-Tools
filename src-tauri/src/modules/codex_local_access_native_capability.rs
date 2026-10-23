@@ -51,6 +51,8 @@ fn native_capability_support(
     match declared {
         Some(Supported) => Some(Supported),
         Some(Unsupported) => Some(Unsupported),
+        None if capability == "tool_search_client"
+            && native_wire_api(account).ok() == Some(native_contract::WireApi::Chat) => Some(Supported),
         None => None,
     }
 }

@@ -433,6 +433,16 @@ pub struct CodexLocalAccessProviderGatewayModelCapability {
     pub supports_vision: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexLocalAccessProviderModelBinding {
+    pub client_model: String,
+    /// None reserves a legacy client ID whose old target could not be proven.
+    /// It must never be reassigned from the current model-list order.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upstream_model: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CodexLocalAccessProviderGateway {
@@ -441,6 +451,10 @@ pub struct CodexLocalAccessProviderGateway {
     pub upstream_model: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub upstream_models: Vec<String>,
+    /// Native routing uses these frozen, key-scoped legacy identities. New
+    /// models keep their upstream IDs. None never authorizes positional aliases.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_bindings: Option<Vec<CodexLocalAccessProviderModelBinding>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wire_api: Option<String>,
     #[serde(default)]
@@ -484,6 +498,10 @@ pub struct CodexLocalAccessApiKey {
     pub key: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provider_gateway: Option<CodexLocalAccessProviderGateway>,
+    /// Frozen identities are independent of execution transport; native Grok
+    /// intentionally has no ordinary provider_gateway descriptor.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider_model_bindings: Option<Vec<CodexLocalAccessProviderModelBinding>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model_routing: Option<CodexLocalAccessModelRouting>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

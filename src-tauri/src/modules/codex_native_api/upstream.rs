@@ -31,7 +31,7 @@ pub(super) async fn canonical_stream(
 ) -> Result<CanonicalStream, ServiceError> {
     let chat = route.wire_api == WireApi::Chat && !compact;
     let chat_context = if chat {
-        super::chat_upstream::ToolContext::from_responses(request_body)
+        super::chat_upstream::ToolContext::prepare_responses(request_body)?.1
     } else {
         super::chat_upstream::ToolContext::default()
     };
@@ -276,9 +276,7 @@ pub(super) async fn canonical_stream(
                 if let Some(event) = structured_failure {
                     enqueue(&mut state.pending, vec![event]);
                 } else {
-                    state
-                        .pending
-                        .push_back(Err(std::io::Error::other(error)));
+                    state.pending.push_back(Err(std::io::Error::other(error)));
                 }
             }
         }

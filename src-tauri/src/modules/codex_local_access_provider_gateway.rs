@@ -57,9 +57,20 @@ fn save_provider_gateway_profile_state(
         std::fs::create_dir_all(parent)
             .map_err(|e| format!("创建 Codex provider gateway 状态目录失败: {}", e))?;
     }
-    let content = serde_json::to_string_pretty(state)
-        .map_err(|e| format!("序列化 Codex provider gateway 状态失败: {}", e))?;
-    write_string_atomic(&path, &content)
+    update_string_atomic(&path, |current| {
+        let mut next = state.clone();
+        // Port/key maintenance may have read state before model migration.
+        // A stale writer cannot erase identities frozen by that migration.
+        if next.model_bindings.is_none() {
+            if let Some(current) = current {
+                let current: ProviderGatewayProfileState = serde_json::from_str(current)
+                    .map_err(|_| "PROVIDER_MODEL_BINDING_STATE_INVALID".to_string())?;
+                next.model_bindings = current.model_bindings;
+            }
+        }
+        serde_json::to_string_pretty(&next)
+            .map_err(|e| format!("序列化 Codex provider gateway 状态失败: {}", e))
+    })
         .map_err(|e| format!("写入 Codex provider gateway 状态失败: {}", e))
 }
 
@@ -78,6 +89,7 @@ fn provider_gateway_profile_api_key(
     let state = ProviderGatewayProfileState {
         api_key: generate_local_api_key(),
         port: None,
+        model_bindings: None,
         created_at: now,
         updated_at: now,
     };
@@ -103,6 +115,7 @@ fn provider_gateway_profile_port(profile_dir: &Path, account_id: &str) -> Result
         port: Some(allocate_random_local_port(
             CODEX_LOCAL_ACCESS_LOCALHOST_BIND_HOST,
         )?),
+        model_bindings: None,
         created_at: now,
         updated_at: now,
     };
@@ -594,6 +607,8 @@ pub(crate) struct ProviderGatewayModelSlot {
     pub(crate) client_model: String,
     pub(crate) upstream_model: String,
 }
+
+include!("codex_local_access_provider_model_bindings.rs");
 
 fn preferred_provider_gateway_slot<'a>(
     account: &CodexAccount,
@@ -1321,6 +1336,7 @@ fn provider_gateway_for_account(
             api_key: String::new(),
             upstream_model: upstream_models.first().cloned().unwrap_or_default(),
             upstream_models,
+            model_bindings: None,
             wire_api: Some("responses".to_string()),
             supports_vision: account.api_supports_vision,
             model_capabilities,
@@ -1404,6 +1420,7 @@ fn provider_gateway_for_account(
         api_key: api_key.to_string(),
         upstream_model: upstream_models.first().cloned().unwrap_or_default(),
         upstream_models,
+        model_bindings: None,
         wire_api: Some(provider_gateway_wire_api_for_account(account)),
         supports_vision: gateway_supports_vision,
         model_capabilities,
@@ -1678,6 +1695,7 @@ fn build_mixed_model_gateway_collection_for_profile(
         label: "Mixed Model Routing".to_string(),
         key: key.clone(),
         provider_gateway: None,
+        provider_model_bindings: None,
         model_routing: Some(CodexLocalAccessModelRouting {
             default_route: "oauth".to_string(),
             failure_policy: "strict".to_string(),
@@ -1721,6 +1739,9 @@ fn build_provider_gateway_collection_for_profile(
     ),
     String,
 > {
+    // Capture whether a legacy profile existed before port/key initialization.
+    // A fresh profile must not acquire the old positional GPT aliases.
+    let previous_model_state = load_provider_gateway_profile_state(profile_dir, &account.id)?;
     let mut collection = new_empty_local_access_collection()?;
     if let Some(template) = load_collection_from_disk()? {
         apply_provider_gateway_template_settings(&mut collection, &template);
@@ -1784,8 +1805,20 @@ fn build_provider_gateway_collection_for_profile(
         return Err("该供应商账号不符合本地网关使用条件".to_string());
     }
 
-    let provider_gateway = provider_gateway_for_account(account)?;
-    apply_provider_gateway_model_slots(&mut collection, &provider_gateway.upstream_models);
+    let mut provider_gateway = provider_gateway_for_account(account)?;
+    if collection.gateway_mode == CodexLocalAccessGatewayMode::Native {
+        provider_gateway.model_bindings = Some(resolve_native_provider_model_bindings_for_profile(
+            profile_dir,
+            account,
+            previous_model_state.as_ref(),
+        )?);
+        // Frozen mappings live on this provider key, not in the global alias
+        // namespace. Explicit collection aliases remain subject to normal ACLs.
+        collection.suppress_oauth_model_alias = true;
+    } else {
+        // The Go reference retains its existing alias allocation path.
+        apply_provider_gateway_model_slots(&mut collection, &provider_gateway.upstream_models);
+    }
     let key = provider_gateway_profile_api_key(profile_dir, &account.id)?;
     let now = now_ms();
     collection.api_key = key.clone();
@@ -1801,6 +1834,7 @@ fn build_provider_gateway_collection_for_profile(
         } else {
             Some(provider_gateway.clone())
         },
+        provider_model_bindings: provider_gateway.model_bindings.clone(),
         model_routing: None,
         inherit_account_pool: Some(false),
         account_ids: vec![account.id.clone()],
@@ -1870,6 +1904,7 @@ fn build_bound_oauth_local_gateway_collection_for_profile(
         label: format!("Bound OAuth Local Gateway: {}", account.email),
         key: key.clone(),
         provider_gateway: None,
+        provider_model_bindings: None,
         model_routing: None,
         inherit_account_pool: Some(false),
         account_ids: vec![account.id.clone()],
@@ -2055,6 +2090,7 @@ fn build_model_provider_gateway_test_collection(
         label: provider_gateway_test_api_key_label(request),
         key: collection.api_key.clone(),
         provider_gateway,
+        provider_model_bindings: None,
         model_routing: None,
         inherit_account_pool: Some(false),
         account_ids: vec![account.id.clone()],
@@ -2449,6 +2485,9 @@ fn write_local_access_profile_model_override(
     }
     let config_path = profile_config_path(profile_dir);
     let mut doc = crate::modules::codex_config_format::load_codex_config_doc(&config_path)?;
+    if doc.get("model").and_then(|item| item.as_str()) == Some(model) {
+        return Ok(());
+    }
     doc["model"] = value(model);
     let content = crate::modules::codex_config_format::codex_config_doc_to_string(&mut doc);
     crate::modules::codex_config_format::write_codex_config_toml_atomic(&config_path, &content)
@@ -2716,7 +2755,12 @@ pub async fn activate_provider_gateway_for_dir(
         .ok_or_else(|| format!("供应商网关账号不存在: {}", account_id))?;
     let (collection, key, provider_gateway) =
         build_provider_gateway_collection_for_profile(profile_dir, &account)?;
-    let model_slots = provider_gateway_model_slots(&provider_gateway.upstream_models);
+    let model_slots = provider_gateway_model_slots_for_collection(&collection, &provider_gateway)?;
+    let selected_model = if collection.gateway_mode == CodexLocalAccessGatewayMode::Native {
+        native_provider_profile_selected_model(profile_dir, &account, &collection, &key, &model_slots)?
+    } else {
+        preferred_provider_gateway_slot(&account, &model_slots).map(|slot| slot.client_model.clone())
+    };
     save_profile_takeover_backup(profile_dir, &key)?;
     write_local_access_profile_takeover(profile_dir, &collection, Some(&key), false).await?;
     cleanup_provider_gateway_profile_model_overrides(profile_dir)?;
@@ -2727,10 +2771,12 @@ pub async fn activate_provider_gateway_for_dir(
             .map(|slot| slot.client_model.clone())
             .collect::<Vec<_>>(),
     )?;
-    if let Some(default_slot) = preferred_provider_gateway_slot(&account, &model_slots) {
-        write_local_access_profile_model_override(profile_dir, &default_slot.client_model)?;
+    if collection.gateway_mode != CodexLocalAccessGatewayMode::Native {
+        if let Some(model) = &selected_model {
+            write_local_access_profile_model_override(profile_dir, model)?;
+        }
     }
-    if !model_slots.is_empty() {
+    if !model_slots.is_empty() && collection.gateway_mode != CodexLocalAccessGatewayMode::Native {
         write_provider_gateway_model_catalog_with_templates(
             profile_dir,
             &model_slots,
@@ -2740,6 +2786,13 @@ pub async fn activate_provider_gateway_for_dir(
     }
     codex_account::reapply_experimental_model_policy_if_enabled(profile_dir)?;
     reapply_deepseek_profile_config_overrides(profile_dir, &account)?;
+    if collection.gateway_mode == CodexLocalAccessGatewayMode::Native {
+        if let Some(model) = &selected_model {
+            write_local_access_profile_model_override(profile_dir, model)?;
+        }
+        write_native_provider_profile_model_catalog(profile_dir, &collection, &key, &account)?;
+        remember_takeover_ownership(profile_dir)?;
+    }
     ensure_runtime_loaded_without_start().await?;
     let runtime = gateway_runtime().lock().await;
     Ok(build_state_snapshot(&runtime))
@@ -3178,13 +3231,14 @@ pub async fn ensure_provider_gateway_for_dir(
     let _guard = provider_gateway_lifecycle_lock().lock().await;
     let account = codex_account::load_account(account_id)
         .ok_or_else(|| format!("供应商网关账号不存在: {}", account_id))?;
+    freeze_existing_native_provider_model_bindings(profile_dir, &account)?;
     // 持久端口可能已被其它实例/进程占用：先放弃该端口，下面的构建会重新分配一个空闲端口，
     // 避免带着冲突端口启动 sidecar 失败后，后续每次尝试都继续失败。
     stop_profile_writer_before_port_reassignment(profile_dir, account_id).await?;
     release_occupied_provider_gateway_profile_port(profile_dir, account_id).await;
     let (collection, key, provider_gateway) =
         build_provider_gateway_collection_for_profile(profile_dir, &account)?;
-    let model_slots = provider_gateway_model_slots(&provider_gateway.upstream_models);
+    let model_slots = provider_gateway_model_slots_for_collection(&collection, &provider_gateway)?;
     let runtime_key = provider_gateway_runtime_key(profile_dir, account_id);
     let (endpoint, stopped) =
         stop_provider_gateway_runtime_checked(&runtime_key, "configuration_rebuild").await;

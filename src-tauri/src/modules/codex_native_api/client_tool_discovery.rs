@@ -60,7 +60,10 @@ fn declaration_identity(tool: &Value, parent: &str) -> String {
     json!([
         text(tool, "type").unwrap_or(""),
         namespace(tool).unwrap_or_else(|| parent.to_owned()),
-        text(tool, "name").unwrap_or("")
+        text(tool, "name")
+            .filter(|name| !name.is_empty())
+            .or_else(|| tool.pointer("/function/name").and_then(Value::as_str))
+            .unwrap_or("")
     ])
     .to_string()
 }

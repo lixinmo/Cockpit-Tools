@@ -282,7 +282,7 @@ fn maintain_local_access_profile(
             collection,
             key,
             &accounts,
-        );
+        )?;
     }
     write_local_access_profile_client_models(profile_dir, supports_websockets, client_models)?;
     remember_takeover_ownership(profile_dir)

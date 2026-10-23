@@ -1,5 +1,7 @@
 use super::*;
 
+include!("codex_local_access_native_provider_identity_tests.rs");
+
 fn collection() -> CodexLocalAccessCollection {
     serde_json::from_value(json!({"enabled":true,"gatewayMode":"native","port":19001,"apiKey":"synthetic-key","accountIds":["responses","chat"],"createdAt":0,"updatedAt":0})).unwrap()
 }
@@ -70,7 +72,10 @@ fn native_catalog_search_considers_every_eligible_pool_member_not_first_metadata
 
 #[test]
 fn native_catalog_search_respects_key_account_grants_and_model_prefix() {
-    let collection = collection();
+    let mut collection = collection();
+    collection.capability_fallback.overrides.push(serde_json::from_value(json!({
+        "accountId":"responses","model":"custom-agent","capabilities":{"tool_search_client":"supported"}
+    })).unwrap());
     let key:CodexLocalAccessApiKey=serde_json::from_value(json!({"id":"scoped","label":"scope","key":"synthetic-key","inheritAccountPool":false,"accountIds":["responses"],"modelPrefix":"team"})).unwrap();
     let accounts = vec![
         account("responses", "responses"),
@@ -143,14 +148,14 @@ fn native_catalog_search_follows_explicit_provider_and_namespaced_mixed_routes()
             &native_catalog(&collection, Some(&provider), &accounts).unwrap(),
             "custom-agent"
         )["supports_search_tool"],
-        false
+        true
     );
     assert_eq!(
         entry(
             &native_catalog(&collection, Some(&mixed), &accounts).unwrap(),
             "third/custom-agent"
         )["supports_search_tool"],
-        false
+        true
     );
 }
 
@@ -159,10 +164,13 @@ async fn native_profile_catalog_and_models_endpoint_share_identical_tool_capabil
     for response_wire in ["responses", "chat_completions"] {
         let mut collection = collection();
         collection.api_keys=vec![serde_json::from_value(json!({"id":"scoped","label":"scope","key":"synthetic-key","inheritAccountPool":false,"accountIds":["responses","chat"]})).unwrap()];
-        let accounts = vec![
+        let mut accounts = vec![
             account("responses", response_wire),
             account("chat", "chat_completions"),
         ];
+        for account in &mut accounts {
+            account.api_model_context_windows.insert("custom-agent".into(), 12345);
+        }
         let directory =
             std::env::temp_dir().join(format!("cockpit-catalog-tools-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&directory).unwrap();
@@ -242,11 +250,11 @@ fn native_chat_catalog_negotiates_identical_tools_for_raw_step5_and_known_shells
         &collection,
         Some(&key),
         &[chat.clone()],
-    );
+    ).unwrap();
     for id in ["gpt-5.6-sol", "step-5-preview"] {
         for catalog in [&served, &profile] {
             assert_eq!(entry(catalog, id)["use_responses_lite"], true, "{id}");
-            assert_eq!(entry(catalog, id)["supports_search_tool"], false, "{id}");
+            assert_eq!(entry(catalog, id)["supports_search_tool"], true, "{id}");
         }
     }
     assert_eq!(
@@ -305,7 +313,7 @@ fn native_chat_catalog_does_not_change_responses_only_or_model_denied_routes() {
     );
     assert_eq!(
         entry(&filtered, "custom-agent")["supports_search_tool"],
-        true
+        false
     );
 }
 

@@ -110,6 +110,10 @@ test('native gateway regressions gate packaging after the application has built 
   assert.match(step, /CLOUD_BUILD_TARGET: \$\{\{ matrix\.target \}\}/);
   assert.match(step, /COCKPIT_NATIVE_APP_BUILD: '1'/);
   assert.match(step, /COCKPIT_SKIP_CLIPROXY_BUILD: '1'/);
+  assert.match(step, /inputs\.native_probe != true/);
+  const probeStart = workflow.indexOf('      - name: Package optional local Native acceptance driver');
+  const probeEnd = workflow.indexOf('      - name:', probeStart + 10);
+  assert.match(workflow.slice(probeStart, probeEnd), /run: node scripts\/ci\/cloud-build\.cjs build-native-probe/);
 });
 
 test('publication rejects wrong provenance, tampered assets and unlisted files', () => {

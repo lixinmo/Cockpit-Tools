@@ -16,6 +16,7 @@ pub(crate) struct ToolContext {
     declarations: Vec<Declaration>,
     indices: BTreeMap<String, usize>,
     local_names: BTreeMap<String, Option<String>>,
+    discovery: Option<super::super::chatgpt_plan_tools::Context>,
 }
 
 pub(super) fn qualify(namespace: &str, name: &str) -> String {
@@ -34,6 +35,36 @@ pub(super) fn qualify(namespace: &str, name: &str) -> String {
 }
 
 impl ToolContext {
+    pub(crate) fn prepare_responses(body: &Value) -> Result<(Value, Self), super::ServiceError> {
+        let (lowered, discovery) = super::discovery::prepare(body)?;
+        let mut context = Self::from_responses(&lowered);
+        context.discovery = Some(discovery);
+        Ok((lowered, context))
+    }
+
+    pub(super) fn restore_events(
+        &mut self,
+        events: Vec<Value>,
+    ) -> Result<Vec<Value>, super::ServiceError> {
+        let Some(context) = self.discovery.as_mut() else {
+            return Ok(events);
+        };
+        let mut restored = Vec::new();
+        for event in events {
+            restored.extend(super::super::chatgpt_plan_tools::restore_event(
+                context, event,
+            )?);
+        }
+        Ok(restored)
+    }
+
+    pub(super) fn restore_response(&self, response: Value) -> Result<Value, super::ServiceError> {
+        self.clone()
+            .restore_events(vec![response])?
+            .pop()
+            .ok_or_else(|| super::upstream_error("Chat tool discovery returned no response"))
+    }
+
     pub(crate) fn from_responses(body: &Value) -> Self {
         let mut result = Self::default();
         result.scan(&body["tools"]);

@@ -728,6 +728,9 @@ struct ProviderGatewayProfileState {
     api_key: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     port: Option<u16>,
+    /// Some(empty) records a completed migration with no legacy aliases.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    model_bindings: Option<Vec<crate::models::codex_local_access::CodexLocalAccessProviderModelBinding>>,
     created_at: i64,
     updated_at: i64,
 }

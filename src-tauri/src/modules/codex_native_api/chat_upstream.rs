@@ -7,6 +7,8 @@ use serde_json::{json, Value};
 #[path = "chat_upstream_stream.rs"]
 mod stream;
 pub use stream::ResponsesStreamAdapter;
+#[path = "chat_client_discovery.rs"]
+mod discovery;
 #[path = "chat_upstream_messages.rs"]
 mod messages;
 #[path = "chat_upstream_tools.rs"]
@@ -22,6 +24,15 @@ pub(crate) fn responses_to_native_chat(body: &Value) -> Result<Value, ServiceErr
 }
 
 fn responses_to_chat_inner(body: &Value, native: bool) -> Result<Value, ServiceError> {
+    let prepared = if native {
+        None
+    } else {
+        Some(ToolContext::prepare_responses(body)?)
+    };
+    let (body, context) = match prepared.as_ref() {
+        Some((lowered, context)) => (lowered, context.clone()),
+        None => (body, ToolContext::from_responses(body)),
+    };
     let mut out = body
         .as_object()
         .ok_or_else(|| invalid("body", "expected an object"))?
@@ -61,7 +72,6 @@ fn responses_to_chat_inner(body: &Value, native: bool) -> Result<Value, ServiceE
     ] {
         out.remove(key);
     }
-    let context = ToolContext::from_responses(body);
     out.insert(
         "messages".into(),
         json!(messages::convert(body, &context, native)?),
@@ -336,7 +346,7 @@ pub(crate) fn chat_to_response_with_context(
     if let Some(v) = value.get("service_tier") {
         response["service_tier"] = v.clone();
     }
-    Ok(response)
+    context.restore_response(response)
 }
 
 #[cfg(test)]
@@ -346,3 +356,7 @@ mod parity22_tests;
 #[cfg(test)]
 #[path = "chat_plaintext_tests.rs"]
 mod plaintext_tests;
+
+#[cfg(test)]
+#[path = "chat_client_discovery_tests.rs"]
+mod client_discovery_tests;

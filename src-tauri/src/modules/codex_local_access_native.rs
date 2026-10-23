@@ -711,12 +711,33 @@ fn native_model_for_key(
             "Model is not allowed for this API key",
         ));
     }
-    let canonical = collection
-        .model_aliases
-        .iter()
-        .find(|alias| alias.alias.eq_ignore_ascii_case(base_model))
-        .map(|alias| alias.source_model.as_str())
-        .unwrap_or(base_model);
+    let provider_gateway = key.and_then(|key| key.provider_gateway.as_ref());
+    let bindings = key.and_then(|key| key.provider_model_bindings.as_ref())
+        .or_else(|| provider_gateway.and_then(|gateway| gateway.model_bindings.as_ref()))
+        .map(|bindings| normalize_provider_model_bindings(bindings))
+        .transpose().map_err(|_| native_error(400, "invalid_provider_model_binding",
+            "Provider model bindings contain conflicting or invalid identities"))?;
+    let scoped_binding = bindings.as_ref().and_then(|bindings|
+        bindings.iter().find(|binding| binding.client_model.eq_ignore_ascii_case(base_model))
+            .map(|binding| (provider_gateway, binding)));
+    let canonical = if let Some((gateway, binding)) = scoped_binding {
+        let target = binding.upstream_model.as_deref().ok_or_else(|| native_error(
+            409, "provider_model_binding_unresolved",
+            "This legacy model alias has no verified target; select a provider model by its original name",
+        ))?;
+        if gateway.is_some_and(|gateway| native_gateway_models(gateway).iter().any(|id| id.eq_ignore_ascii_case(base_model)))
+            && !target.eq_ignore_ascii_case(base_model)
+        {
+            return Err(native_error(409, "provider_model_binding_conflict",
+                "A provider model conflicts with a retained legacy alias; resolve the binding explicitly"));
+        }
+        target
+    } else {
+        collection.model_aliases.iter()
+            .find(|alias| alias.alias.eq_ignore_ascii_case(base_model))
+            .map(|alias| alias.source_model.as_str())
+            .unwrap_or(base_model)
+    };
     if native_excluded(&collection.excluded_models, canonical)
         || key.is_some_and(|key| native_excluded(&key.excluded_models, canonical))
     {

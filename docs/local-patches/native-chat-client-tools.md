@@ -1,4 +1,4 @@
-# Native Chat client-tool negotiation
+# Native provider model identity and client tools
 
 ## Problem and boundary
 
@@ -31,9 +31,10 @@ guide](https://platform.stepfun.com/cookbook/step-5-tool-calling).
   hosted capabilities can still use an eligible Responses account. Unknown wire
   protocols, excluded accounts, and accounts outside the key scope cannot grant
   this declaration.
-- `supports_search_tool` remains the separate client tool-discovery gate. Plain
-  Chat keeps it false because it has no complete client `tool_search` adapter.
-  It is not a web-search or hosted-MCP flag.
+- `supports_search_tool` remains the separate client tool-discovery gate. The
+  Chat bridge now adapts explicit client discovery, dynamic declarations, call
+  history and restored output across JSON, SSE and WebSocket. Explicit capability
+  refusals still win. It is not a web-search or hosted-MCP flag.
 - Background profile maintenance applies the same capability gates before one
   catalog write. Unchanged maintenance does not repeatedly invalidate the model
   cache or restore template flags.
@@ -42,8 +43,8 @@ guide](https://platform.stepfun.com/cookbook/step-5-tool-calling).
   `error.capability_diagnostics`. It does not capture names, schemas, arguments,
   messages, credentials, or account identifiers.
 
-No request-time tool filtering, model remapping, wider account grant, engine
-switch, or Credits exception is introduced. An explicitly submitted hosted
+No request-time tool filtering, wider account grant, engine switch, or Credits
+exception is introduced. An explicitly submitted hosted
 `web_search`, including one inside `additional_tools` with Lite metadata, still
 fails preflight without an upstream request. Lite is not an implementation of
 hosted web search. A separately available client search function or connector
@@ -67,9 +68,10 @@ a separate one-day artifact. No real-account test runs in Actions. The ignored
 `native_provider_process_driver` can then run locally without compilation. It
 requires a private configuration, reads one existing StepFun account without
 migration, retains the saved Native/`prefer_regular` policy, limits models to the
-saved catalog, and uses a temporary listener/history database. Existing aliases
-are resolved through the production model selector; none are changed. Only
-allowlisted structural diagnostics are written by the driver.
+saved catalog, and uses a temporary listener/history database. Acceptance uses
+the original raw IDs and rejects any route that redirects them to another model.
+Saved aliases are not mutated. Only allowlisted structural diagnostics are
+written by the driver.
 An existing auxiliary OAuth binding is retained as metadata, as in the production
 provider builder. It neither changes the StepFun API-key authentication nor adds
 the bound identity to the acceptance scope. The final route and send guard still
@@ -83,8 +85,8 @@ the formal release gate; that gate requires successful App build and archive
 steps on the exact release commit.
 
 The real acceptance checks must show Codex selecting a tool, executing a
-read-only local fixture operation, returning its result, and receiving a final
-answer for both `step-5-preview` and `step-3.7-flash`. A 200 response alone is not
+local fixture read/edit/verify operation, returning its result, and receiving a
+final answer for both `step-5-preview` and `step-3.7-flash`. A 200 response alone is not
 sufficient. Explicit hosted web search must still fail with its actual capability
 reason. Private acceptance configuration, history, and diagnostics stay local.
 
@@ -94,7 +96,40 @@ client so it consumes the updated metadata. A `.bak` catalog is not evidence of
 the active client's configuration. Existing conversations carrying incompatible
 hosted-tool history remain subject to the normal history and capability checks.
 
-## Validation record
+## Stable model identity and complete metadata
+
+Native provider catalogs expose every allowed upstream model under its own ID.
+There is no positional allocation from the three legacy GPT compatibility aliases
+and no limit based on the number of shipped Codex models. Go reference behavior
+is retained. Explicit user alias rules still apply; they are not expanded.
+
+Existing automatic aliases are frozen once from an owned managed catalog or a
+trusted runtime snapshot. The migration checks account/key/port ownership and
+never uses `.bak` files or guesses from the current model ordering. Removed
+models retain their recorded binding; unknown old bindings remain blocked until
+the user chooses an unambiguous raw ID. Colliding identities fail explicitly.
+A valid currently selected model survives provider refresh and reordering.
+
+Metadata comes from the resolved upstream identity and eligible protocol, not
+from the GPT-looking name of an old alias. The same complete producer drives the
+Native HTTP catalog and the saved profile. Explicit account context limits and
+saved profile context/reasoning settings remain authoritative. Unknown provider
+models use the existing 128K client fallback, with no invented reasoning or
+verbosity support; the public API does not claim that fallback as an upstream
+limit. Known StepFun limits/efforts are scoped to the official endpoint, based on
+its [Codex guide](https://platform.stepfun.com/docs/zh/guides/developer/integrations/codex).
+
+Step 5 does not offer the built-in Chat web-search tool, per the official
+[tool-call reference](https://platform.stepfun.ai/docs/en/api-reference/tool-call).
+Real search acceptance uses the official same-plan
+[Search MCP](https://platform.stepfun.com/docs/zh/guides/developer/integrations/search-mcp):
+`https://api.stepfun.com/step_plan/v1/mcp/web_search/mcp`, with `web_search` and
+`web_fetch` executed by the client. The gateway forwards their ordinary function
+calls/results. It does not silently substitute the standard-billing search API
+or claim hosted Responses search support. API credentials and search content
+never enter the cloud build.
+
+## Earlier negotiation-only validation record
 
 Production App: `a741f403211e95f0fdffd04c40b56c7d766822c0`.
 Successful full Cloud Build:
