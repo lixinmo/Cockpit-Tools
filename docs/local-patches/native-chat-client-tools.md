@@ -324,3 +324,84 @@ removed 984,160 KiB (about 0.94 GiB); all targeted paths are absent. No project
 The installed App, runtime accounts/configuration, shared toolchains, source and
 Git history/remotes were retained. No compilation ran on this Mac and no private
 configuration, credentials or raw conversations were uploaded.
+
+## Client configuration publication fix (2026-10-24, Asia/Shanghai)
+
+The user's actual provider switch exposed a separate configuration failure:
+Codex rejected `model_providers.codex_local_access.wire_api=chat_completions`.
+The earlier bounded gateway acceptance supplied its own client provider options,
+so it did not validate the account-page publication path. It must not be treated
+as evidence that the old UI switch/edit/sync paths generated valid client config.
+
+Root cause: ordinary account projection reused the upstream account's Chat
+protocol, upstream address and API key for the Codex-facing provider. Full switch
+first published that intermediate state before starting the gateway. Current
+credential editing and provider synchronization could overwrite the gateway
+without rebuilding it; catalog/header refresh could also rewrite the provider.
+
+Commit `15f1ee99ceba5ef9a11c356c655c8c6de9140b4e` separates those responsibilities:
+
+- Gateway accounts go through one asynchronous client-publication entrypoint.
+  The existing gateway start/publish/rollback transaction completes before the
+  switch updates its current-account index or an edit reports success.
+- Credential edits retain ordered per-ID locks and old detail records until
+  publication and index migration succeed. Current provider sync awaits the same
+  publication path. Bound OAuth identities and existing Credits rules remain.
+- Raw Chat account projection is refused before auth/config writes. It is not
+  relabeled Responses while retaining an upstream Chat-only destination.
+- Original gateway accounts cannot overwrite their published endpoint, protocol,
+  local credential or catalog during catalog/header refresh. Instance preparation
+  defers to its existing final ensure stage to avoid a second gateway rebuild.
+- Saved StepFun upstream configuration remains Chat. The generated client profile
+  uses a local gateway address, local credential and Responses.
+
+Complete successful standard-hosted Intel Cloud Build:
+[40001505539](https://github.com/lixinmo/Cockpit-Tools/actions/runs/40001505539).
+Main-library regressions: 241 passed, zero failed; one synthetic profile exporter
+was intentionally ignored in CI and run explicitly for local parser acceptance.
+Frontend: typecheck and 1,637 tests; packaging 57; CI scripts 10; Native retry 18;
+Go `CT-CONNECT-RETRY-001` v1.0 linux/amd64; Credits 31; Auto Reset 71 all passed.
+
+Codex CLI 0.162.1 then parsed four complete profiles produced by the real backend
+switch, credential-edit, provider-sync and catalog/header-refresh entrypoints.
+All four were accepted with no manually supplied wire override. A copied negative
+control changing only Responses back to Chat reproduced the exact parser failure.
+The synthetic full-entrypoint test is distinct from the bounded real-account test.
+
+The real-account driver now uses production `build_runtime_account`, account
+bundle and Native catalog writers to create its whole isolated client profile.
+Codex reads that profile without overriding wire, model or base URL. Both original
+models completed actual read/`apply_patch`/verify/tool-result/final-token loops:
+Step 5 had seven successful Native turns; Step 3.7 had five. CLI and driver exit
+codes were zero, with no timeout or failed Native turn. Saved account files,
+index, encryption key and Native configuration hashes were unchanged by acceptance.
+The original routing snapshot keeps auxiliary OAuth binding metadata; its real
+OAuth credentials are not copied or refreshed for the isolated test client.
+The same Native/prefer_regular and Sidecar-switch protections were checked.
+This does not claim an automated click inside the user's Codex GUI.
+
+Verified artifact SHA-256:
+
+- App archive: `11497d94bbf0743065c49852e22eddba37f75f739ca1d30ddd165ec431e4b3ac`.
+- Main binary: `2e74cfbc0b187d2b73c00505275cc421e7c08fb5fe7b927c1b10887f06495ee4`.
+- Go sidecar: `7a55d344e59c6419fe5fb64f04b644c844c639b14d3f933cd49109d7726a144f`.
+- Native probe: `7977009ec9cc403fd3328c8b523520d4048d262a9fa5062b64d81d8503da4e4e`.
+- Temporary acceptance script: `e77ae4baff8cacac1913cd98076ae40795c4b2605280a0b93367729d30771805`.
+
+The verified App was installed at `/Applications/Cockpit Tools.app` and restarted.
+Both binaries are x86_64 and pass signature verification; the new exact process
+passed Ready/version and two Pong checks five seconds apart. The old 176,656 KiB
+App was removed only after successful verification. Version remains 1.3.73; the
+commit/hash identify this fix. The current user's default config remained valid
+and was accepted by the installed Codex parser; it did not select the local
+StepFun gateway, so no unrelated active account was switched. Reselect StepFun
+in Cockpit to publish the fixed configuration; reload Codex if its old error
+banner remains. No manual TOML edit is required.
+
+All private acceptance roots were removed by the harness. After install,
+280,592 KiB of probe/App downloads, safe summaries and task helpers were removed;
+including the old App, this round removed 457,248 KiB (about 0.44 GiB). Targeted
+paths are absent, no project build-cache/dependency directories were present,
+and the verified App remains running. Runtime accounts/configuration, shared
+toolchains, source and Git history/remotes were retained. No local compilation
+or private-data upload occurred.
