@@ -752,6 +752,19 @@ fn write_auth_value_to_configured_store(
     }
 }
 
+/// Chat is an upstream transport owned by the gateway, never a Codex client protocol.
+/// Refuse before touching auth/config so callers cannot leave a partially projected account.
+fn reject_chat_upstream_client_projection(account: &CodexAccount) -> Result<(), String> {
+    if account.is_api_key_auth()
+        && account.api_wire_api.as_deref().is_some_and(|wire| {
+            matches!(wire.trim().to_ascii_lowercase().as_str(), "chat" | "chat_completions")
+        })
+    {
+        return Err("CODEX_CLIENT_REQUIRES_RESPONSES_GATEWAY".to_string());
+    }
+    Ok(())
+}
+
 pub fn write_auth_file_to_dir(base_dir: &Path, account: &CodexAccount) -> Result<(), String> {
     write_auth_file_to_dir_with_after_commit(base_dir, account, || {
         crate::modules::codex_cli_daemon::after_auth_commit(base_dir);
@@ -776,6 +789,7 @@ fn write_auth_file_to_dir_with_after_commit_and_bridge(
     after_commit: impl FnOnce(),
     bridge_url: Option<String>,
 ) -> Result<(), String> {
+    reject_chat_upstream_client_projection(account)?;
     let auth_path = base_dir.join("auth.json");
     logger::log_info(&format!(
         "[Codex切号] 准备写入登录信息: account_id={}, email={}, target_dir={}, target_file={}",
@@ -951,6 +965,11 @@ fn refresh_api_key_provider_projection_in_dir(
     if !account.is_api_key_auth() {
         return Ok(());
     }
+    // The gateway publishes its own local credential, endpoint, protocol and headers.
+    // A catalog/header refresh of the upstream account must not replace that projection.
+    if crate::modules::codex_local_access::account_requires_provider_gateway(account) {
+        return Ok(());
+    }
     if account_uses_deepseek_cdp_injection(account) {
         return Ok(());
     }
@@ -981,6 +1000,7 @@ fn write_api_key_account_bundle_with_oauth_to_dir(
     api_key_account: &CodexAccount,
     oauth_account: &CodexAccount,
 ) -> Result<(), String> {
+    reject_chat_upstream_client_projection(api_key_account)?;
     if !api_key_account.is_api_key_auth() {
         return Err("仅 API Key 账号支持 OAuth 绑定写入".to_string());
     }

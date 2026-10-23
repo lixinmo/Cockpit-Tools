@@ -419,8 +419,7 @@ pub async fn update_api_key_bound_oauth_account(
 
     if is_current {
         let codex_home = get_codex_home();
-        crate::modules::codex_local_access::stop_provider_gateways_for_profile(&codex_home).await;
-        write_prepared_account_bundle_to_dir(&codex_home, &account)?;
+        publish_account_client_profile(&codex_home, &account).await?;
     }
 
     Ok(account)
@@ -466,18 +465,81 @@ async fn update_api_key_bound_oauth_account_with_bound(
 
     if is_current {
         let codex_home = get_codex_home();
-        write_api_key_account_bundle_with_oauth_to_dir(
-            &codex_home,
-            &account,
-            &bound_oauth_account,
-        )?;
-        activate_provider_gateway_after_switch_if_needed(&codex_home, &account).await?;
+        if crate::modules::codex_local_access::account_requires_provider_gateway(&account) {
+            publish_account_client_profile(&codex_home, &account).await?;
+        } else {
+            write_api_key_account_bundle_with_oauth_to_dir(
+                &codex_home, &account, &bound_oauth_account,
+            )?;
+            activate_provider_gateway_after_switch_if_needed(&codex_home, &account).await?;
+        }
     }
 
     Ok(account)
 }
 
-pub fn update_api_key_credentials(
+pub async fn update_api_key_credentials(
+    account_id: &str,
+    api_key: String,
+    api_base_url: Option<String>,
+    api_provider_mode: Option<CodexApiProviderMode>,
+    api_provider_id: Option<String>,
+    api_provider_name: Option<String>,
+    api_model_catalog: Vec<String>,
+    api_sync_model_catalog_to_codex: Option<bool>,
+    api_wire_api: Option<String>,
+    api_supports_websockets: bool,
+    api_supports_vision: bool,
+    api_model_vision_support: std::collections::HashMap<String, bool>,
+    api_vision_routing_model: Option<String>,
+    account_name: Option<String>,
+    api_model_context_windows: Option<HashMap<String, i64>>,
+) -> Result<CodexAccount, String> {
+    let (normalized_key, _) = validate_api_key_credentials(&api_key, api_base_url.as_deref())?;
+    let new_id = build_api_key_account_id(&normalized_key);
+    let mut edit_guards = Vec::new();
+    for lock in api_key_credential_edit_locks(account_id, &new_id)? {
+        edit_guards.push(lock.lock_owned().await);
+    }
+    let was_current = get_current_account().is_some_and(|current| current.id == account_id);
+    let profile = get_codex_home();
+    let _profile_lease = if was_current {
+        Some(try_acquire_profile_mutation_lease(&profile, "api-key-credentials")?)
+    } else {
+        None
+    };
+    let old_id = account_id.to_string();
+    let worker_id = old_id.clone();
+    let account = tauri::async_runtime::spawn_blocking(move || {
+        update_api_key_credentials_in_store(
+            &worker_id,
+            api_key,
+            api_base_url,
+            api_provider_mode,
+            api_provider_id,
+            api_provider_name,
+            api_model_catalog,
+            api_sync_model_catalog_to_codex,
+            api_wire_api,
+            api_supports_websockets,
+            api_supports_vision,
+            api_model_vision_support,
+            api_vision_routing_model,
+            account_name,
+            api_model_context_windows,
+        )
+    }).await.map_err(|error| format!("更新 API Key 任务失败: {}", error))??;
+    if was_current {
+        publish_account_client_profile(&profile, &account).await?;
+    }
+    // Retain both IDs and the old detail until the gateway has published successfully.
+    let saved = account.clone();
+    tauri::async_runtime::spawn_blocking(move || commit_api_key_credential_index(&old_id, &saved))
+        .await.map_err(|error| format!("提交 API Key 任务失败: {}", error))??;
+    Ok(account)
+}
+
+fn update_api_key_credentials_in_store(
     account_id: &str,
     api_key: String,
     api_base_url: Option<String>,
@@ -499,11 +561,6 @@ pub fn update_api_key_credentials(
     let (normalized_key, normalized_base_url) =
         validate_api_key_credentials(&api_key, api_base_url.as_deref())?;
     let new_id = build_api_key_account_id(&normalized_key);
-    let edit_locks = api_key_credential_edit_locks(account_id, &new_id)?;
-    let _edit_guards = edit_locks
-        .iter()
-        .map(|lock| lock.lock().map_err(|_| "Codex 账号写入锁已损坏".to_string()))
-        .collect::<Result<Vec<_>, _>>()?;
     let mut account =
         load_account(account_id).ok_or_else(|| format!("账号不存在: {}", account_id))?;
 
@@ -520,9 +577,6 @@ pub fn update_api_key_credentials(
     )?;
     let old_id = account.id.clone();
     let index = load_account_index();
-    let was_current = get_current_account()
-        .map(|current| current.id == old_id)
-        .unwrap_or(false);
 
     if new_id != old_id && index.accounts.iter().any(|item| item.id == new_id) {
         return Err("该 API Key 已存在，请直接使用已有账号".to_string());
@@ -563,11 +617,6 @@ pub fn update_api_key_credentials(
         crate::modules::codex_instance::replace_bind_account_references(&old_id, &account.id)?;
         crate::modules::codex_local_access::replace_account_references_after_key_edit(&old_id, &account.id)?;
     }
-    if was_current {
-        let codex_home = get_codex_home();
-        write_account_bundle_to_dir(&codex_home, &account)?;
-    }
-    commit_api_key_credential_index(&old_id, &account)?;
 
     logger::log_info(&format!(
         "Codex API Key 账号凭据已更新: old_id={}, new_id={}, has_base_url={}",
@@ -579,7 +628,7 @@ pub fn update_api_key_credentials(
     Ok(account)
 }
 
-pub fn sync_api_key_provider_accounts(
+pub async fn sync_api_key_provider_accounts(
     account_ids: Vec<String>,
     api_base_url: Option<String>,
     api_provider_mode: Option<CodexApiProviderMode>,
@@ -593,13 +642,56 @@ pub fn sync_api_key_provider_accounts(
     api_vision_routing_model: Option<String>,
     api_model_context_windows: Option<std::collections::HashMap<String, i64>>,
 ) -> Result<usize, String> {
+    let current_id = load_account_index().current_account_id;
+    let updates_current = current_id.as_ref().is_some_and(|id| account_ids.contains(id));
+    let profile = get_codex_home();
+    let _profile_lease = if updates_current {
+        Some(try_acquire_profile_mutation_lease(&profile, "provider-account-sync")?)
+    } else {
+        None
+    };
+    let updated_accounts = tauri::async_runtime::spawn_blocking(move || {
+        sync_api_key_provider_accounts_in_store(
+            account_ids,
+            api_base_url,
+            api_provider_mode,
+            api_provider_id,
+            api_provider_name,
+            api_model_catalog,
+            api_wire_api,
+            api_supports_websockets,
+            api_supports_vision,
+            api_model_vision_support,
+            api_vision_routing_model,
+            api_model_context_windows,
+        )
+    }).await.map_err(|error| format!("同步供应商账号任务失败: {}", error))??;
+    if let Some(account) = updated_accounts.iter().find(|account| current_id.as_deref() == Some(account.id.as_str())) {
+        publish_account_client_profile(&profile, account).await?;
+    }
+    Ok(updated_accounts.len())
+}
+
+fn sync_api_key_provider_accounts_in_store(
+    account_ids: Vec<String>,
+    api_base_url: Option<String>,
+    api_provider_mode: Option<CodexApiProviderMode>,
+    api_provider_id: Option<String>,
+    api_provider_name: Option<String>,
+    api_model_catalog: Vec<String>,
+    api_wire_api: Option<String>,
+    api_supports_websockets: bool,
+    api_supports_vision: bool,
+    api_model_vision_support: std::collections::HashMap<String, bool>,
+    api_vision_routing_model: Option<String>,
+    api_model_context_windows: Option<std::collections::HashMap<String, i64>>,
+) -> Result<Vec<CodexAccount>, String> {
     let provider_config = resolve_api_provider_config(
         api_base_url.as_deref(),
         api_provider_mode,
         api_provider_id.as_deref(),
         api_provider_name.as_deref(),
     )?;
-    let current_account_id = load_account_index().current_account_id;
     let mut seen = HashSet::new();
     let mut updated_accounts = Vec::new();
 
@@ -633,14 +725,7 @@ pub fn sync_api_key_provider_accounts(
         updated_accounts.push(account);
     }
 
-    if let Some(current_account) = updated_accounts
-        .iter()
-        .find(|account| current_account_id.as_deref() == Some(account.id.as_str()))
-    {
-        write_account_bundle_to_dir(&get_codex_home(), current_account)?;
-    }
-
-    Ok(updated_accounts.len())
+    Ok(updated_accounts)
 }
 
 pub fn update_account_name(account_id: &str, name: String) -> Result<CodexAccount, String> {

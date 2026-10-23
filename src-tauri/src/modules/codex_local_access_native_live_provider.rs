@@ -261,8 +261,11 @@ impl ProviderHost {
         })?;
         let canonical = native_model_for_key(collection, Some(key), requested_model)?;
         if MODELS.contains(&requested_model) && canonical != requested_model {
-            return Err(native_error(403, "acceptance_model_redirect_not_allowed",
-                "Acceptance requires the selected model's original identity"));
+            return Err(native_error(
+                403,
+                "acceptance_model_redirect_not_allowed",
+                "Acceptance requires the selected model's original identity",
+            ));
         }
         if !self.allowed_models.contains(&canonical) {
             return Err(native_error(
@@ -592,6 +595,38 @@ fn read_config() -> Result<Config, &'static str> {
     Ok(config)
 }
 
+/// Use the production client account/catalog producers, never a hand-written
+/// `wire_api` override in the accepting Codex process. Full switch/update/sync
+/// publication is independently exercised by the synthetic profile exporter.
+/// This bounded driver cannot call that entrypoint: doing so could refresh the
+/// real auxiliary OAuth identity and start another, unbounded listener.
+fn write_acceptance_client_profile(
+    profile: &Path,
+    collection: &CodexLocalAccessCollection,
+    account: &CodexAccount,
+    local_key: &str,
+    port: u16,
+    model: &str,
+) -> Result<(), &'static str> {
+    let mut published = collection.clone();
+    published.port = port;
+    let client = build_runtime_account(
+        build_collection_base_url(&published),
+        local_key.to_owned(),
+        // Only the ephemeral local credential belongs in this isolated client.
+        // Original binding metadata remains on the unchanged routing snapshot.
+        None,
+        profile_api_key_supports_websockets(&published, local_key),
+    );
+    codex_account::write_account_bundle_to_dir(profile, &client)
+        .map_err(|_| "Cannot publish the production client account profile")?;
+    write_native_provider_profile_model_catalog(profile, &published, local_key, account)
+        .map_err(|_| "Cannot publish the production provider model catalog")?;
+    write_local_access_profile_model_override(profile, model)
+        .map_err(|_| "Cannot select the acceptance model")?;
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[ignore = "Explicit COCKPIT_NATIVE_PROVIDER_LIVE_CONFIG; sends bounded real StepFun API-key requests"]
 async fn native_provider_process_driver() -> Result<(), &'static str> {
@@ -736,8 +771,13 @@ async fn native_provider_process_driver() -> Result<(), &'static str> {
     builder
         .create(&config.output_dir)
         .map_err(|_| "Output directory must be new")?;
+    let client_profile = config.output_dir.join("codex-home");
+    let profile_collection = collection.clone();
+    let profile_account = account.clone();
+    let profile_key = collection.api_key.clone();
+    let profile_model = config.allowed_models[0].clone();
     let mut inner = NativeHostBridge::for_collection(collection);
-    inner.profile_dir = Some(config.output_dir.clone());
+    inner.profile_dir = Some(client_profile.clone());
     inner.account_overrides.insert(account.id.clone(), account);
     let host = Arc::new(ProviderHost {
         inner,
@@ -761,10 +801,32 @@ async fn native_provider_process_driver() -> Result<(), &'static str> {
     )
     .await
     .map_err(|_| "Cannot start provider acceptance listener")?;
+    let port = handle.addr.port();
+    let profile_result = tokio::task::spawn_blocking(move || {
+        write_acceptance_client_profile(
+            &client_profile,
+            &profile_collection,
+            &profile_account,
+            &profile_key,
+            port,
+            &profile_model,
+        )
+    })
+    .await
+    .map_err(|_| "Production acceptance profile worker failed")?;
+    if let Err(error) = profile_result {
+        let _ = handle.shutdown(Duration::from_secs(10)).await;
+        crate::modules::codex_proxy_engine::shutdown_all();
+        return Err(error);
+    }
     let mut ready = private_new_file(&config.output_dir.join("ready.json"))?;
-    write!(ready, "{}", json!({"port":handle.addr.port()}))
-        .and_then(|_| ready.flush())
-        .map_err(|_| "Cannot publish provider acceptance port")?;
+    write!(
+        ready,
+        "{}",
+        json!({"port":port,"client_profile":"codex-home","production_client_projection":true})
+    )
+    .and_then(|_| ready.flush())
+    .map_err(|_| "Cannot publish provider acceptance port")?;
     let (send, mut receive) = tokio::sync::mpsc::channel(1);
     std::thread::spawn(move || {
         for line in std::io::stdin().lock().lines() {
@@ -780,6 +842,62 @@ async fn native_provider_process_driver() -> Result<(), &'static str> {
     crate::modules::codex_proxy_engine::shutdown_all();
     stopped.map_err(|_| "Provider acceptance shutdown failed")?;
     Ok(())
+}
+
+#[test]
+fn native_provider_live_profile_uses_production_client_projection() {
+    let profile = tempfile::tempdir().unwrap();
+    let mut account = CodexAccount::new_api_key(
+        "stepfun-fixture".into(),
+        "fixture@example.invalid".into(),
+        "synthetic-upstream-secret".into(),
+        crate::models::codex::CodexApiProviderMode::Custom,
+        Some("https://api.stepfun.com/step_plan/v1".into()),
+        None,
+        None,
+        vec!["step-5-preview".into()],
+    );
+    account.api_wire_api = Some("chat_completions".into());
+    account.bound_oauth_account_id = Some("auxiliary-oauth-fixture".into());
+    let mut collection: CodexLocalAccessCollection = serde_json::from_value(json!({
+        "enabled":true,"port":0,"apiKey":"synthetic-local-key","accountIds":[],
+        "gatewayMode":"native","creditsPolicy":"prefer_regular","createdAt":1,"updatedAt":1,
+        "apiKeys":[{"id":"provider-live-acceptance","label":"fixture","key":"synthetic-local-key",
+            "inheritAccountPool":false,"accountIds":["stepfun-fixture"],"allowedModels":["step-5-preview"],
+            "providerGateway":{"baseUrl":"https://api.stepfun.com/step_plan/v1","apiKey":"synthetic-upstream-secret",
+                "upstreamModel":"step-5-preview","upstreamModels":["step-5-preview"],"wireApi":"chat_completions"}}]
+    })).unwrap();
+    collection.bound_oauth_account_id = account.bound_oauth_account_id.clone();
+    write_acceptance_client_profile(
+        profile.path(),
+        &collection,
+        &account,
+        "synthetic-local-key",
+        61234,
+        "step-5-preview",
+    )
+    .unwrap();
+    let content = std::fs::read_to_string(profile.path().join("config.toml")).unwrap();
+    let doc =
+        crate::modules::codex_config_format::read_codex_config_doc_from_str(&content).unwrap();
+    let provider = &doc["model_providers"][CODEX_LOCAL_ACCESS_RUNTIME_PROVIDER_ID];
+    assert_eq!(provider["wire_api"].as_str(), Some("responses"));
+    let expected_base = build_base_url_with_host(61234, collection.client_base_url_host);
+    assert_eq!(provider["base_url"].as_str(), Some(expected_base.as_str()));
+    assert_eq!(doc["model"].as_str(), Some("step-5-preview"));
+    let auth = std::fs::read_to_string(profile.path().join("auth.json")).unwrap();
+    assert!(auth.contains("synthetic-local-key"));
+    assert!(!auth.contains("synthetic-upstream-secret"));
+    assert!(!content.contains("synthetic-upstream-secret"));
+    assert_eq!(account.api_wire_api.as_deref(), Some("chat_completions"));
+    assert_eq!(
+        collection.bound_oauth_account_id,
+        account.bound_oauth_account_id
+    );
+    assert!(profile
+        .path()
+        .join(CODEX_MANAGED_MODEL_CATALOG_FILE)
+        .is_file());
 }
 
 #[tokio::test]

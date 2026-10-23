@@ -2873,6 +2873,11 @@ fn sync_or_cleanup_account_model_catalog_for_dir(
     base_dir: &Path,
     account: &CodexAccount,
 ) -> Result<(), String> {
+    if crate::modules::codex_local_access::account_requires_provider_gateway(account) {
+        // The gateway is the sole owner of this account's client catalog and provider.
+        // Keep its published files until the asynchronous gateway rebuild succeeds.
+        return Ok(());
+    }
     if account.is_api_key_auth() {
         cleanup_experimental_model_catalog_for_dir(base_dir)?;
     }
@@ -3275,10 +3280,10 @@ fn write_api_key_bearer_provider_override_to_config_toml(
         .as_deref()
         .filter(|name| !name.trim().is_empty())
         .unwrap_or(CODEX_DEFAULT_RUNTIME_PROVIDER_NAME);
-    let wire_api = match wire_api.trim().to_ascii_lowercase().as_str() {
-        "chat_completions" | "chat" => "chat_completions",
-        _ => CODEX_PROVIDER_WIRE_API,
-    };
+    if matches!(wire_api.trim().to_ascii_lowercase().as_str(), "chat_completions" | "chat") {
+        return Err("CODEX_CLIENT_REQUIRES_RESPONSES_GATEWAY".to_string());
+    }
+    let wire_api = CODEX_PROVIDER_WIRE_API;
 
     let existing = fs::read_to_string(&config_path).unwrap_or_default();
     let mut doc = if existing.trim().is_empty() {

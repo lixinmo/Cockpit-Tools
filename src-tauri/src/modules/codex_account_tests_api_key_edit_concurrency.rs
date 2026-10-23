@@ -105,7 +105,7 @@ fn api_key_edit_parallel_credentials_preserve_all_rotated_accounts() {
                 let barrier = &barrier;
                 scope.spawn(move || {
                     barrier.wait();
-                    update_api_key_credentials(
+                    tokio::runtime::Runtime::new().unwrap().block_on(update_api_key_credentials(
                         &original.id,
                         format!("sk-concurrency-after-{n}"),
                         Some("https://example.invalid/v1".into()),
@@ -121,7 +121,7 @@ fn api_key_edit_parallel_credentials_preserve_all_rotated_accounts() {
                         None,
                         None,
                         None,
-                    )
+                    ))
                     .unwrap()
                 })
             })
@@ -216,7 +216,7 @@ fn api_key_edit_shared_destination_cannot_overwrite_another_account() {
                 let barrier = &barrier;
                 scope.spawn(move || {
                     barrier.wait();
-                    update_api_key_credentials(
+                    tokio::runtime::Runtime::new().unwrap().block_on(update_api_key_credentials(
                         &original.id,
                         "sk-shared-destination".into(),
                         Some("https://example.invalid/v1".into()),
@@ -232,7 +232,7 @@ fn api_key_edit_shared_destination_cannot_overwrite_another_account() {
                         None,
                         None,
                         None,
-                    )
+                    ))
                 })
             })
             .collect::<Vec<_>>();

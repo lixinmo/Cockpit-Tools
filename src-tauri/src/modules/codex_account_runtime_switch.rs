@@ -446,6 +446,12 @@ where
 {
     let api_key_account =
         load_account(account_id).ok_or_else(|| format!("账号不存在: {}", account_id))?;
+    if crate::modules::codex_local_access::account_requires_provider_gateway(&api_key_account) {
+        publish_account_client_profile(auth_dir, &api_key_account).await?;
+        let result = operation(&api_key_account);
+        let latest_account = load_account(account_id).unwrap_or(api_key_account);
+        return Ok((latest_account, result, None));
+    }
     if api_key_account.is_api_key_auth() {
         let sync_error = if normalize_optional_ref(
             api_key_account.bound_oauth_account_id.as_deref(),
@@ -568,6 +574,11 @@ pub async fn project_preflighted_account_for_instance_launch(
         return Err("Web Session 账号仅支持查看额度，无法用于客户端或 CLI 启动".to_string());
     }
 
+    if crate::modules::codex_local_access::account_requires_provider_gateway(&account) {
+        publish_account_client_profile(auth_dir, &account).await?;
+        return Ok(account);
+    }
+
     if !managed_account_refresh_needed_for_request(&account, false, false) {
         if account.is_api_key_auth() {
             if let Some(bound_id) =
@@ -634,6 +645,12 @@ async fn prepare_account_for_injection_from_auth_dir_impl(
             "清理旧版 id_token 重登标记失败，继续准备账号凭据: account_id={}, error={}",
             account.id, err
         ));
+    }
+    if crate::modules::codex_local_access::account_requires_provider_gateway(&account) {
+        if let Some(dir) = auth_dir {
+            publish_account_client_profile(dir, &account).await?;
+        }
+        return Ok(account);
     }
     if account.is_api_key_auth() {
         if let Some(dir) = auth_dir {
@@ -714,7 +731,14 @@ fn switch_account_with_prepared(
         write_prepared_account_bundle_to_dir(wsl_dir, &account_for_write)
     });
 
-    // 更新索引中的 current_account_id
+    finish_account_switch(account_id, account_for_write)
+}
+
+fn finish_account_switch(
+    account_id: &str,
+    account_for_write: CodexAccount,
+) -> Result<CodexAccount, String> {
+    // Only commit the selected account after its client projection has succeeded.
     let mut index = load_account_index();
     index.current_account_id = Some(account_id.to_string());
     save_account_index(&index)?;
@@ -727,6 +751,23 @@ fn switch_account_with_prepared(
     logger::log_info(&format!("已切换到 Codex 账号: {}", updated_account.email));
 
     Ok(updated_account)
+}
+
+/// Publish the client side of an account without ever exposing its upstream Chat protocol.
+/// Gateway activation already starts the listener before publishing and rolls profile files back
+/// on failure. Callers own the existing profile mutation lease where user interaction requires it.
+pub(crate) async fn publish_account_client_profile(
+    base_dir: &Path,
+    account: &CodexAccount,
+) -> Result<(), String> {
+    if crate::modules::codex_local_access::account_requires_provider_gateway(account)
+        || crate::modules::codex_local_access::account_requires_bound_oauth_local_gateway(account)
+    {
+        return activate_provider_gateway_after_switch_if_needed(base_dir, account).await;
+    }
+    write_account_bundle_to_dir(base_dir, account)?;
+    crate::modules::codex_local_access::stop_provider_gateways_for_profile(base_dir).await;
+    Ok(())
 }
 
 async fn activate_provider_gateway_after_switch_if_needed(
@@ -875,6 +916,30 @@ async fn commit_account_switch_locked(
     account_id: &str,
     prepared: PreparedCodexAccountSwitch,
 ) -> Result<CodexAccount, String> {
+    let gateway_account = match &prepared {
+        PreparedCodexAccountSwitch::Account(account) => account,
+        PreparedCodexAccountSwitch::ApiKeyWithOauth { api_key_account, .. } => api_key_account,
+    };
+    if crate::modules::codex_local_access::account_requires_provider_gateway(gateway_account)
+        || crate::modules::codex_local_access::account_requires_bound_oauth_local_gateway(gateway_account)
+    {
+        // Do not first project the upstream account. Codex can observe every config write,
+        // and a failed gateway startup must retain the previous client configuration.
+        let profile = get_codex_home();
+        publish_account_client_profile(&profile, gateway_account).await?;
+        if let Some(wsl_dir) = configured_codex_wsl_config_dir()
+            .filter(|dir| !projection_dirs_equal(dir, &profile))
+        {
+            // Preserve the optional Windows projection without exporting a Chat-only provider.
+            // Each profile keeps its established account-scoped gateway and local credential.
+            if let Err(error) = publish_account_client_profile(&wsl_dir, gateway_account).await {
+                logger::log_warn(&format!(
+                    "[Codex切号] 同步 WSL 网关配置失败，默认实例配置已发布: {}", error
+                ));
+            }
+        }
+        return finish_account_switch(account_id, gateway_account.clone());
+    }
     match prepared {
         PreparedCodexAccountSwitch::Account(account) => {
             let updated_account = switch_account_with_prepared(account_id, account)?;

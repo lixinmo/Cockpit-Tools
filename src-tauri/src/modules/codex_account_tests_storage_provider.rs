@@ -1,5 +1,6 @@
 // Codex 账号测试：Storage synchronization and API provider projection behavior。
 // 测试与生产实现共享 super 作用域，验证真实持久化和运行态行为。
+include!("codex_account_tests_native_provider_wire.rs");
     #[test]
     fn current_account_does_not_sync_tokens_from_official_store() {
         let data_dir = make_temp_dir("codex-current-account-sync-test");
@@ -834,7 +835,7 @@ multi_agent = true
         save_account_index(&index).expect("mark account current");
         write_account_bundle_to_dir(&env.codex_home(), &account).expect("write initial account");
 
-        let updated = update_api_key_credentials(
+        let updated = tokio::runtime::Runtime::new().unwrap().block_on(update_api_key_credentials(
             &account.id,
             "sk-after-edit".to_string(),
             Some("https://after.example.com/v1".to_string()),
@@ -850,7 +851,7 @@ multi_agent = true
             None,
             None,
             None,
-        )
+        ))
         .expect("update API key account");
 
         let auth: serde_json::Value = serde_json::from_str(
@@ -1368,7 +1369,7 @@ supports_websockets = false
         index.current_account_id = Some(account.id.clone());
         save_account_index(&index).expect("save account index");
 
-        let updated = sync_api_key_provider_accounts(
+        let updated = tokio::runtime::Runtime::new().unwrap().block_on(sync_api_key_provider_accounts(
             vec![account.id.clone(), account.id.clone()],
             Some("https://relay.example.com/v1".to_string()),
             Some(CodexApiProviderMode::Custom),
@@ -1381,7 +1382,7 @@ supports_websockets = false
             Default::default(),
             None,
             None,
-        )
+        ))
         .expect("sync provider snapshot");
 
         assert_eq!(updated, 1);

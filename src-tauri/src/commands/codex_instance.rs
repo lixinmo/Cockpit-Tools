@@ -370,14 +370,13 @@ async fn inject_bound_account_to_profile(
         return Ok(());
     }
 
-    if let Some(provider_gateway_account_id) =
-        modules::codex_instance::parse_provider_gateway_bind_account_id(bind_account_id)
+    if modules::codex_instance::parse_provider_gateway_bind_account_id(bind_account_id).is_some()
+        || modules::codex_account::load_account(bind_account_id)
+            .is_some_and(|account| modules::codex_local_access::account_requires_provider_gateway(&account))
     {
-        modules::codex_local_access::activate_provider_gateway_for_dir(
-            profile_dir,
-            &provider_gateway_account_id,
-        )
-        .await?;
+        // The command's final ensure stage starts and publishes this gateway once.
+        // Keep the previous profile until that transaction succeeds; projecting the
+        // upstream account here would either expose Chat or start a redundant listener.
         return Ok(());
     }
 
@@ -400,14 +399,13 @@ async fn inject_preflighted_bound_account_to_profile(
         return Ok(());
     }
 
-    if let Some(provider_gateway_account_id) =
-        modules::codex_instance::parse_provider_gateway_bind_account_id(bind_account_id)
+    if modules::codex_instance::parse_provider_gateway_bind_account_id(bind_account_id).is_some()
+        || modules::codex_account::load_account(bind_account_id)
+            .is_some_and(|account| modules::codex_local_access::account_requires_provider_gateway(&account))
     {
-        modules::codex_local_access::activate_provider_gateway_for_dir(
-            profile_dir,
-            &provider_gateway_account_id,
-        )
-        .await?;
+        // The command's final ensure stage starts and publishes this gateway once.
+        // Keep the previous profile until that transaction succeeds; projecting the
+        // upstream account here would either expose Chat or start a redundant listener.
         return Ok(());
     }
 

@@ -95,7 +95,7 @@ fn full_key_edit_migrates_persisted_references_and_failed_edits_remain_retryable
     let path = super::local_access_file_path().unwrap();
     fs::write(&path, "invalid interrupted config").unwrap();
     let edit = || {
-        codex_account::update_api_key_credentials(
+        tokio::runtime::Runtime::new().unwrap().block_on(codex_account::update_api_key_credentials(
             &account.id,
             "new-test-key".into(),
             account.api_base_url.clone(),
@@ -111,7 +111,7 @@ fn full_key_edit_migrates_persisted_references_and_failed_edits_remain_retryable
             None,
             None,
             None,
-        )
+        ))
     };
     assert!(edit().unwrap_err().contains("账号池引用"));
     assert!(

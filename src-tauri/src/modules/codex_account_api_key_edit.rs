@@ -3,8 +3,8 @@
 fn api_key_credential_edit_locks(
     old_id: &str,
     new_id: &str,
-) -> Result<Vec<Arc<Mutex<()>>>, String> {
-    static LOCKS: std::sync::LazyLock<Mutex<HashMap<String, std::sync::Weak<Mutex<()>>>>> =
+) -> Result<Vec<Arc<tokio::sync::Mutex<()>>>, String> {
+    static LOCKS: std::sync::LazyLock<Mutex<HashMap<String, std::sync::Weak<tokio::sync::Mutex<()>>>>> =
         std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
     let mut locks = LOCKS
         .lock()
@@ -20,7 +20,7 @@ fn api_key_credential_edit_locks(
             let lock = locks
                 .get(&id)
                 .and_then(std::sync::Weak::upgrade)
-                .unwrap_or_else(|| Arc::new(Mutex::new(())));
+                .unwrap_or_else(|| Arc::new(tokio::sync::Mutex::new(())));
             locks.insert(id, Arc::downgrade(&lock));
             lock
         })

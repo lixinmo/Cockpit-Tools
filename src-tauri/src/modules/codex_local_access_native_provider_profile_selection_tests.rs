@@ -60,6 +60,11 @@ async fn publish_and_stop(profile: &Path, account: &CodexAccount) {
         collection.api_keys[0].provider_gateway.as_ref().unwrap(),
     )
     .unwrap();
+    let plan = native_model_route_plan(
+        &collection, Some(&collection.api_keys[0]), "provider-a",
+    ).unwrap();
+    assert_eq!(native_plan_account_model(&plan, account).as_deref(), Some("provider-a"));
+    assert_eq!(plan.gateway.as_ref().unwrap().wire_api.as_deref(), Some("chat_completions"));
     let published = native_ensure_provider_profile(
         profile,
         account,
@@ -75,6 +80,17 @@ async fn publish_and_stop(profile: &Path, account: &CodexAccount) {
     .await;
     stopped.unwrap();
     published.unwrap();
+    let doc = crate::modules::codex_config_format::load_codex_config_doc(
+        &profile_config_path(profile),
+    ).unwrap();
+    let provider = &doc["model_providers"][CODEX_LOCAL_ACCESS_RUNTIME_PROVIDER_ID];
+    assert_eq!(provider["wire_api"].as_str(), Some("responses"));
+    let base = reqwest::Url::parse(provider["base_url"].as_str().unwrap()).unwrap();
+    assert!(matches!(base.host_str(), Some("127.0.0.1" | "localhost" | "::1")));
+    assert_eq!(base.path(), "/v1");
+    assert_ne!(provider["experimental_bearer_token"].as_str(), account.openai_api_key.as_deref());
+    assert_eq!(native_wire_api(account).unwrap(), native_contract::WireApi::Chat);
+    assert_eq!(account.api_base_url.as_deref(), Some("https://example.invalid/v1"));
 }
 
 #[tokio::test]

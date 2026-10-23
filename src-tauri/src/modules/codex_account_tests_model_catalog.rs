@@ -1866,6 +1866,8 @@ model_catalog_json = "cockpit-provider-model-catalog.json"
     #[test]
     fn chat_completions_api_key_bundle_defers_catalog_to_provider_gateway_start() {
         let base_dir = make_temp_dir("codex-chat-api-key-model-catalog-test");
+        let original = "model_provider = \"openai\"\nmodel = \"gpt-5.6-sol\"\n";
+        fs::write(base_dir.join("config.toml"), original).unwrap();
         let mut account = CodexAccount::new_api_key(
             "custom-api-key".to_string(),
             "custom@example.com".to_string(),
@@ -1878,12 +1880,11 @@ model_catalog_json = "cockpit-provider-model-catalog.json"
         );
         account.api_wire_api = Some("chat_completions".to_string());
 
-        write_account_bundle_to_dir(&base_dir, &account).expect("write account bundle");
-
+        let error = write_account_bundle_to_dir(&base_dir, &account).unwrap_err();
+        assert!(error.contains("CODEX_CLIENT_REQUIRES_RESPONSES_GATEWAY"));
         let config = fs::read_to_string(base_dir.join("config.toml")).expect("read config");
-        assert!(config.contains("model_provider = \"codex_local_access\""));
-        assert!(config.contains("experimental_bearer_token = \"sk-custom\""));
-        assert!(!config.contains("model_catalog_json"));
+        assert_eq!(config, original, "a Chat upstream cannot become the Codex client provider");
+        assert!(!base_dir.join("auth.json").exists());
         assert!(!base_dir
             .join(super::CODEX_MANAGED_MODEL_CATALOG_FILE)
             .exists());
