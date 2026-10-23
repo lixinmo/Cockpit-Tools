@@ -224,3 +224,103 @@ No common project build-cache/dependency directories were present. Shared
 toolchains, runtime accounts/configuration, source, Git history/remotes, and the
 current App were retained. Saved Native/`prefer_regular` settings were confirmed
 after restart and cleanup. No local application compilation was performed.
+
+## Stable identity and client discovery validation (2026-10-23)
+
+Production changes: `575b0b8f5e0324f050de226ca4acea88c3ec1e2b`.
+Validated source, including corrected synthetic fixtures:
+`318f61f7eceda04121744c638404680722836a78`.
+Complete successful Cloud Build:
+[39956666995](https://github.com/lixinmo/Cockpit-Tools/actions/runs/39956666995).
+
+The two first runs ([full](https://github.com/lixinmo/Cockpit-Tools/actions/runs/39950734527),
+[driver-only](https://github.com/lixinmo/Cockpit-Tools/actions/runs/39952898635))
+compiled successfully but reported 219 passing and five failing tests. All five
+stopped while deserializing newly added synthetic collections that lacked the
+required `accountIds` field. The follow-up commit only supplies those fixture
+account scopes; production permissions and validation were not relaxed. The
+complete rerun passed all 224 selected main-library Native regressions.
+
+Coverage includes raw model counts through 257 and binding allocation through
+1,000; reorder/add/remove/restore; unresolved/conflicting aliases; per-key scope;
+actual profile publication and repeated refresh preserving the selected model;
+full profile/API metadata agreement and explicit reasoning/context overrides;
+Chat client discovery over JSON/SSE/WebSocket with EOF and DONE endings; and
+shared plan/Grok discovery regressions. Explicit hosted-tool rejection remains
+covered. This is not a claim that every upstream model implements every tool.
+
+Other successful checks: frontend typecheck and 1,637 frontend tests; 57 packaging
+tests; 10 cloud-build script tests; Native retry 18; Go
+`CT-CONNECT-RETRY-001` v1.0 on linux/amd64; Credits policy 31; Auto Reset 71.
+All compilation occurred on standard GitHub-hosted runners; the personal App is
+Intel-only, while the existing multi-platform build and release paths remain.
+
+Downloaded App and probe provenance, SHA-256, x86_64 architecture and ad-hoc
+signatures were verified. App version remains 1.3.73; use the commit and hashes
+to identify this patched build. SHA-256:
+
+- App archive: `7c810d1a258f50be19ab74ec0b0da15c48eaa5fa3bde70a293447a30131d8986`.
+- Main binary: `d2d697d0ba22cc0f07e62087319562e63d6f96ee2ce19eade9137e97a637e6a5`.
+- Go sidecar: `7ffd7afd4cbdb2d1712a8734ad0a7caa3d24c376bd656057ca6a71be14f998ae`.
+- Native probe: `6b440eae1d136843f348b9394552cc2cd53b4aa745585e77efdfbbf5eb080b6d`.
+
+### Real client acceptance and installation
+
+Codex CLI 0.162.1 used the cloud-built Native host from the validated commit,
+an independent bounded listener, and the original saved StepFun API-key account.
+The profile was temporary and the upstream destination was restricted to the
+original Step Plan endpoint. No saved account, binding, model mapping or client
+configuration was changed. No `web_search="disabled"` override was used.
+
+| Case | Verified result |
+| --- | --- |
+| Raw `step-5-preview` | Two shell operations and one actual `apply_patch`: read, edit only the fixture, read/verify, exact final random token; four successful Native turns, custom call/result and shell result replay. |
+| Raw `step-3.7-flash` | Same complete read/edit/verify and exact final token checks; five successful Native turns. |
+| Step 5 + official Step Plan Search MCP | Actual client discovery call/output, one successful search, one successful fetch, and final citation of the same official URL in that order; four successful Native turns, no failed tool, no shell/file change. |
+
+The search harness initially lacked per-tool approval in its isolated
+noninteractive client. A direct same-key MCP check succeeded; structural CLI
+error diagnostics identified a local approval rejection. Only the temporary
+child's two configured `web_search`/`web_fetch` tools then received
+`approval_mode="approve"`; the read-only sandbox, credentials, account/model
+scope, provider endpoint and production capability checks remained unchanged.
+No global approval bypass or persistent client permission was added.
+
+The test URL extractor was also corrected for Markdown backticks and Chinese
+terminal punctuation. The final strict rerun checked only the actual fetch
+`url`/`urls` fields, required search-before-fetch-before-final-answer order, and
+matched one exact official source across all three stages. Its citation matched
+even before formatting normalization. The final temporary harness SHA-256 was
+`53a9a2a9737696c921a7e86be029ebcf5ed7fb6f6ed4102002acc1f47c531518`, recorded in
+both overall and per-case safe summaries. None of these harness fixes changed
+production Rust code or weakened the source/call/result assertions.
+
+All real driver processes exited normally. They confirmed saved
+`gatewayMode=native`, `creditsPolicy=prefer_regular`, preserved auxiliary OAuth
+binding metadata, and the existing prohibition on switching to Sidecar. StepFun
+API-key requests remained outside ChatGPT subscription Credits as before.
+Search here is client-executed Step Plan MCP, not OpenAI hosted `web_search`;
+the normal client must have a search connector configured and authorized.
+
+The verified App was installed at `/Applications/Cockpit Tools.app` and restarted.
+The new process at that exact path passed two application WebSocket Pong checks
+five seconds apart. Installed main/sidecar hashes match the download above. The
+old bundle was removed only after these checks; it occupied 176,516 KiB. Saved
+Native/`prefer_regular` settings were rechecked after restart.
+
+The user's current Codex configuration was not a StepFun/Cockpit gateway profile,
+so it was not switched. On selecting the StepFun account again, Cockpit rebuilds
+the managed catalog using this Native implementation; reload the Codex client to
+consume it. No `.bak` file was used as runtime evidence. Existing conversations
+with unsupported hosted-tool history continue to receive explicit validation
+errors rather than silently losing tools. These real checks cover an independent
+listener, not the GUI production listener's live account-revocation behavior.
+
+Post-install cleanup removed 807,644 KiB of this round's downloaded artifacts,
+probe binary, temporary client homes/fixtures, diagnostic summaries, helpers and
+installation receipt directory. Together with the replaced old App, this round
+removed 984,160 KiB (about 0.94 GiB); all targeted paths are absent. No project
+`target/`, `node_modules/`, `dist/` or `src-tauri/target/` directories were present.
+The installed App, runtime accounts/configuration, shared toolchains, source and
+Git history/remotes were retained. No compilation ran on this Mac and no private
+configuration, credentials or raw conversations were uploaded.
