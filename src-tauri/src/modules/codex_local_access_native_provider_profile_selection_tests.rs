@@ -28,6 +28,7 @@ fn fixture_collection(account: &CodexAccount) -> CodexLocalAccessCollection {
     serde_json::from_value(json!({
         "enabled":true,"gatewayMode":"native","creditsPolicy":"prefer_regular",
         "port":port,"apiKey":"synthetic-profile-key","createdAt":1,"updatedAt":1,
+        "accountIds":[account.id],
         "apiKeys":[{
             "id":provider_gateway_api_key_id(&account.id),"label":"Synthetic profile",
             "key":"synthetic-profile-key","inheritAccountPool":false,"accountIds":[account.id],

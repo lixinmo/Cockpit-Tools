@@ -128,7 +128,7 @@ fn native_provider_descriptor_missing_bindings_is_raw_only_and_go_keeps_legacy_s
     .unwrap();
     let mut collection: CodexLocalAccessCollection = serde_json::from_value(json!({
         "enabled":true,"port":19001,"apiKey":"synthetic","createdAt":1,"updatedAt":1,
-        "gatewayMode":"native",
+        "gatewayMode":"native","accountIds":["binding-fixture"],
     }))
     .unwrap();
     let raw = targets(&provider_gateway_model_slots_for_collection(&collection, &gateway).unwrap());
@@ -248,7 +248,7 @@ fn native_provider_grok_identities_do_not_require_a_generic_gateway_or_gpt_slots
     .unwrap();
     let collection: CodexLocalAccessCollection = serde_json::from_value(json!({
         "enabled":true,"gatewayMode":"native","port":19001,"apiKey":"synthetic",
-        "createdAt":1,"updatedAt":1,
+        "createdAt":1,"updatedAt":1,"accountIds":[account_id],
     }))
     .unwrap();
     let first =
@@ -277,6 +277,7 @@ fn native_provider_grok_runtime_never_treats_todays_models_as_historical_evidenc
     account.api_model_catalog = vec!["gpt-5.6-sol".into()];
     let mut collection: CodexLocalAccessCollection = serde_json::from_value(json!({
         "enabled":true,"gatewayMode":"native","port":state.port,"apiKey":state.api_key,
+        "accountIds":[account.id],
         "createdAt":1,"updatedAt":1,"modelAliases":[{
             "alias":"gpt-5.6-sol","sourceModel":"grok-old",
         }],"apiKeys":[{
