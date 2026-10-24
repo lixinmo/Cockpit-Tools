@@ -257,7 +257,13 @@ async function runTurn(context, model, resume, expectedRejection = false) {
   requireThat(counters.commandSuccess >= 2 && counters.fileChangeSuccess >= 1 && counters.failedTools === 0, 'read_edit_verify_not_completed');
   requireThat(evidence.calls >= 3 && evidence.customCalls >= 1 && evidence.paired, 'tool_history_not_paired');
   requireThat(fs.readFileSync(path.join(context.work, 'result.txt'), 'utf8') === `${nonce}\n`, 'file_nonce_mismatch');
-  requireThat(fs.existsSync(finalPath) && fs.readFileSync(finalPath, 'utf8').trim() === nonce, 'final_nonce_mismatch');
+  const finalText = fs.existsSync(finalPath) ? fs.readFileSync(finalPath, 'utf8').trim() : '';
+  if (finalText !== nonce) print({ stage: 'final_answer_check', model,
+    commandSuccess: counters.commandSuccess, fileChangeSuccess: counters.fileChangeSuccess,
+    fileNonceMatches: true, finalNonceMatches: false, finalCharacters: finalText.length,
+    expectedCharacters: nonce.length, containsExactNonce: finalText.includes(nonce),
+    native: gateway });
+  requireThat(finalText === nonce, 'final_nonce_mismatch');
   requireThat(gateway.success && gateway.functionHistorySeen && gateway.customHistorySeen, 'native_tool_replay_not_verified');
   if (resume) requireThat(gateway.reasoningSeen, 'reasoning_history_not_observed');
   print({ stage: resume ? 'resume' : 'fresh', model, sameSession: !resume || sessionId === context.sessionId, savedModelConfirmed: true, ...counters, history: evidence, native: gateway, fileNonceMatches: true, finalNonceMatches: true, passed: true });

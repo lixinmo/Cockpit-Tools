@@ -23,8 +23,7 @@ Regression coverage includes the actual Go output shape, long synthetic resumed
 histories, model changes in both directions, and a complete tool round over JSON,
 SSE and WebSocket. These checks must run in Cloud Build; actual client acceptance
 must resume a saved conversation containing the legacy empty field, rather than
-only starting new conversations. Validation and installation are not complete
-until their run and results are recorded below.
+only starting new conversations. The completed validation is recorded below.
 
 Codex can choose different tool protocols for a known model shell and an unknown
 provider ID. In CLI 0.162.1, an unknown raw model without a managed catalog uses
@@ -429,3 +428,94 @@ paths are absent, no project build-cache/dependency directories were present,
 and the verified App remains running. Runtime accounts/configuration, shared
 toolchains, source and Git history/remotes were retained. No local compilation
 or private-data upload occurred.
+
+## Legacy Go history validation (2026-10-24)
+
+Production commit: `192a93ccbcc4c608c3edf9fe06b50dbf16e7ecfc`.
+Full Cloud Build: [40050328558](https://github.com/lixinmo/Cockpit-Tools/actions/runs/40050328558).
+The empty-field rejection was present in upstream 1.3.69 and remained in 1.3.73.
+It is distinct from the earlier third-party-to-official Responses normalization
+for visible reasoning content and invalid provider signatures. Those existing
+compatibility paths are not removed or broadened by this fix.
+
+The build passed frontend typecheck, 1,637 frontend tests, 57 packaging tests,
+10 cloud-script tests, and 248 Native/account regressions (zero failures; one
+explicit profile exporter ignored). The newly selected regressions passed for
+Go empty-field conversion and capability replay, 443-turn synthetic history
+with function/custom calls, both model-switch directions, and JSON/SSE/WS.
+Nonempty reasoning ciphertext still produces zero Chat upstream requests in the negative
+tests. Native retry passed 18 tests, Credits 31, Auto Reset 71, and the Go
+`CT-CONNECT-RETRY-001` v1.0 verifier passed on linux/amd64. Only the Intel Mac App
+was built. After the initial status snapshot, build polling was spaced at least
+five minutes apart.
+
+### Actual Codex negative and positive controls
+
+The installed baseline was verified by its binary hashes as `15f1ee99`.
+Its matching cloud-built driver reproduced the exact reported 400 error for
+both Step 5 and Step 3.7 with a synthetic legacy empty-field request, with zero
+upstream attempts. Actual Codex CLI 0.162.1 then completed a fresh Step 5 tool
+round through that baseline (five Native 200 responses, three shell operations,
+one patch, exact final random value). Inserting the Go reasoning shape into the
+same temporary saved conversation made its next resume fail with the reported
+`chat_parameter_not_representable` error before executing tools. This control
+demonstrates that the client read and replayed the legacy item; the driver's
+type-only evidence alone would not prove that the empty field was transmitted.
+
+The fixed driver used the same saved StepFun account as a read-only snapshot,
+its saved Native/prefer_regular policy and production profile writer. The
+committed local harness is `scripts/verify-native-provider-history.cjs`.
+Its completed run performed three turns in one temporary conversation:
+
+| Turn | Selected model | Native HTTP 200 responses | Shell / apply_patch | Result |
+| --- | --- | --- | --- | --- |
+| Fresh fixture | step-5-preview | 4 | 2 / 1 | Exact file and final random value |
+| Resume with legacy empty field | step-5-preview | 4 | 2 / 1 | Exact file and final random value |
+| Resume the same history after model change | step-3.7-flash | 4 | 2 / 1 | Exact file and final random value |
+
+The harness checked the same session ID, the model in each new turn context,
+paired tool IDs/results, and retention of the injected history item. It did not
+override wire protocol, authentication or the model catalog. Model selection
+used only the temporary profile's saved setting. The selected account, account
+index, provider store, Native configuration and storage encryption key hashes
+were unchanged. All temporary profiles and conversations were removed.
+
+A preliminary fixed-driver run completed file operations but failed the strict
+final-answer random-value check and was not accepted. No success criterion was
+relaxed; the completed rerun above passed all three turns. Additional diagnostics
+report only answer length/match booleans and structural execution evidence.
+An earlier broad file watch also observed unrelated OAuth profile updates while
+the running App refreshed quotas; the read-only comparison above concerns the
+five selected provider/configuration inputs, not a claim that all background
+account activity stopped.
+
+This verifies resumed synthetic Go-format history with the real client and
+provider. It does not claim that the user's entire private conversation was
+replayed, or that opaque Responses reasoning, encrypted tool arguments/results,
+compaction, or arbitrary hosted tools can be transferred to Chat. No search/tool
+declaration, account scope, Credits rule or retry rule was disabled.
+
+### Installation
+
+Archive SHA-256: `20c4d66defb59b7bdf0d80840122ac473c2c97a87b0a4d55b78129dd237ea8c4`.
+Main executable: `f6c88b13e9f2f7576c881752a6fa01b26ed280547b75f38c26e73247b652c297`.
+Go sidecar: `a607c512ffb587f68ebe8bdb0f657d3a23254ae01cb868728f4aa442520f74f7`.
+Native probe: `8663885c602bc457070466e15ac78f5ceebdb1784520ef831db86991af871470`.
+Acceptance harness: `158501aea0fb4945147128fb29ac4f477d5df6b371fc6a8ba822ac6a42ef8193`.
+
+The matching x86_64 App and sidecar were installed in
+`/Applications/Cockpit Tools.app` after provenance/hash/signature verification.
+The App was restarted; the new exact executable process passed Ready/version
+and two Pong checks five seconds apart. Native/prefer_regular remained active.
+Version remains 1.3.73, so the commit and hashes identify this repair. This fix
+requires the new running binary; it does not require a model-catalog refresh,
+history editing, or a new conversation. The previous App was removed only after
+the new process passed these checks.
+
+Cleanup removed 689,949,556 bytes of downloaded probes, archives, extraction
+copies and task helpers. Including the previous App, 870,538,564 bytes (about
+0.81 GiB) were removed. No task profiles or project build/dependency caches
+remained. Runtime data, shared toolchains, source, Git history/remotes and the
+verified current App were retained. Application builds and Rust test execution
+ran only in GitHub Actions; private configuration and conversations were not
+uploaded.
