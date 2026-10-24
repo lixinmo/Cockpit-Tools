@@ -338,3 +338,74 @@ temporary client profiles or project build/cache directories remained. Sources,
 Git history/remotes, shared toolchains, runtime data and the current verified
 App were retained. No local application/Rust compilation or private-data upload
 was performed.
+
+## Generic menu correction: remove the StepFun effort table
+
+The earlier StepFun low/medium/high and 2603 low/high values were added to Rust
+after a human documentation review. They were not returned by runtime discovery
+or saved through Model Management. That provider-specific effort table has now
+been removed in `2aff526f85575c16d15fec902b875eebbf4cd794`. The context-only
+baseline remains, with `cockpit_reasoning_known=false`; existing specialized
+adapters are unchanged. No replacement effort settings were written into the
+user's profile. Generic menu precedence is explicit settings, actual upstream
+metadata, then the six compatibility choices. Forwarding still preserves the
+caller's value and preserves absence.
+
+A read-only live GET of the existing StepFun plan's model list returned HTTP
+200 and nine models, including Step 5 and Step 3.7, without discoverable effort
+fields. No full response, key or private configuration was uploaded. This is
+evidence about that response, not a promise that every provider exposes effort
+metadata in its model list.
+
+[Cloud Build 40110787830](https://github.com/lixinmo/Cockpit-Tools/actions/runs/40110787830)
+completed successfully on the standard Intel runner in approximately 72 minutes.
+Frontend, Native/Go contracts and the Native regression packaging gate passed.
+The source tests cover generic menus across provider hosts/model names, unknown
+facts omitted from public capability declarations, upstream facts overriding
+fallbacks, and explicit manual settings taking priority. GitHub's jobs API
+intermittently returned HTTP 502 and omitted running-step details; final run
+success and both artifact identities were confirmed. Two attempts to retrieve
+the complete public log failed at that API, so this record does not reuse or
+infer a test count from the previous build. Status polling stayed at least five
+minutes apart, without restarting the build.
+
+The downloaded App and probe matched the build commit, checksums, x86_64
+architecture and code-signature verification. Acceptance used the production
+profile writer, bounded Native listener and read-only original account snapshot:
+
+| Client | Catalog scenario | Real tool/history results |
+| --- | --- | --- |
+| Codex CLI 0.162.1 | Step 5 generic six/default medium; temporary Step 3.7 low-only/default low | Three same-session turns, 12 successful Native tool requests, six shell commands, three apply_patch calls and nine paired calls/results |
+| Desktop backend 0.164.0-alpha.11.1 | Both models generic six/default medium; no manual overrides | Three same-session turns, 15 successful Native tool requests, 12 shell commands, three apply_patch calls and 15 paired calls/results |
+
+Each client started with Step 5, resumed after a synthetic legacy empty encrypted
+reasoning item, then selected Step 3.7 in the same session. Every request returned
+200; all tool results, file contents and final nonces matched. The standalone
+run additionally verified Step 5 high stays high, manual-low Step 3.7 high stays
+high, and absent effort stays absent, all with real upstream 200 responses.
+The manual menu caused that client to choose low itself. Both runs retained
+Native/prefer_regular and the Sidecar prohibition; six original account/config
+file hashes remained unchanged. All generated profiles and histories were removed.
+The desktop backend was exercised through its shipped CLI, not an automated GUI
+click-through. The acceptance harness is committed through `d8a9f107`.
+
+The new App was installed and restarted. Its exact process path and binary hash
+matched the verified artifact; Ready/version and two Pongs five seconds apart
+passed. Native/prefer_regular remained active and the obsolete codex MCP entry
+remained absent. The user's active profile was not StepFun, so it was not switched.
+Selecting StepFun again generates the updated managed catalog; an existing Codex
+process must reload that catalog. Existing explicit manual choices remain in force.
+
+SHA-256:
+
+- App archive: `a56decd06c2effd14dffc4c09e501073744eca429d50443ac29108b32b6c7653`.
+- Main executable: `a489c726cf05902cb6714535030fbc691c5924988baff805edebaa812950200d`.
+- Matching Go sidecar: `7b4307ab540b78581cbfbdbe1877e82aee8b9e38ec31f302e2863940295f4eea`.
+- Native probe: `eb188d4ac35f9976f4493543bdeea8a4362ee5c6d3ab08b2cc40030ad4c01901`.
+- Acceptance harness: `67d80910d25cf0c94388af1bf25b1a7093712bfa5f2ba98359cd3adb77f93ddc`.
+
+Cleanup removed 468,910,321 bytes of downloads, probe, replaced App and task
+helpers, including 181,192,304 bytes from the old App. No project build caches or
+temporary acceptance profiles remained. Monitoring scripts ran from standard
+input and left no files. The current App, source/Git history, shared toolchains
+and runtime data were retained. No local compilation or private-data upload occurred.
