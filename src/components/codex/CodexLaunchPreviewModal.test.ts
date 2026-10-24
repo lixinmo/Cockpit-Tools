@@ -45,12 +45,15 @@ const compiled = ts.transpileModule(callbacks.join("\n") + `\nconst resetConfigR
   compilerOptions: { target: ts.ScriptTarget.ES2022 },
 }).outputText;
 
-function harness(routing = false, overlay = "global-progress-overlay") {
+function harness(routing = false, overlay = "global-progress-overlay", providerAccountId?: string) {
   const read = deferred<any>();
   const write = deferred<any>();
   const events: string[] = [];
   const lateUpdates: string[] = [];
   const cached: unknown[] = [];
+  const readCalls: unknown[][] = [];
+  const quickWriteCalls: unknown[][] = [];
+  const cacheCalls: unknown[][] = [];
   let closed = false;
   let store = { instances: [{ id: "synthetic", saved: false }, { id: "unrelated", saved: false }] };
   const saved = { model: "saved" };
@@ -66,13 +69,14 @@ function harness(routing = false, overlay = "global-progress-overlay") {
     nextModelRouting: { enabled: false, routes: [] }, mixedRoutingBindAccountId: undefined,
     normalizedRoutingRoutes: [], routingRoutes: [], dirty: true, contextWindowInput: "", compactLimitInput: "",
     contextOverrideEnabled: false, mode: "account", instanceId: "synthetic", account: null,
+    providerConfigAccountId: providerAccountId,
     loadedTarget: "synthetic", previewTargetKey: "synthetic",
     document: { querySelectorAll: () => ["codex-launch-preview-overlay", overlay].map((className) => ({ classList: [className] })) },
     onClose: () => { assert.equal(c.configSession.current, 2); closed = true; events.push("close"); },
-    loadCodexLaunchPreviewConfig: () => { events.push("read"); return read.promise; },
-    saveCodexInstanceQuickConfig: () => { events.push("quick-write"); return write.promise; },
+    loadCodexLaunchPreviewConfig: (...args: unknown[]) => { readCalls.push(args); events.push("read"); return read.promise; },
+    saveCodexInstanceQuickConfig: (...args: unknown[]) => { quickWriteCalls.push(args); events.push("quick-write"); return write.promise; },
     saveCodexInstanceConfiguration: () => { events.push("routing-write"); return write.promise; },
-    rememberCodexLaunchPreviewConfig: (_id: string, config: unknown) => { cached.push(config); },
+    rememberCodexLaunchPreviewConfig: (...args: unknown[]) => { cacheCalls.push(args); cached.push(args[1]); },
     useCodexInstanceStore: { getState: () => store, setState: (next: typeof store) => { store = next; } },
     resolveRoutingCatalog: (models: unknown[]) => ({ enabled: false, models, defaultModelId: null }),
     codexLaunchPreviewQuickConfigKey: () => "same",
@@ -89,8 +93,8 @@ function harness(routing = false, overlay = "global-progress-overlay") {
     c[name] = () => { if (closed) lateUpdates.push(name); else events.push(name); };
   }
   vm.runInNewContext(compiled, c);
-  return { c, read, write, events, lateUpdates, cached, saved, savedInstance, getStore: () => store,
-    completeWrite(context: boolean) { write.resolve(routing && !context ? { quickConfig: saved, instance: savedInstance } : saved); },
+  return { c, read, write, events, lateUpdates, cached, readCalls, quickWriteCalls, cacheCalls, saved, savedInstance, getStore: () => store,
+    completeWrite(context: boolean) { write.resolve(routing && !context && !c.providerConfigAccountId ? { quickConfig: saved, instance: savedInstance } : saved); },
   };
 }
 
@@ -351,3 +355,58 @@ test('canceling per-model edits restores the mixed-routing selection as well as 
   assert.deepEqual(savedPayload.modelRouting, initialRouting);
   assert.equal(savedPayload.experimentalModelCatalogModels[0].context_window, 200000);
 });
+
+
+for (const action of ["persistDraft", "applyContextConfig"] as const) {
+  test(`${action}: provider identity is retained through read, write and cache publication`, async () => {
+    const h = harness(false, "global-progress-overlay", "provider-a");
+    // Even a stale subscription routing dirty flag cannot redirect a provider save.
+    h.c.routingDirty = true;
+    const pending = h.c.handlers[action]();
+    assert.deepEqual(h.readCalls, [["synthetic", false, "provider-a"]]);
+    h.read.resolve({});
+    await settlePromises();
+    assert.equal(h.events.includes("routing-write"), false);
+    assert.equal(h.quickWriteCalls.length, 1);
+    assert.equal(h.quickWriteCalls[0][0], "synthetic");
+    assert.equal(h.quickWriteCalls[0][6], "provider-a");
+    h.write.resolve(h.saved);
+    await pending;
+    assert.deepEqual(h.cacheCalls, [["synthetic", h.saved, "provider-a"]]);
+    assert.equal(h.getStore().instances[0].saved, false);
+    assert.deepEqual(h.lateUpdates, []);
+  });
+}
+
+test('provider context reload requests the same isolated provider configuration', async () => {
+  const h = harness(false, "global-progress-overlay", "provider-a");
+  Object.assign(h.c, {
+    normalizeCodexModelRoutingRoutes: () => [],
+    resolveStoredCompactLimitInput: () => '',
+  });
+  const pending = h.c.handlers.reloadContextConfig();
+  assert.deepEqual(h.readCalls, [["synthetic", false, "provider-a"]]);
+  h.read.resolve({});
+  await pending;
+  assert.equal(h.events.includes("applyLoadedConfig"), true);
+  assert.deepEqual(h.quickWriteCalls, []);
+});
+
+for (const action of ["persistDraft", "applyContextConfig"] as const) {
+  test(`${action}: changing provider scope invalidates a pending pre-save read`, async () => {
+    const h = harness(false, "global-progress-overlay", "provider-a");
+    const pending = h.c.handlers[action]();
+    assert.deepEqual(h.readCalls, [["synthetic", false, "provider-a"]]);
+    // React runs this extracted production setup when previewTargetKey changes.
+    h.c.providerConfigAccountId = "provider-b";
+    h.c.previewTargetKey = JSON.stringify(["synthetic", "provider-b"]);
+    h.c.handlers.resetConfigReadState();
+    assert.equal(h.c.configSession.current, 2);
+    h.read.resolve({});
+    await pending;
+    assert.deepEqual(h.quickWriteCalls, []);
+    assert.deepEqual(h.cacheCalls, []);
+    assert.equal(h.events.includes("routing-write"), false);
+    assert.equal(h.events.includes("applyLoadedConfig"), false);
+  });
+}
