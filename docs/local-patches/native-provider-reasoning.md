@@ -107,3 +107,96 @@ and verifies that explicit ultra requests reach the provider as Step 5 high or
 manually configured Step 3.7 low. Personal profiles and conversations never enter
 Actions. Build, actual acceptance, installation and cleanup results must be
 recorded after completion; no pending check is a successful validation.
+
+## Completed validation and installation — 2026-10-24
+
+Production App and probe commit: `8a34979007b29beff1286386710a015ef0c136b0`.
+Full Intel Mac Cloud Build:
+[40085427270](https://github.com/lixinmo/Cockpit-Tools/actions/runs/40085427270).
+
+The final build passed TypeScript checking, all 1,645 frontend tests, 57 packaging
+tests, 10 build-script tests, all locale checks and 275 Native/account regressions
+(zero failures, one intentionally ignored profile exporter). Native setup retry
+passed 18 tests, Credits 31, Auto Reset 71, and Go `CT-CONNECT-RETRY-001` v1.0
+passed on linux/amd64. Application and Rust checks ran only on standard hosted
+runners. Build-status polling was at least five minutes apart after the initial
+snapshot.
+
+Earlier gates caught and repaired two test-library compatibility errors, a
+missing provider binding in the existing preview test harness, missing locale
+strings, and a real maintenance-path mismatch. The latter is fixed by applying
+the final provider policy before the single catalog write, rather than writing
+a base catalog and rewriting it afterward. The unchanged byte/cache assertions
+remain, with an additional conflicting instance/provider policy case. An alias
+now inherits the actual model's explicit context/effort policy; the regression
+checks all four effective fields rather than retaining a stale template limit.
+
+A bounded live StepFun model-list read returned model IDs without effort ranges.
+It was not treated as a declaration of three or six levels. Synthetic upstreams
+in Actions verify discovery of actual ranges, missing versus explicitly empty
+ranges, credentials/endpoints isolated in the cache, and JSON/SSE/WebSocket
+generation requests with the expected final parameters.
+
+### Actual clients and StepFun
+
+Both installed client backends used the exact cloud-built Native host and its
+production client-profile writer. No manual wire/auth/model-catalog override
+was supplied to the client. Each ran three turns in the same temporary session:
+fresh Step 5, Step 5 resumed with an injected synthetic old-Go empty reasoning
+field, then Step 3.7 resumed with a provider-scoped low-only policy.
+
+| Client | Native 200 responses for tool turns | Successful shell operations | Successful apply_patch operations |
+| --- | --- | --- | --- |
+| Standalone CLI 0.162.1 | 13 | 7 | 3 |
+| Desktop-bundled CLI 0.164.0-alpha.11.1 | 12 | 6 | 3 |
+
+Every turn verified paired tool IDs/results, the same session identity, the
+selected raw model, exact fixture contents and the exact final random value.
+Each client then passed two additional real requests: explicit ultra reached
+Step 5 as high, and the temporarily customized Step 3.7 as low. These checks
+combine allowlisted prepared-effort evidence, the verified Chat conversion path
+and successful real upstream responses. They establish parameter transport and
+tool operation, not equivalence of reasoning quality between different models.
+
+An initial standalone attempt completed the tool operations and included the
+correct value in its final answer, but added explanatory text and failed the
+exact-answer check. The test prompt was made explicit about output format; no
+assertion was relaxed. The two complete runs above passed afterward.
+
+The selected account snapshot, account index, provider store, Native settings,
+storage key and original client configuration hashes were unchanged during each
+completed run. Manual low-only policies and all test conversations belonged to
+temporary profiles and were removed. The user's actual Step 3.7 was not left
+restricted to low. This is actual-client acceptance through production code,
+not an automated click-through of the desktop GUI or replay of private history.
+
+### Deployment, MCP cleanup and provenance
+
+The verified App was installed at `/Applications/Cockpit Tools.app` and restarted.
+Both binaries are x86_64; signatures, manifest hashes and commit provenance were
+checked. The exact new process passed Ready/version and two Pong checks five
+seconds apart. Native/prefer_regular remained active. Version remains 1.3.73;
+the commit and hashes identify the personal build.
+
+Only the obsolete local `codex` MCP registration targeting the removed
+`codex mcp-server` command was removed. The rest of the parsed client configuration
+was identical, the MCP listing parsed successfully, and the obsolete entry was
+still absent after application restart. This cleanup is independent of provider
+effort handling. Existing client processes must reload their configuration to
+consume changed catalogs/MCP settings; no hand-edited model file is required.
+
+SHA-256:
+
+- App archive: `0d91c022f202dffa2d37c82281c4794950e08d5cc7cc6d8efa27a5743f1ba129`.
+- Main executable: `b4adba631f6ed42529ead2fed1d2e0669af8657d8ee790445d77b3fb70d9279d`.
+- Matching Go sidecar: `9c69d7252afcadc39287e8f8e1cddd44690a0348b8be13bb36fd04fecfe1c394`.
+- Native probe: `556df140d673376fd7d9074ea85261abf72f3813c2e2b9294ed5d460ad760552`.
+- Completed acceptance harness: `230fe198c3f6402855db43073d635e436fe3b232cd7f72f0a6ce723dcd46371f`.
+
+Cleanup removed 473,625,706 bytes of App/probe downloads, extraction copies,
+public CI logs, safe acceptance summaries and temporary helpers. Including the
+previous App removed after successful health checks, 654,209,578 bytes (about
+0.61 GiB) were removed. No temporary acceptance profiles or project build/cache
+directories remained. Runtime account/configuration data, shared toolchains,
+source, Git history/remotes and the verified current App were retained. No
+private configuration or conversations were uploaded to Actions.

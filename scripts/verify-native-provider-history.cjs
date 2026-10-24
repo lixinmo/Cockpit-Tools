@@ -232,7 +232,7 @@ async function runTurn(context, model, resume, expectedRejection = false) {
     }
   });
   context.activeCli = running;
-  running.child.stdin.end('This is an isolated compatibility test. Only access input.txt and result.txt in the current working directory. First use the shell tool to read both files. Then use the apply_patch tool (not a shell write) to replace result.txt with exactly the one line currently in input.txt, including its trailing newline. Then use the shell tool to compare the two files and read result.txt. After successful verification reply with only that exact line. Do not create agents, use network tools, inspect other paths, or perform any other task. The contents may have changed since the previous turn; read them again.\n');
+  running.child.stdin.end('This is an isolated compatibility test. Only access input.txt and result.txt in the current working directory. First use the shell tool to read both files. Then use the apply_patch tool (not a shell write) to replace result.txt with exactly the one line currently in input.txt, including its trailing newline. Then use the shell tool to compare the two files and read result.txt. After successful verification, your entire final answer must be exactly the 48 lowercase hexadecimal characters from that line. Do not include a label, explanation, bullet, code fence, quotes, or a summary. Do not create agents, use network tools, inspect other paths, or perform any other task. The contents may have changed since the previous turn; read them again.\n');
   const timer = setTimeout(() => running.child.kill('SIGTERM'), context.opts.timeout * 1000);
   const hardTimer = setTimeout(() => running.child.kill('SIGKILL'), (context.opts.timeout + 5) * 1000);
   let result;
