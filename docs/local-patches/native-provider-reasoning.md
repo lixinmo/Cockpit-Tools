@@ -47,8 +47,8 @@ The gateway resolves and authorizes the real account/model before adjusting an
 effort. It keeps the authorized client model name separately, so aliases and
 namespaces use the same policy in the menu and in the outgoing request.
 
-For a known range, exact values are preserved. xhigh and max retain the Go
-adapter's cross-provider preference for each other; otherwise the nearest
+For a known range, exact values are preserved. xhigh and max reuse CLIProxyAPI's
+generic cross-provider preference for each other; otherwise the nearest
 supported intensity is selected, with the lower value winning a tie. The order
 includes minimal and ultra. Values above the highest supported intensity end at
 that highest intensity. Examples:
@@ -67,6 +67,30 @@ not a Codex menu enum. When no adjustable effort is explicitly supported,
 nonempty intensity requests fail before generation; a no-effort/automatic
 request omits the unsupported parameter. Tools, messages, encrypted history,
 model identity, continuation and authorization are not rewritten by this mapper.
+
+### Historical Go path: library rules versus the actual provider gateway
+
+The pre-Native checkpoint `54012972cdc3b04b5b79b638b9c1150ac265fa25` distinguishes
+two paths. CLIProxyAPI's generic thinking executor contains nearest-level
+clamping (ties prefer lower) and xhigh/max compatibility, with conditions on
+provider/protocol families. The old StepFun provider gateway did **not** call
+that executor: `provider_gateway.go` invokes the Responses-to-Chat converter
+directly, constructs its own HTTP request and sends it through the identity
+client. Ordinary API-account automatic routing enters the same direct gateway.
+
+That converter only trims/lowercases `reasoning.effort` and copies it to
+`reasoning_effort`. It does not consult a level list, pair levels by position,
+or cap ultra at high. Thus the old StepFun gateway sent ultra as ultra; whether
+the vendor accepted, ignored or normalized it cannot be established from a 200
+response alone. The positional allocation elsewhere in old Cockpit assigned
+**model-name aliases**, not effort levels.
+
+The new Native mapper therefore adds capability-aware behavior to this direct
+provider path, borrowing selected library rules rather than reproducing that
+old StepFun path exactly. It also includes ultra in its intensity order, whereas
+the older generic Go nearest-level order ended at max. Unknown ranges continue
+to use passthrough. Earlier descriptions implying that the old StepFun gateway
+itself already ran the library's clamping algorithm were inaccurate.
 
 ## Manual settings
 
