@@ -37,6 +37,9 @@ Options:
                                six compatibility choices, medium default, and unknown capability
                                (Step 5 only when combined with --check-effort-passthrough);
                                fail if upstream/manual capability information is now present
+  --check-generic-context     Require both models' generated catalogs to use the unknown
+                               128K/115200 fallback and the local /v1/models response to omit
+                               public context claims; fail rather than replace known metadata
   --self-test                 Synthetic helper checks only; no account/network
   --help                      Show this help; no account/network
 
@@ -47,13 +50,14 @@ The supplied probe must already have passed its cloud-build verification.
 }
 
 function options(args) {
-  const result = { codex: 'codex', timeout: 240, requests: 32, negative: false, efforts: false, genericMenu: false };
+  const result = { codex: 'codex', timeout: 240, requests: 32, negative: false, efforts: false, genericMenu: false, genericContext: false };
   const names = { '--probe': 'probe', '--data-dir': 'data', '--account-id': 'account', '--codex': 'codex', '--timeout-seconds': 'timeout', '--max-requests': 'requests' };
   for (let i = 0; i < args.length; i += 1) {
     const name = args[i];
     if (name === '--expect-legacy-rejection') result.negative = true;
     else if (name === '--check-effort-passthrough') result.efforts = true;
     else if (name === '--check-generic-effort-menu') result.genericMenu = true;
+    else if (name === '--check-generic-context') result.genericContext = true;
     else if (names[name]) {
       requireThat(i + 1 < args.length && !args[i + 1].startsWith('--'), 'missing_argument');
       result[names[name]] = args[++i];
@@ -220,6 +224,29 @@ function genericEffortMenuEvidence(catalog, modelId = MODELS[0]) {
     default: 'medium', capabilitiesKnown: false, source: 'compatibility_fallback', passed: true };
 }
 
+function genericContextEvidence(catalog, publicCatalog, modelId = MODELS[0]) {
+  requireThat(MODELS.includes(modelId), 'model_outside_scope');
+  const matches = Array.isArray(catalog.models)
+    ? catalog.models.filter((item) => item?.slug === modelId) : [];
+  requireThat(matches.length === 1, 'generic_context_model_not_unique');
+  const model = matches[0];
+  // Known provider/account/profile facts must not be erased to make this
+  // fallback check pass. It is an observation of the generated catalog only.
+  requireThat(model.cockpit_context_known !== true, 'generic_context_has_declared_capabilities');
+  requireThat(model.cockpit_context_known === false, 'generic_context_source_not_unknown');
+  requireThat(model.context_window === 128000 && model.max_context_window === 128000
+    && model.auto_compact_token_limit === 115200, 'generic_context_fallback_mismatch');
+  const publicMatches = Array.isArray(publicCatalog.data)
+    ? publicCatalog.data.filter((item) => item?.id === modelId) : [];
+  requireThat(publicMatches.length === 1, 'generic_context_public_model_not_unique');
+  const publicModel = publicMatches[0];
+  requireThat(!Object.hasOwn(publicModel, 'context_length')
+    && !Object.hasOwn(publicModel.model_info ?? {}, 'context_length'), 'generic_context_falsely_advertised');
+  return {stage: 'generic_context', model: modelId, contextWindow: 128000,
+    maxContextWindow: 128000, autoCompactTokenLimit: 115200, contextKnown: false,
+    publicContextDeclared: false, passed: true};
+}
+
 async function runTurn(context, model, resume, expectedRejection = false) {
   changeSavedModel(context.config, model);
   const nonce = crypto.randomBytes(24).toString('hex');
@@ -342,7 +369,7 @@ async function main(opts) {
     context.home = path.join(output, 'codex-home');
     context.config = path.join(context.home, 'config.toml');
     context.reports = path.join(output, 'reports.jsonl');
-    if (opts.efforts || opts.genericMenu) {
+    if (opts.efforts || opts.genericMenu || opts.genericContext) {
       requireThat(typeof ready.model_catalog === 'string' && path.basename(ready.model_catalog) === ready.model_catalog, 'model_catalog_reference_invalid');
       const catalog = JSON.parse(fs.readFileSync(path.join(context.home, ready.model_catalog), 'utf8'));
       if (opts.genericMenu) {
@@ -353,6 +380,14 @@ async function main(opts) {
         requireThat(model?.default_reasoning_level === 'low'
           && JSON.stringify(model.supported_reasoning_levels?.map((item) => item.effort)) === '["low"]', 'manual_menu_not_published');
         print({stage: 'manual_menu', model: MODELS[1], choices: ['low'], default: 'low', temporary: true, passed: true});
+      }
+      if (opts.genericContext) {
+        const response = await fetch(`http://127.0.0.1:${ready.port}/v1/models`, {
+          headers: {Authorization: `Bearer ${localKey}`}, signal: AbortSignal.timeout(30_000),
+        });
+        requireThat(response.status === 200, 'generic_context_public_catalog_failed');
+        const publicCatalog = await response.json();
+        for (const model of MODELS) print(genericContextEvidence(catalog, publicCatalog, model));
       }
     }
     context.cliEnv = { ...minimalEnvironment(), HOME: isolatedHome, CODEX_HOME: context.home, NO_COLOR: '1' };
@@ -434,10 +469,29 @@ function selfTest() {
     expectFailure(genericCatalog, 'model_outside_scope', 'outside-model');
     const bothGeneric = {models: MODELS.map((slug) => ({...genericModel, slug}))};
     requireThat(MODELS.every((modelId) => genericEffortMenuEvidence(bothGeneric, modelId).model === modelId), 'selftest_both_generic_menus');
+    const contextModel = {slug: MODELS[0], cockpit_context_known: false,
+      context_window: 128000, max_context_window: 128000, auto_compact_token_limit: 115200};
+    const contextCatalog = {models: MODELS.map((slug) => ({...contextModel, slug}))};
+    const publicCatalog = {data: MODELS.map((id) => ({id, model_info: {upstream_id: id}}))};
+    const contextBefore = JSON.stringify([contextCatalog, publicCatalog]);
+    requireThat(MODELS.every((modelId) => genericContextEvidence(contextCatalog, publicCatalog, modelId).passed)
+      && JSON.stringify([contextCatalog, publicCatalog]) === contextBefore, 'selftest_generic_context');
+    const expectContextFailure = (model, served, code) => {
+      let caught;
+      try { genericContextEvidence({models: [model]}, served); } catch (error) { caught = error.safeCode; }
+      requireThat(caught === code, 'selftest_generic_context_rejection');
+    };
+    expectContextFailure({...contextModel, cockpit_context_known: true}, publicCatalog, 'generic_context_has_declared_capabilities');
+    expectContextFailure({...contextModel, cockpit_context_known: undefined}, publicCatalog, 'generic_context_source_not_unknown');
+    expectContextFailure({...contextModel, context_window: 1000000}, publicCatalog, 'generic_context_fallback_mismatch');
+    expectContextFailure({...contextModel, auto_compact_token_limit: 100000}, publicCatalog, 'generic_context_fallback_mismatch');
+    expectContextFailure(contextModel, {data: []}, 'generic_context_public_model_not_unique');
+    expectContextFailure(contextModel, {data: [{id: MODELS[0], context_length: 128000}]}, 'generic_context_falsely_advertised');
+    expectContextFailure(contextModel, {data: [{id: MODELS[0], model_info: {context_length: 128000}}]}, 'generic_context_falsely_advertised');
     const scopedArgs = ['--probe', __filename, '--data-dir', root, '--account-id', 'synthetic'];
-    requireThat(options(scopedArgs).genericMenu === false, 'selftest_default_options');
-    const combined = options([...scopedArgs, '--check-effort-passthrough', '--check-generic-effort-menu']);
-    requireThat(combined.efforts && combined.genericMenu, 'selftest_combined_options');
+    requireThat(options(scopedArgs).genericMenu === false && options(scopedArgs).genericContext === false, 'selftest_default_options');
+    const combined = options([...scopedArgs, '--check-effort-passthrough', '--check-generic-effort-menu', '--check-generic-context']);
+    requireThat(combined.efforts && combined.genericMenu && combined.genericContext, 'selftest_combined_options');
     print({ stage: 'self_test', passed: true, realAccountRead: false, networkRequests: 0 });
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 }
@@ -451,4 +505,4 @@ if (require.main === module) {
   }).catch((error) => { print({ stage: 'failed', code: error.safeCode || 'acceptance_internal_failure', passed: false }); process.exitCode = 1; });
 }
 
-module.exports = { changeSavedModel, genericEffortMenuEvidence, historyEvidence, injectLegacyReasoning, options };
+module.exports = { changeSavedModel, genericEffortMenuEvidence, genericContextEvidence, historyEvidence, injectLegacyReasoning, options };

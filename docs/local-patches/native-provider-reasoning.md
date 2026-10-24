@@ -14,9 +14,12 @@ The order for client menu choices and defaults is:
 4. Six GPT-compatible choices: low, medium, high, xhigh, max, ultra.
 
 The generic path does not infer effort choices from provider hostnames or model
-names. The previously added StepFun three-level/two-level tables have been
-removed. Existing context-window baselines remain separate and do not declare
-reasoning capabilities. Pre-existing dedicated provider adapters are unchanged.
+names. The previously added StepFun three-level/two-level tables and the later
+retained StepFun context-window table have been removed. StepFun context now
+uses explicit account/profile settings or actual upstream metadata; without
+either, it uses the generic 128,000-token client fallback and 115,200-token
+compaction threshold. That fallback is not advertised as an upstream capability.
+Pre-existing dedicated provider adapters are unchanged.
 Reading vendor documentation is a human activity, not runtime discovery; any
 resulting user override belongs in Model Management's scoped profile policy,
 not another built-in effort table.
@@ -112,6 +115,13 @@ or cap ultra at high. Thus the old StepFun gateway sent ultra as ultra; whether
 the vendor accepted, ignored or normalized it cannot be established from a 200
 response alone. The positional allocation elsewhere in old Cockpit assigned
 **model-name aliases**, not effort levels.
+
+The old client menus were not uniformly six levels: at both `54012972` and
+`cf4df701`, the borrowed Sol/Terra templates offered six choices, Luna offered
+five, and the unknown-model fallback offered low/medium/high/xhigh. The current
+generic six-choice fallback removes that dependence on the borrowed template;
+it is not an exact restoration of every old menu. Existing xAI-specific Grok
+normalization and GPT thinking-suffix handling remain separate official paths.
 
 The first Native patch borrowed selected library rules rather than reproducing
 that old StepFun path. That generic conversion has now been removed from the

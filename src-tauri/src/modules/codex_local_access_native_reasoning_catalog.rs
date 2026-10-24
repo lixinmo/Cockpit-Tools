@@ -19,7 +19,7 @@ fn native_copy_provider_model_fields(target: &mut Value, source: &Value) {
 }
 
 fn native_provider_catalog_candidate(account: &CodexAccount, actual: &str, model: &Value) -> Value {
-    let baseline = native_provider_model_baseline(account, actual).or_else(|| {
+    let baseline = account_model_template(account, actual).or_else(|| {
         (native_wire_api(account).ok() == Some(native_contract::WireApi::Responses))
             .then(|| codex_protocol::known_codex_model_template(actual))
             .flatten()
