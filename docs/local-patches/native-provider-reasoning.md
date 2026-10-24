@@ -244,3 +244,87 @@ previous App removed after successful health checks, 654,209,578 bytes (about
 directories remained. Runtime account/configuration data, shared toolchains,
 source, Git history/remotes and the verified current App were retained. No
 private configuration or conversations were uploaded to Actions.
+
+## Corrected forwarding validation and installation — 2026-10-24
+
+This record supersedes the 8a349790 request-conversion behavior above.
+Production App/probe commit: `9014a4f7b5a04323ec4facd9a909d1ef133f396e`.
+Full Intel Mac Cloud Build:
+[40097767822](https://github.com/lixinmo/Cockpit-Tools/actions/runs/40097767822).
+
+The build passed 273 Native/account regressions, zero failures, one intentionally
+ignored exporter; 1,645 frontend tests; 57 packaging and 10 build-script tests;
+typechecking and all locales. Native retry (18), Credits (31), Auto Reset (71)
+and Go CT-CONNECT-RETRY-001 v1.0 also passed. The obsolete mapper unit tests were
+removed with the mapper; the JSON/SSE/WebSocket integration matrix now verifies
+the real requirement: original values reach the synthetic supplier, whose own
+documented-style mapping or strict rejection determines the result. It covers
+medium/xhigh/ultra, null/legacy values, missing parameters, low-only menus,
+unchanged tools/history, and namespace denial before any upstream request.
+
+An independent local loopback check used both installed CLIs, without a real
+provider, to confirm that summary-capability flags do not suppress an explicit
+high effort. It also confirmed that a client with no effort setting chooses and
+sends low from a low-default catalog. Six captured requests were stopped with
+an intentional synthetic 400; these establish client field behavior, not model
+generation. Their temporary configurations and helpers were deleted.
+
+### Real StepFun acceptance
+
+The exact cloud-built Native host and production catalog writer were used with
+a read-only account snapshot. Each client completed fresh Step 5, resumed Step
+5 with a synthetic old-Go empty reasoning item, then resumed Step 3.7 in the
+same conversation. Step 3.7 had a temporary low-only menu/default.
+
+| Client | Native 200 responses for tool turns | Successful shell / patch operations |
+| --- | --- | --- |
+| Standalone CLI 0.162.1 | 13 | 7 / 3 |
+| Desktop-bundled CLI 0.164.0-alpha.11.1 | 12 | 6 / 3 |
+
+All accepted turns checked call/result pairing, a real custom patch call,
+same-session identity, raw model identity, exact file contents and the exact
+final random value. Both clients themselves selected low for Step 3.7; the
+gateway preserved it. Each also completed these three real control requests:
+
+| Model / client menu | Caller effort | Outgoing effort | HTTP status |
+| --- | --- | --- | --- |
+| Step 5, normal menu | high | high | 200 |
+| Step 3.7, low-only menu | high | high | 200 |
+| Step 3.7, low-only menu | absent | absent | 200 |
+
+The absence check is not a claim about the provider's hidden default intensity.
+These controls prove that menu/default configuration does not rewrite an
+explicit request or inject an absent parameter. No undocumented StepFun ultra
+behavior was assumed or required to pass.
+
+A preliminary desktop run failed the combined call-count/custom-call/pairing
+criterion and was not accepted. Its retained safe summary did not distinguish
+which subcondition failed, so no specific corruption or model behavior is
+claimed. Structural diagnostic counts were added without relaxing assertions;
+the complete desktop rerun passed every check. Each completed run preserved
+hashes of the selected account, index, provider store, Native settings, storage
+key and original client config. All temporary policies/conversations were removed.
+
+The matching App and sidecar were verified, installed and restarted. The exact
+new process passed Ready/version and two Pong checks five seconds apart.
+Native/prefer_regular remained active. The obsolete codex MCP entry remains
+removed. Existing client choices/defaults continue to come from their catalog;
+this correction changes request forwarding, not the already working tool or
+history adapters. The desktop-bundled backend was exercised as a CLI; this is
+not a claim of an automated GUI click-through.
+
+SHA-256:
+
+- App archive: `d47ad017d9f041c56940b1702cad9774fb90997ca4b142ab070e0d4af79c57dd`.
+- Main executable: `2df4448574108c70728d4164b9443f15e19fbb6d7dd99687a4fd5f3f520064c2`.
+- Matching Go sidecar: `e841edeb9727705cf23929d5de7c62c989c0a001ecbc112fea6cdb17e8bda124`.
+- Native probe: `82ab889b20b78c55831612f864416f88cf5280f02c13521c3e45100eb3661a23`.
+- Completed acceptance harness: `ae1d049f1af93df071807412ad1454be50c179ab53c1d9e6653f08f72a81a2f7`.
+
+Cleanup removed 470,670,226 bytes of downloaded artifacts, extraction copies,
+safe summaries and task helpers. Including the replaced App removed after
+successful health checks, 652,084,994 bytes (about 0.61 GiB) were removed. No
+temporary client profiles or project build/cache directories remained. Sources,
+Git history/remotes, shared toolchains, runtime data and the current verified
+App were retained. No local application/Rust compilation or private-data upload
+was performed.

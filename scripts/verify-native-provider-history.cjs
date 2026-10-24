@@ -259,6 +259,10 @@ async function runTurn(context, model, resume, expectedRejection = false) {
   const gateway = reportEvidence(context.reports, beforeReports);
   requireThat(actualModel === model, 'saved_model_not_used');
   requireThat(counters.commandSuccess >= 2 && counters.fileChangeSuccess >= 1 && counters.failedTools === 0, 'read_edit_verify_not_completed');
+  if (!(evidence.calls >= 3 && evidence.customCalls >= 1 && evidence.paired)) {
+    print({stage: 'tool_history_check', model, ...counters, history: evidence, native: gateway,
+      passed: false});
+  }
   requireThat(evidence.calls >= 3 && evidence.customCalls >= 1 && evidence.paired, 'tool_history_not_paired');
   requireThat(fs.readFileSync(path.join(context.work, 'result.txt'), 'utf8') === `${nonce}\n`, 'file_nonce_mismatch');
   const finalText = fs.existsSync(finalPath) ? fs.readFileSync(finalPath, 'utf8').trim() : '';
