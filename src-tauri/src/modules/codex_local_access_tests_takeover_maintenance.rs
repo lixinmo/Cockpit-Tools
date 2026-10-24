@@ -62,6 +62,33 @@ async fn passive_native_takeover_preserves_chat_tool_negotiation_without_reinval
     super::maintain_local_access_profile(&profile, &collection).unwrap();
     assert_eq!(fs::read_to_string(&catalog_path).unwrap(), expected);
     assert!(!cache.exists());
+    // Provider policy is the final layer even when the instance has a broader
+    // explicit list. Maintenance must never alternate between these two lists.
+    fs::write(profile.join(".cockpit-experimental-model-catalog-enabled"), "enabled\n").unwrap();
+    fs::write(profile.join(".cockpit-experimental-model-catalog-config.json"), json!({
+        "version":4,"models":[{"model_id":"step-5-preview","display_name":"Step 5",
+            "reasoning_efforts":["low","high"],"default_reasoning_effort":"high"}]
+    }).to_string()).unwrap();
+    codex_account::save_provider_model_quick_config(&profile, &account, true, vec![
+        crate::models::codex::CodexExperimentalModelDefinition {
+            model_id:"step-5-preview".into(), display_name:"Step 5".into(),
+            reasoning_efforts:Some(vec!["low".into()]), default_reasoning_effort:Some("low".into()),
+            context_window:None, auto_compact_token_limit:None,
+        }
+    ], None).unwrap();
+    super::maintain_local_access_profile(&profile, &collection).unwrap();
+    let scoped = fs::read_to_string(&catalog_path).unwrap();
+    let scoped_json: Value = serde_json::from_str(&scoped).unwrap();
+    let model = scoped_json["models"].as_array().unwrap().iter()
+        .find(|model| model["slug"] == "step-5-preview").unwrap();
+    assert_eq!(model["default_reasoning_level"], "low");
+    assert_eq!(model["supported_reasoning_levels"].as_array().unwrap().len(), 1);
+    fs::write(&cache, "scoped cache sentinel").unwrap();
+    for _ in 0..2 {
+        super::maintain_local_access_profile(&profile, &collection).unwrap();
+        assert_eq!(fs::read_to_string(&catalog_path).unwrap(), scoped);
+        assert_eq!(fs::read_to_string(&cache).unwrap(), "scoped cache sentinel");
+    }
     fs::remove_dir_all(profile).unwrap();
 }
 

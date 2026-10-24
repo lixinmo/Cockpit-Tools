@@ -1951,8 +1951,20 @@ fn write_local_access_profile_client_models(
 fn write_profile_client_models(
     profile_dir: &Path,
     supports_websockets: Option<bool>,
+    client_models: Value,
+    add_reserve: bool,
+) -> Result<(), String> {
+    write_profile_client_models_with_native_policy(
+        profile_dir, supports_websockets, client_models, add_reserve, None,
+    )
+}
+
+fn write_profile_client_models_with_native_policy(
+    profile_dir: &Path,
+    supports_websockets: Option<bool>,
     mut client_models: Value,
     add_reserve: bool,
+    native_policy: Option<(&CodexLocalAccessCollection, Option<&CodexLocalAccessApiKey>, &[CodexAccount])>,
 ) -> Result<(), String> {
     // 只有目录里已经有官方 GPT / Codex 模型（或用户显式列出 gpt-reserve）时才追加额度兜底
     // 条目。账号池没有能承接官方模型的账号时（例如只加了 DeepSeek + Grok 账号），客户端
@@ -1983,6 +1995,16 @@ fn write_profile_client_models(
     // Apply profile overrides after templates and pool models have been merged;
     // startup and passive reconciliation must use the same final values.
     let content = codex_account::decorate_managed_model_catalog_for_profile(profile_dir, &content)?;
+    // Apply the provider-specific layer last, before the only file/cache write.
+    // Startup and passive maintenance must not alternate between base and final
+    // metadata or overwrite a provider rule with an instance-level rule.
+    let content = if let Some((collection, key, accounts)) = native_policy {
+        let mut catalog = serde_json::from_str::<Value>(&content)
+            .map_err(|_| "NATIVE_PROVIDER_POLICY_CATALOG_INVALID".to_string())?;
+        native_decorate_provider_models(profile_dir, collection, key, accounts, &mut catalog)?;
+        serde_json::to_string_pretty(&catalog)
+            .map_err(|_| "NATIVE_PROVIDER_POLICY_CATALOG_INVALID".to_string())?
+    } else { content };
     let catalog_file = CODEX_MANAGED_MODEL_CATALOG_FILE;
     let catalog_changed = write_string_atomic_if_changed(&profile_dir.join(catalog_file), &content)
         .map_err(|e| format!("写入 Codex API 服务模型目录失败: {}", e))?;

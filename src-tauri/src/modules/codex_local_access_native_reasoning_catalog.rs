@@ -279,34 +279,6 @@ fn native_decorate_provider_models(
     Ok(())
 }
 
-fn native_update_provider_policy_catalog(
-    profile: &Path,
-    collection: &CodexLocalAccessCollection,
-    key: Option<&CodexLocalAccessApiKey>,
-    accounts: &[CodexAccount],
-) -> Result<(), String> {
-    let path = profile.join(CODEX_MANAGED_MODEL_CATALOG_FILE);
-    let mut changed = false;
-    update_string_atomic(&path, |current| {
-        let content = current.ok_or_else(|| "NATIVE_CATALOG_FILE_CHANGED".to_string())?;
-        let mut catalog: Value =
-            serde_json::from_str(content).map_err(|error| error.to_string())?;
-        let before = catalog.clone();
-        native_decorate_provider_models(profile, collection, key, accounts, &mut catalog)?;
-        changed = catalog != before;
-        if changed {
-            serde_json::to_string_pretty(&catalog).map_err(|error| error.to_string())
-        } else {
-            Ok(content.to_owned())
-        }
-    })?;
-    if changed {
-        crate::modules::codex_managed_model_catalog_version::write_managed_catalog_meta(&path)?;
-        invalidate_codex_model_cache(profile)?;
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 #[path = "codex_local_access_native_reasoning_catalog_tests.rs"]
 mod native_provider_reasoning_catalog_tests;

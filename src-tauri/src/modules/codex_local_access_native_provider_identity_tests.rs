@@ -92,7 +92,10 @@ async fn native_provider_profile_writer_and_refresh_share_model_metadata_and_sav
             2
         );
         assert_eq!(entry(&saved, "step-3.7-flash")["context_window"], 200_000);
-        assert_eq!(entry(&saved, "gpt-5.6-sol")["context_window"], 1_000_000);
+        let alias = entry(&saved, "gpt-5.6-sol");
+        for field in ["context_window", "auto_compact_token_limit", "default_reasoning_level", "supported_reasoning_levels"] {
+            assert_eq!(alias[field], step5[field], "The alias must inherit its actual model's explicit policy: {field}");
+        }
     }
     fs::remove_dir_all(directory).unwrap();
 }

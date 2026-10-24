@@ -324,8 +324,10 @@ fn write_native_provider_profile_model_catalog(
         .map_err(|error| error.message)?;
     // /models has already enforced the key/account scope. A legacy GPT alias
     // is not permission to append an otherwise unavailable Reserve model.
-    write_profile_client_models(profile, None, catalog, false)?;
-    native_update_provider_policy_catalog(profile, collection, Some(key), std::slice::from_ref(account))
+    write_profile_client_models_with_native_policy(
+        profile, None, catalog, false,
+        Some((collection, Some(key), std::slice::from_ref(account))),
+    )
 }
 
 fn native_profile_catalog_account_ids(

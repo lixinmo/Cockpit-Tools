@@ -283,8 +283,13 @@ fn maintain_local_access_profile(
             key,
             &accounts,
         )?;
+        write_profile_client_models_with_native_policy(
+            profile_dir, Some(supports_websockets), client_models, true,
+            Some((collection, key, &accounts)),
+        )?;
+    } else {
+        write_local_access_profile_client_models(profile_dir, supports_websockets, client_models)?;
     }
-    write_local_access_profile_client_models(profile_dir, supports_websockets, client_models)?;
     remember_takeover_ownership(profile_dir)
 }
 
