@@ -1700,6 +1700,7 @@ pub async fn codex_list_instances() -> Result<Vec<CodexInstanceProfileView>, Str
 pub async fn codex_get_instance_quick_config(
     instance_id: String,
     api_service_preview: Option<bool>,
+    provider_account_id: Option<String>,
 ) -> Result<crate::models::codex::CodexQuickConfig, String> {
     let base_dir = resolve_instance_base_dir(instance_id.as_str())?;
     let api_service_instance = api_service_preview.unwrap_or(false)
@@ -1718,6 +1719,11 @@ pub async fn codex_get_instance_quick_config(
                 })
         });
     tauri::async_runtime::spawn_blocking(move || {
+        if let Some(account_id) = provider_account_id {
+            let account = modules::codex_account::load_account(&account_id)
+                .ok_or_else(|| "PROVIDER_MODEL_POLICY_ACCOUNT_MISSING".to_string())?;
+            return modules::codex_account::read_provider_model_quick_config(&base_dir, &account);
+        }
         let mut config = modules::codex_account::read_quick_config_from_config_toml(&base_dir)?;
         if api_service_instance {
             // 启动预览属于 API 服务时，清单直接按账号池能力计算，
@@ -1769,9 +1775,29 @@ pub async fn codex_save_instance_quick_config(
         Vec<crate::models::codex::CodexExperimentalModelDefinition>,
     >,
     experimental_model_catalog_default_model_id: Option<String>,
+    provider_account_id: Option<String>,
 ) -> Result<crate::models::codex::CodexQuickConfig, String> {
     let base_dir = resolve_instance_base_dir(instance_id.as_str())?;
+    let provider_profile = base_dir.clone();
+    let selected_provider = provider_account_id.clone();
     let saved = tauri::async_runtime::spawn_blocking(move || {
+        if let Some(account_id) = provider_account_id {
+            let account = modules::codex_account::load_account(&account_id)
+                .ok_or_else(|| "PROVIDER_MODEL_POLICY_ACCOUNT_MISSING".to_string())?;
+            let current = modules::codex_account::read_provider_model_quick_config(&base_dir, &account)?;
+            // Context controls retain their existing instance-wide semantics;
+            // a model-only save never rewrites that unrelated global state.
+            if current.detected_model_context_window != model_context_window
+                || current.detected_auto_compact_token_limit != auto_compact_token_limit {
+                modules::codex_account::save_quick_config_for_base_dir_with_default(
+                    &base_dir, model_context_window, auto_compact_token_limit, None, None, None)?;
+            }
+            return modules::codex_account::save_provider_model_quick_config(
+                &base_dir, &account,
+                experimental_model_catalog_enabled.unwrap_or(current.experimental_model_catalog_enabled),
+                experimental_model_catalog_models.unwrap_or(current.experimental_model_catalog_models),
+                experimental_model_catalog_default_model_id);
+        }
         let saved = modules::codex_account::save_quick_config_for_base_dir_with_default(
             &base_dir,
             model_context_window,
@@ -1785,7 +1811,10 @@ pub async fn codex_save_instance_quick_config(
     })
     .await
     .map_err(|error| format!("保存 Codex 实例快捷配置后台任务失败: {}", error))??;
-    modules::codex_local_access::trigger_gateway_reload_in_background("实验模型目录已更新");
+    modules::codex_local_access::refresh_native_provider_catalog_for_account(&provider_profile, selected_provider.as_deref()).await?;
+    if selected_provider.is_none() {
+        modules::codex_local_access::trigger_gateway_reload_in_background("实验模型目录已更新");
+    }
     Ok(saved)
 }
 
@@ -1805,6 +1834,7 @@ pub async fn codex_save_instance_model_catalog(
             experimental_model_catalog_default_model_id,
         );
     }
+    let provider_profile = base_dir.clone();
     let saved = tauri::async_runtime::spawn_blocking(move || {
         let saved = modules::codex_account::save_model_catalog_for_base_dir_preserving_context(
             &base_dir,
@@ -1817,6 +1847,7 @@ pub async fn codex_save_instance_model_catalog(
     })
     .await
     .map_err(|error| format!("保存 Codex 实例可见模型后台任务失败: {}", error))??;
+    modules::codex_local_access::refresh_native_provider_catalog_for_profile(&provider_profile).await?;
     modules::codex_local_access::trigger_gateway_reload_in_background("实验模型目录已更新");
     Ok(saved)
 }
@@ -1848,7 +1879,7 @@ pub async fn codex_save_instance_configuration(
     if defer_bind_account_application == Some(true) && model_routing.is_some() {
         let previous_pending_catalog = read_pending_model_catalog(&profile)?;
         let previous_quick_config =
-            codex_get_instance_quick_config(instance_id.clone(), None).await?;
+            codex_get_instance_quick_config(instance_id.clone(), None, None).await?;
         let mut quick_config = save_pending_model_catalog(
             &profile, experimental_model_catalog_enabled,
             experimental_model_catalog_models, experimental_model_catalog_default_model_id,
@@ -1902,6 +1933,7 @@ pub async fn codex_save_instance_configuration(
                         None,
                         None,
                         None,
+                        None,
                     )
                     .await
                     .map(|_| ())
@@ -1922,7 +1954,7 @@ pub async fn codex_save_instance_configuration(
             }
         };
     }
-    let previous_quick_config = codex_get_instance_quick_config(instance_id.clone(), None).await?;
+    let previous_quick_config = codex_get_instance_quick_config(instance_id.clone(), None, None).await?;
     let saved_quick_config = if update_context_override == Some(true) {
         codex_save_instance_quick_config(
             instance_id.clone(),
@@ -1931,6 +1963,7 @@ pub async fn codex_save_instance_configuration(
             Some(experimental_model_catalog_enabled),
             Some(experimental_model_catalog_models),
             experimental_model_catalog_default_model_id,
+            None,
         )
         .await?
     } else {
@@ -1971,6 +2004,7 @@ pub async fn codex_save_instance_configuration(
                 Some(previous_quick_config.experimental_model_catalog_enabled),
                 Some(previous_quick_config.experimental_model_catalog_models),
                 previous_quick_config.experimental_model_catalog_default_model_id,
+                None,
             )
             .await;
             match rollback_result {

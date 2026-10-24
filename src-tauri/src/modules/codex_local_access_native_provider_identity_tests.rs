@@ -104,10 +104,7 @@ fn native_provider_public_metadata_does_not_trust_a_chat_gpt_display_name() {
     let served = native_catalog(&collection, Some(&key), &[provider]).unwrap();
     let public = &served["data"][0];
     assert!(public.get("context_length").is_none());
-    assert_eq!(
-        public["model_info"]["supported_reasoning_efforts"],
-        json!([])
-    );
+    assert!(public["model_info"].get("supported_reasoning_efforts").is_none());
     assert!(!public["capabilities"]
         .as_array()
         .unwrap()
@@ -199,8 +196,10 @@ fn native_provider_identity_catalog_is_complete_independent_of_count_and_order()
             assert_eq!(a["use_responses_lite"], true);
             assert_eq!(a["supports_search_tool"], true);
             assert!(a["tool_mode"].is_null());
-            assert!(a["default_reasoning_level"].is_null());
-            assert_eq!(a["supported_reasoning_levels"], json!([]));
+            assert_eq!(a["default_reasoning_level"], "medium");
+            assert_eq!(a["supported_reasoning_levels"].as_array().unwrap().iter()
+                .map(|level| level["effort"].as_str().unwrap()).collect::<Vec<_>>(),
+                ["low", "medium", "high", "xhigh", "max", "ultra"]);
             assert_eq!(a["support_verbosity"], false);
             assert_eq!(a["supports_reasoning_summary_parameter"], false);
             assert!(!a["base_instructions"]

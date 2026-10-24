@@ -570,8 +570,18 @@ pub(crate) fn build_provider_client_model(model_id: &str, index: usize) -> Value
     model["default_verbosity"] = Value::Null;
     model["supports_reasoning_summary_parameter"] = json!(false);
     model["supports_reasoning_summaries"] = json!(false);
-    model["default_reasoning_level"] = Value::Null;
-    model["supported_reasoning_levels"] = json!([]);
+    // Compatibility choices for providers that do not publish effort metadata.
+    // They are not a claim that the upstream supports all GPT intensities.
+    model["default_reasoning_level"] = json!("medium");
+    model["cockpit_reasoning_known"] = json!(false);
+    model["supported_reasoning_levels"] = json!([
+        {"effort":"low","description":"Low (provider compatibility)"},
+        {"effort":"medium","description":"Medium (provider compatibility)"},
+        {"effort":"high","description":"High (provider compatibility)"},
+        {"effort":"xhigh","description":"Extra high (provider compatibility)"},
+        {"effort":"max","description":"Max (provider compatibility)"},
+        {"effort":"ultra","description":"Ultra (provider compatibility)"}
+    ]);
     model["supports_search_tool"] = json!(false);
     model["web_search_tool_type"] = json!("text");
     model["supports_parallel_tool_calls"] = json!(false);

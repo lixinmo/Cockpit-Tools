@@ -423,6 +423,11 @@ fn native_provider_profile_selected_model(
     }
     // First activation and unavailable prior choices keep the explicit startup
     // preference, with an allowed current model as the existing fallback.
+    if let Some(model) = codex_account::provider_default_model_override(profile, account)? {
+        if available(&model)? {
+            return Ok(Some(model));
+        }
+    }
     let candidates = preferred_provider_gateway_slot(account, slots)
         .into_iter()
         .chain(slots.iter());
@@ -445,6 +450,15 @@ async fn native_ensure_provider_profile(
     key: &str,
     slots: &[ProviderGatewayModelSlot],
 ) -> Result<(), String> {
+    // Metadata failure cannot change credentials, permissions or engine choice.
+    // The last valid metadata/documented baseline remains available offline.
+    if account.is_api_key_auth()
+        && !native_is_chatgpt_plan_account(account)
+        && !codex_account::is_grok_upstream_provider(account)
+        && account.api_provider_mode != CodexApiProviderMode::OpenaiBuiltin
+    {
+        let _ = crate::modules::codex_provider_metadata::refresh(account).await;
+    }
     let images = image_generation_accounts_for_account(account, &collection);
     let oauth_ids = images
         .iter()
@@ -779,3 +793,5 @@ mod native_profile_tests {
         tokio::fs::remove_dir_all(root).await.unwrap();
     }
 }
+
+include!("codex_local_access_native_manual_catalog.rs");

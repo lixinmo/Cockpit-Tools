@@ -189,3 +189,18 @@ test("the snapshot cache evicts least-recently-used instances at its limit", () 
   assert.equal(service.getCachedCodexLaunchPreviewConfig("a"), a);
   assert.notEqual(service.getCachedCodexLaunchPreviewConfig("c"), null);
 });
+
+test('provider previews and saves remain isolated from other providers and the instance policy', async () => {
+  const service = createCodexLaunchPreviewConfigService({ loader: async (_id, _apiService, provider) => config(provider ?? 'subscription') });
+  const official = await service.loadCodexLaunchPreviewConfig('same-instance');
+  const first = await service.loadCodexLaunchPreviewConfig('same-instance', false, 'provider-a');
+  const second = await service.loadCodexLaunchPreviewConfig('same-instance', false, 'provider-b');
+  assert.equal(official.experimental_model_catalog_models[0].model_id, 'subscription');
+  assert.equal(first.experimental_model_catalog_models[0].model_id, 'provider-a');
+  assert.equal(second.experimental_model_catalog_models[0].model_id, 'provider-b');
+  const saved = config('provider-a-custom');
+  service.rememberCodexLaunchPreviewConfig('same-instance', saved, 'provider-a');
+  assert.equal(service.getCachedCodexLaunchPreviewConfig('same-instance', 'provider-a'), saved);
+  assert.equal(service.getCachedCodexLaunchPreviewConfig('same-instance', 'provider-b'), second);
+  assert.equal(service.getCachedCodexLaunchPreviewConfig('same-instance'), official);
+});

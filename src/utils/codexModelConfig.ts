@@ -1,7 +1,7 @@
 import type { CodexExperimentalModelDefinition, CodexReasoningEffort } from '../types/codex';
 
 export const CODEX_REASONING_EFFORT_ORDER: readonly CodexReasoningEffort[] = [
-  'low', 'medium', 'high', 'xhigh', 'max', 'ultra',
+  'none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra',
 ];
 
 export function sortCodexReasoningEfforts(efforts: readonly CodexReasoningEffort[]): CodexReasoningEffort[] {
@@ -46,10 +46,10 @@ export function withSupportedReasoningEfforts(
   reasoningEfforts: CodexReasoningEffort[] | undefined,
   inheritedEfforts?: readonly CodexReasoningEffort[],
 ): CodexExperimentalModelDefinition {
-  const supported = reasoningEfforts?.length ? reasoningEfforts : inheritedEfforts;
+  const supported = reasoningEfforts ?? inheritedEfforts;
   return {
     ...model,
-    reasoning_efforts: reasoningEfforts?.length ? sortCodexReasoningEfforts(reasoningEfforts) : undefined,
+    reasoning_efforts: reasoningEfforts === undefined ? undefined : sortCodexReasoningEfforts(reasoningEfforts),
     default_reasoning_effort: model.default_reasoning_effort && supported
       && !supported.includes(model.default_reasoning_effort) ? undefined : model.default_reasoning_effort,
   };

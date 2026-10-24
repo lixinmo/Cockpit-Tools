@@ -21,6 +21,8 @@ struct Config {
     key: String,
     output_dir: PathBuf,
     max_requests: usize,
+    #[serde(default)]
+    manual_low: bool,
 }
 
 fn safe_error(mut error: ServiceError) -> ServiceError {
@@ -148,6 +150,15 @@ fn shapes(value: Option<&Value>) -> Vec<Value> {
         .take(256)
         .map(tool_shape)
         .collect()
+}
+
+fn effort_shape(body: &Value) -> &'static str {
+    match body.pointer("/reasoning/effort").or_else(|| body.get("reasoning_effort")).and_then(Value::as_str) {
+        Some("none") => "none", Some("minimal") => "minimal", Some("low") => "low",
+        Some("medium") => "medium", Some("high") => "high", Some("xhigh") => "xhigh",
+        Some("max") => "max", Some("ultra") => "ultra", Some("auto") => "auto",
+        None => "absent", _ => "unknown",
+    }
 }
 
 #[test]
@@ -419,13 +430,28 @@ impl Host for ProviderHost {
         image: bool,
         compact: bool,
     ) -> BoxFuture<'a, Result<Value, ServiceError>> {
+        self.prepare_body_for_model(caller, route, &route.model, headers, body, image, compact)
+    }
+    fn prepare_body_for_model<'a>(
+        &'a self,
+        caller: &'a Caller,
+        route: &'a Route,
+        requested_model: &'a str,
+        headers: &'a axum::http::HeaderMap,
+        body: Value,
+        image: bool,
+        compact: bool,
+    ) -> BoxFuture<'a, Result<Value, ServiceError>> {
         Box::pin(async move {
             self.check_route(route, &route.model)?;
             self.evidence(json!({"stage":"prepare","tools":shapes(body.get("tools")),"history":shapes(body.get("input"))}));
-            self.inner
-                .prepare_body(caller, route, headers, body, image, compact)
+            let requested_effort = effort_shape(&body);
+            let result = self.inner
+                .prepare_body_for_model(caller, route, requested_model, headers, body, image, compact)
                 .await
-                .map_err(safe_error)
+                .map_err(safe_error)?;
+            self.evidence(json!({"stage":"reasoning","requested":requested_effort,"effective":effort_shape(&result)}));
+            Ok(result)
         })
     }
     fn multi_agent_policy<'a>(
@@ -585,6 +611,7 @@ fn read_config() -> Result<Config, &'static str> {
             .iter()
             .any(|m| !MODELS.contains(&m.as_str()))
         || config.account_id.is_empty()
+        || (config.manual_low && !config.allowed_models.iter().any(|model| model == "step-3.7-flash"))
         || !config
             .account_id
             .bytes()
@@ -776,6 +803,7 @@ async fn native_provider_process_driver() -> Result<(), &'static str> {
     let profile_account = account.clone();
     let profile_key = collection.api_key.clone();
     let profile_model = config.allowed_models[0].clone();
+    let manual_low = config.manual_low;
     let mut inner = NativeHostBridge::for_collection(collection);
     inner.profile_dir = Some(client_profile.clone());
     inner.account_overrides.insert(account.id.clone(), account);
@@ -810,7 +838,23 @@ async fn native_provider_process_driver() -> Result<(), &'static str> {
             &profile_key,
             port,
             &profile_model,
-        )
+        )?;
+        if manual_low {
+            codex_account::save_provider_model_quick_config(
+                &client_profile, &profile_account, true,
+                vec![crate::models::codex::CodexExperimentalModelDefinition {
+                    model_id: "step-3.7-flash".into(), display_name: "Step 3.7 Flash".into(),
+                    reasoning_efforts: Some(vec!["low".into()]), default_reasoning_effort: Some("low".into()),
+                    context_window: None, auto_compact_token_limit: None,
+                }], None,
+            ).map_err(|_| "Cannot save the temporary provider reasoning policy")?;
+            let mut published = profile_collection.clone();
+            published.port = port;
+            write_native_provider_profile_model_catalog(
+                &client_profile, &published, &profile_key, &profile_account,
+            ).map_err(|_| "Cannot publish the temporary provider reasoning policy")?;
+        }
+        Ok::<(), &'static str>(())
     })
     .await
     .map_err(|_| "Production acceptance profile worker failed")?;

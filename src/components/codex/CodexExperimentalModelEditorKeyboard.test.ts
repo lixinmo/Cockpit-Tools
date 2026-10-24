@@ -105,21 +105,22 @@ test('reasoning portal focuses the selected option and keeps multi-selection key
   assert.equal(menu.props.style.zIndex, 12041);
   assert.equal(menu.props.style.bottom, 100);
   assert.equal(menu.props.style.maxHeight, 280);
-  assert.equal(h.document.activeElement, h.options[2]);
+  assert.equal(h.document.activeElement, h.options.find((option) => option.props['data-effort'] === 'medium'));
   assert.equal(menu.props['aria-multiselectable'], 'true');
   assert.equal(h.key(menu, 'End'), true);
-  assert.equal(h.document.activeElement, h.options[6]);
+  assert.equal(h.document.activeElement, h.options.at(-1));
   h.key(h.menu(), 'ArrowDown');
   assert.equal(h.document.activeElement, h.options[0]);
   h.key(h.menu(), 'ArrowUp');
-  assert.equal(h.document.activeElement, h.options[6]);
+  assert.equal(h.document.activeElement, h.options.at(-1));
   h.key(h.menu(), 'Home');
-  h.key(h.menu(), 'ArrowDown');
-  const low = h.options[1];
-  h.clickOption(1);
+  const lowIndex = h.options.findIndex((option) => option.props['data-effort'] === 'low');
+  for (let index = 0; index < lowIndex; index += 1) h.key(h.menu(), 'ArrowDown');
+  const low = h.options[lowIndex];
+  h.clickOption(lowIndex);
   assert.deepEqual(h.models[0].reasoning_efforts, ['low', 'medium', 'high']);
   assert.equal(h.document.activeElement, low);
-  assert.equal(h.options[1].props['aria-selected'], true);
+  assert.equal(h.options[lowIndex].props['aria-selected'], true);
   assert.ok(h.menu());
   h.key(h.menu(), 'Home');
   const trigger = h.trigger('reasoning').props.ref.current;
@@ -185,5 +186,20 @@ test('outside clicks and disabling close the portal without stealing another con
   assert.equal(h.menu(), undefined);
   assert.equal(h.escape.open, false);
   assert.equal(h.document.activeElement, outside);
+  h.h.unmount();
+});
+
+
+test('provider reasoning can explicitly disable effort while preserving inherit as a separate action', () => {
+  const h = harness({ reasoning_efforts: ['low', 'high'], default_reasoning_effort: 'high' });
+  h.open('reasoning');
+  h.clickOption(h.options.findIndex((option) => option.props['data-effort'] === 'unsupported'));
+  assert.deepEqual(h.models[0].reasoning_efforts, []);
+  assert.equal(h.models[0].default_reasoning_effort, undefined);
+  assert.equal(h.menu(), undefined);
+  h.open('reasoning');
+  assert.equal(h.document.activeElement, h.options.find((option) => option.props['data-effort'] === 'unsupported'));
+  h.clickOption(0);
+  assert.equal(h.models[0].reasoning_efforts, undefined);
   h.h.unmount();
 });

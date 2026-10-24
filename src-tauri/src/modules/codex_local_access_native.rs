@@ -1,6 +1,7 @@
 // Host integration for the independently implemented native Responses engine.
 // Reuses account storage and metrics, never the retired gateway's wire logic.
 use crate::modules::codex_native_api::{self as native_api, contract as native_contract};
+include!("codex_local_access_native_reasoning.rs");
 
 const NATIVE_PRIMARY_CALLER: &str = "native:primary";
 const NATIVE_INTERNAL_CALLER: &str = "native:internal";
@@ -1268,6 +1269,19 @@ impl native_contract::Host for NativeHostBridge {
         dedicated_image: bool,
         compact: bool,
     ) -> futures_util::future::BoxFuture<'a, Result<Value, native_contract::ServiceError>> {
+        self.prepare_body_for_model(caller, route, &route.model, headers, body, dedicated_image, compact)
+    }
+
+    fn prepare_body_for_model<'a>(
+        &'a self,
+        caller: &'a native_contract::Caller,
+        route: &'a native_contract::Route,
+        requested_model: &'a str,
+        headers: &'a axum::http::HeaderMap,
+        body: Value,
+        dedicated_image: bool,
+        compact: bool,
+    ) -> futures_util::future::BoxFuture<'a, Result<Value, native_contract::ServiceError>> {
         Box::pin(async move {
             let collection = self.collection().await?;
             let key = native_caller_key(&collection, caller)?;
@@ -1292,6 +1306,11 @@ impl native_contract::Host for NativeHostBridge {
                 )
             })?;
             let body = native_prepare_provider_vision_body(&collection, key, &account, body);
+            let body = if dedicated_image || compact { body } else {
+                native_prepare_provider_reasoning_body_for_model(
+                    self.profile_dir.as_deref(), &account, &route.model, requested_model, body,
+                )?
+            };
             Ok(native_prepare_image_body(
                 &collection,
                 &account,

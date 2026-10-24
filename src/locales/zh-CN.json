@@ -6026,6 +6026,15 @@
       "defaultReasoning": "默认档位",
       "defaultReasoningFollow": "沿用默认",
       "defaultReasoningHint": "留空沿用模型默认档位；所选档位必须在当前支持范围内。",
+      "reasoningNone": "关闭推理",
+      "reasoningMinimal": "极低",
+      "providerPolicyHint": "这里只配置该供应商的模型能力。增删型号请修改账号的模型列表；实例配置的导入导出不适用于此处。",
+      "providerPolicyDescription": "读取供应商已知能力；未提供时使用兼容档位，可手动配置。",
+      "providerPolicyFollow": "跟随供应商",
+      "providerPolicyCustom": "已自定义",
+      "providerPolicyConfirm": "为这个供应商保存独立的模型能力配置，不影响其他账号。",
+      "inheritReasoning": "跟随模型",
+      "noReasoning": "不支持调整推理强度",
       "defaultReasoningInvalid": "默认推理档位必须属于当前支持的档位。"
     },
     "modelConfig": {

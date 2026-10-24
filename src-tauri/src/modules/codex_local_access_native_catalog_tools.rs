@@ -1,5 +1,50 @@
 // One resolved metadata source for /models and managed on-disk catalogs.
+pub(crate) fn provider_model_reasoning_levels(account: &CodexAccount, model: &str) -> Vec<String> {
+    native_declared_provider_model_metadata(account, model)
+        .as_ref().and_then(native_provider_effort_levels)
+        .unwrap_or_else(|| ["low", "medium", "high", "xhigh", "max", "ultra"]
+            .iter().map(|effort| (*effort).to_owned()).collect())
+}
+
 fn native_declared_provider_model_metadata(account: &CodexAccount, model: &str) -> Option<Value> {
+    let mut declared = native_documented_provider_model_metadata(account, model);
+    if let Some(metadata) = crate::modules::codex_provider_metadata::lookup(account, model) {
+        let template = declared.get_or_insert_with(|| {
+            let mut fallback = codex_protocol::build_provider_client_model(model, 0);
+            fallback["cockpit_reasoning_known"] = json!(false);
+            fallback["cockpit_context_known"] = json!(false);
+            fallback
+        });
+        if let Some(window) = metadata.context_window {
+            template["cockpit_context_known"] = json!(true);
+            template["context_window"] = json!(window);
+            template["max_context_window"] = json!(window);
+            template["auto_compact_token_limit"] =
+                json!(codex_protocol::derived_auto_compact_token_limit(window));
+        }
+        if let Some(levels) = metadata.reasoning_efforts {
+            // `auto` is a provider control, not a Codex selectable enum value.
+            let levels = levels.into_iter().filter(|level| level != "auto").collect::<Vec<_>>();
+            let default = metadata.default_reasoning_effort
+                .filter(|default| levels.contains(default))
+                .or_else(|| levels.iter().find(|level| *level == "medium").cloned())
+                .or_else(|| levels.first().cloned());
+            template["supported_reasoning_levels"] = json!(levels.iter().map(|level|
+                json!({"effort":level,"description":level})
+            ).collect::<Vec<_>>());
+            template["default_reasoning_level"] = json!(default);
+            template["cockpit_reasoning_known"] = json!(true);
+        } else if let Some(default) = metadata.default_reasoning_effort {
+            if template["supported_reasoning_levels"].as_array().is_some_and(|levels|
+                levels.iter().any(|level| level["effort"].as_str() == Some(default.as_str()))) {
+                template["default_reasoning_level"] = json!(default);
+            }
+        }
+    }
+    declared
+}
+
+fn native_documented_provider_model_metadata(account: &CodexAccount, model: &str) -> Option<Value> {
     if let Some(template) = account_model_template(account, model) {
         return Some(template);
     }
@@ -23,6 +68,7 @@ fn native_declared_provider_model_metadata(account: &CodexAccount, model: &str) 
     let window = match model {
         "step-5-preview" => 1_000_000,
         "step-3.7-flash" => 256_000,
+        "step-3.5-flash-2603" => 256_000,
         _ => return None,
     };
     let mut template = codex_protocol::build_provider_client_model(model, 0);
@@ -31,11 +77,20 @@ fn native_declared_provider_model_metadata(account: &CodexAccount, model: &str) 
     template["auto_compact_token_limit"] =
         json!(codex_protocol::derived_auto_compact_token_limit(window));
     template["default_reasoning_level"] = json!("medium");
+    template["cockpit_reasoning_known"] = json!(true);
     template["supported_reasoning_levels"] = json!([
         {"effort":"low","description":"Low"},
         {"effort":"medium","description":"Medium"},
         {"effort":"high","description":"High"}
     ]);
+    // StepFun's Chat API reference explicitly gives the 2603 release two levels.
+    if model == "step-3.5-flash-2603" {
+        template["default_reasoning_level"] = json!("high");
+        template["supported_reasoning_levels"] = json!([
+            {"effort":"low","description":"Low"},
+            {"effort":"high","description":"High"}
+        ]);
+    }
     Some(template)
 }
 
@@ -269,7 +324,8 @@ fn write_native_provider_profile_model_catalog(
         .map_err(|error| error.message)?;
     // /models has already enforced the key/account scope. A legacy GPT alias
     // is not permission to append an otherwise unavailable Reserve model.
-    write_profile_client_models(profile, None, catalog, false)
+    write_profile_client_models(profile, None, catalog, false)?;
+    native_update_provider_policy_catalog(profile, collection, Some(key), std::slice::from_ref(account))
 }
 
 fn native_profile_catalog_account_ids(
@@ -338,6 +394,7 @@ async fn native_sync_profile_catalog_tool_capabilities(
                 &serde_json::to_string(&catalog).map_err(|error| error.to_string())?,
             )?;
             catalog = serde_json::from_str(&decorated).map_err(|error| error.to_string())?;
+            native_decorate_provider_models(&profile, &collection, key.as_ref(), &accounts, &mut catalog)?;
             changed = catalog != original;
             if changed {
                 serde_json::to_string_pretty(&catalog).map_err(|error| error.to_string())
@@ -358,3 +415,5 @@ async fn native_sync_profile_catalog_tool_capabilities(
 #[cfg(test)]
 #[path = "codex_local_access_native_catalog_tools_tests.rs"]
 mod native_catalog_tools_tests;
+
+include!("codex_local_access_native_reasoning_catalog.rs");

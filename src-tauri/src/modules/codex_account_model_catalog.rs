@@ -841,9 +841,8 @@ fn normalize_reasoning_efforts(
             normalized.push(effort);
         }
     }
-    if normalized.is_empty() {
-        return Ok(None);
-    }
+    // An explicit empty list means the provider has no adjustable reasoning
+    // effort. Omission alone means inherit discovered/default metadata.
     normalized.sort_by_key(|effort| {
         CODEX_REASONING_EFFORTS
             .iter()
@@ -868,7 +867,7 @@ pub(crate) fn model_reasoning_efforts(
         })
         .collect::<Vec<_>>();
     let catalog = crate::modules::codex_protocol::build_codex_client_models_response_with_model_definitions_and_reasoning(&definitions);
-    catalog["models"]
+    let mut result: HashMap<String, Vec<String>> = catalog["models"]
         .as_array()
         .into_iter()
         .flatten()
@@ -882,7 +881,17 @@ pub(crate) fn model_reasoning_efforts(
                 .collect();
             Some((id.to_string(), efforts))
         })
-        .collect()
+        .collect();
+    // A manual provider declaration is authoritative, including capabilities
+    // absent from the bundled GPT template and an explicit unsupported list.
+    for model in models {
+        if let Some(efforts) = &model.reasoning_efforts {
+            result.insert(model.model_id.clone(), efforts.clone());
+        } else if crate::modules::codex_protocol::known_codex_model_template(&model.model_id).is_none() {
+            result.insert(model.model_id.clone(), ["low", "medium", "high", "xhigh", "max", "ultra"].map(str::to_owned).to_vec());
+        }
+    }
+    result
 }
 
 pub(crate) fn model_reasoning_efforts_for_profile(
@@ -894,6 +903,9 @@ pub(crate) fn model_reasoning_efforts_for_profile(
         .ok()
         .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok());
     for model in models {
+        if model.reasoning_efforts.is_some() {
+            continue;
+        }
         // Official GPT metadata comes from the bundled source, rather than a previously
         // narrowed user override. Supplier/namespaced models use the actual profile template.
         if model.model_id.to_ascii_lowercase().starts_with("gpt-") {
@@ -924,9 +936,7 @@ pub(crate) fn model_reasoning_efforts_for_profile(
                     .is_none_or(|efforts| efforts.contains(effort))
             })
             .collect::<Vec<_>>();
-        if !efforts.is_empty() {
-            result.insert(model.model_id.clone(), efforts);
-        }
+        result.insert(model.model_id.clone(), efforts);
     }
     result
 }
@@ -1040,15 +1050,6 @@ pub(crate) fn normalize_experimental_model_definitions_with_template(
                 .into_iter()
                 .flatten()
                 .map(|effort| effort.trim().to_ascii_lowercase())
-                .filter(|effort| {
-                    template["supported_reasoning_levels"]
-                        .as_array()
-                        .is_some_and(|levels| {
-                            levels
-                                .iter()
-                                .any(|level| level["effort"].as_str() == Some(effort.as_str()))
-                        })
-                })
                 .collect::<Vec<_>>();
             if !template["default_reasoning_level"]
                 .as_str()
@@ -1288,6 +1289,12 @@ fn apply_model_context_config_to_catalog(
         })
         .collect::<Vec<_>>();
     crate::modules::codex_protocol::apply_model_context_overrides(catalog, &definitions);
+    for model in catalog["models"].as_array_mut().into_iter().flatten() {
+        if definitions.iter().any(|(id, window, _)| window.is_some()
+            && model["slug"].as_str().is_some_and(|slug| slug.eq_ignore_ascii_case(id))) {
+            model["cockpit_context_known"] = serde_json::json!(true);
+        }
+    }
 }
 
 fn apply_model_reasoning_config_to_catalog(
@@ -1303,28 +1310,25 @@ fn apply_model_reasoning_config_to_catalog(
             continue;
         };
         if let Some(efforts) = definition.reasoning_efforts.as_ref() {
-            let levels = entry["supported_reasoning_levels"]
+            entry["cockpit_reasoning_known"] = serde_json::json!(true);
+            let existing = entry["supported_reasoning_levels"]
                 .as_array()
                 .cloned()
                 .unwrap_or_default();
-            let selected = CODEX_REASONING_EFFORTS
-                .iter()
-                .filter(|effort| efforts.iter().any(|value| value == **effort))
-                .filter_map(|effort| {
-                    levels
-                        .iter()
-                        .find(|level| level["effort"].as_str() == Some(effort))
+            let selected = normalize_reasoning_efforts(Some(efforts.clone()))?
+                .unwrap_or_default()
+                .into_iter()
+                .map(|effort| {
+                    existing.iter().find(|level| level["effort"] == effort)
                         .cloned()
+                        .unwrap_or_else(|| serde_json::json!({"effort":effort,"description":effort}))
                 })
                 .collect::<Vec<_>>();
-            if !selected.is_empty() {
-                entry["supported_reasoning_levels"] = serde_json::json!(selected);
-                if !selected
-                    .iter()
-                    .any(|level| level["effort"] == entry["default_reasoning_level"])
-                {
-                    entry["default_reasoning_level"] = selected[0]["effort"].clone();
-                }
+            entry["supported_reasoning_levels"] = serde_json::json!(selected);
+            if selected.is_empty() {
+                entry["default_reasoning_level"] = serde_json::Value::Null;
+            } else if !selected.iter().any(|level| level["effort"] == entry["default_reasoning_level"]) {
+                entry["default_reasoning_level"] = selected[0]["effort"].clone();
             }
         }
         if let Some(default) = definition.default_reasoning_effort.as_ref() {
@@ -1342,6 +1346,43 @@ fn apply_model_reasoning_config_to_catalog(
         }
     }
     Ok(())
+}
+
+pub(crate) fn profile_default_model_override(base_dir: &Path) -> Option<String> {
+    if !experimental_model_policy_enabled(base_dir) {
+        return None;
+    }
+    let config = read_experimental_model_catalog_config(base_dir)?;
+    let default = config.default_model_id?;
+    config.models.into_iter().find(|model| model.model_id.eq_ignore_ascii_case(&default))
+        .map(|model| model.model_id)
+}
+
+/// Read the enabled profile's explicit reasoning policy without migrating or
+/// rewriting account/profile state on a gateway request. None means inherit;
+/// Some with an empty effort list explicitly disables effort selection.
+pub(crate) fn profile_reasoning_override(
+    base_dir: &Path,
+    model: &str,
+) -> Result<Option<CodexExperimentalModelDefinition>, String> {
+    if !experimental_model_policy_enabled(base_dir) {
+        return Ok(None);
+    }
+    let raw = match fs::read_to_string(experimental_model_config_path(base_dir)) {
+        Ok(raw) => raw,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(_) => return Err("EXPERIMENTAL_MODEL_CATALOG_READ_FAILED".into()),
+    };
+    let config: ExperimentalModelCatalogConfig = serde_json::from_str(&raw)
+        .map_err(|_| "EXPERIMENTAL_MODEL_CATALOG_JSON_INVALID".to_string())?;
+    let Some(definition) = config.models.into_iter().find(|definition| {
+        definition.model_id.eq_ignore_ascii_case(model)
+            && (definition.reasoning_efforts.is_some()
+                || definition.default_reasoning_effort.is_some())
+    }) else {
+        return Ok(None);
+    };
+    Ok(normalize_experimental_model_definitions(vec![definition])?.into_iter().next())
 }
 
 pub(crate) fn decorate_managed_model_catalog_for_profile(
@@ -2077,6 +2118,8 @@ fn write_quick_config_to_config_toml_with_default_mode(
 ) -> Result<CodexQuickConfig, String> {
     let config_path = get_config_toml_path(base_dir);
     let existing = fs::read_to_string(&config_path).unwrap_or_default();
+    let provider_catalog_managed =
+        crate::modules::codex_local_access::native_provider_catalog_is_running(base_dir)?;
     let disabling_experimental_catalog = experimental_model_catalog_enabled == Some(false);
     let had_experimental_model_control_state = experimental_model_policy_path(base_dir).is_file()
         || experimental_model_config_path(base_dir).is_file()
@@ -2154,12 +2197,12 @@ fn write_quick_config_to_config_toml_with_default_mode(
 
     let effective_experimental_enabled = experimental_model_catalog_enabled
         .or_else(|| experimental_model_policy_enabled(base_dir).then_some(true));
-    let remove_experimental_catalog_after_write = apply_experimental_model_catalog_to_doc(
-        base_dir,
-        &mut doc,
-        effective_experimental_enabled,
-    )?;
-    if disabling_experimental_catalog {
+    let remove_experimental_catalog_after_write = if provider_catalog_managed {
+        false
+    } else {
+        apply_experimental_model_catalog_to_doc(base_dir, &mut doc, effective_experimental_enabled)?
+    };
+    if disabling_experimental_catalog && !provider_catalog_managed {
         // Explicitly disabling this feature is the user's request to return to the official
         // catalog. Remove both Cockpit-managed and user-supplied model_catalog_json references;
         // the referenced user file is intentionally preserved for manual reuse later.
@@ -2183,8 +2226,9 @@ fn write_quick_config_to_config_toml_with_default_mode(
         persist_experimental_model_policy(base_dir, enabled)?;
     }
 
-    let remove_managed_catalog_after_write = remove_experimental_catalog_after_write
-        || (disabling_experimental_catalog && had_experimental_model_control_state);
+    let remove_managed_catalog_after_write = !provider_catalog_managed
+        && (remove_experimental_catalog_after_write
+            || (disabling_experimental_catalog && had_experimental_model_control_state));
     if remove_managed_catalog_after_write {
         crate::modules::atomic_write::remove_file_locked(&experimental_model_catalog_path(
             base_dir,
@@ -2199,7 +2243,9 @@ fn write_quick_config_to_config_toml_with_default_mode(
         let _ = crate::modules::codex_local_access::invalidate_codex_model_cache(base_dir);
     }
     if disabling_experimental_catalog {
-        cleanup_legacy_managed_model_catalogs(base_dir);
+        if !provider_catalog_managed {
+            cleanup_legacy_managed_model_catalogs(base_dir);
+        }
         clear_previous_experimental_catalog_reference(base_dir)?;
         clear_experimental_model_catalog_config(base_dir)?;
         let _ = fs::remove_file(user_customized_model_catalog_marker_path(base_dir));
@@ -3529,3 +3575,9 @@ fn write_api_key_runtime_provider_to_config_toml(
         wire_api,
     )
 }
+
+#[cfg(test)]
+#[path = "codex_account_tests_manual_reasoning.rs"]
+mod manual_reasoning_tests;
+
+include!("codex_account_provider_model_policy.rs");

@@ -30,6 +30,8 @@ Options:
   --max-requests N             Total driver route/send budget, 12..32 (default: 32)
   --expect-legacy-rejection    Negative control: require old probe to reject the
                                first resume with chat_parameter_not_representable
+  --check-effort-mapping       Configure temporary Step 3.7 low-only policy and
+                               verify real ultra requests map to Step 5 high / 3.7 low
   --self-test                 Synthetic helper checks only; no account/network
   --help                      Show this help; no account/network
 
@@ -40,17 +42,19 @@ The supplied probe must already have passed its cloud-build verification.
 }
 
 function options(args) {
-  const result = { codex: 'codex', timeout: 240, requests: 32, negative: false };
+  const result = { codex: 'codex', timeout: 240, requests: 32, negative: false, efforts: false };
   const names = { '--probe': 'probe', '--data-dir': 'data', '--account-id': 'account', '--codex': 'codex', '--timeout-seconds': 'timeout', '--max-requests': 'requests' };
   for (let i = 0; i < args.length; i += 1) {
     const name = args[i];
     if (name === '--expect-legacy-rejection') result.negative = true;
+    else if (name === '--check-effort-mapping') result.efforts = true;
     else if (names[name]) {
       requireThat(i + 1 < args.length && !args[i + 1].startsWith('--'), 'missing_argument');
       result[names[name]] = args[++i];
     } else throw safeFailure('unknown_argument');
   }
   requireThat(result.probe && result.data && /^[A-Za-z0-9_-]+$/.test(result.account || ''), 'explicit_scope_required');
+  requireThat(!(result.negative && result.efforts), 'incompatible_acceptance_modes');
   result.timeout = Number(result.timeout);
   result.requests = Number(result.requests);
   requireThat(Number.isInteger(result.timeout) && result.timeout >= 30 && result.timeout <= 600, 'invalid_timeout');
@@ -266,6 +270,10 @@ async function runTurn(context, model, resume, expectedRejection = false) {
   requireThat(finalText === nonce, 'final_nonce_mismatch');
   requireThat(gateway.success && gateway.functionHistorySeen && gateway.customHistorySeen, 'native_tool_replay_not_verified');
   if (resume) requireThat(gateway.reasoningSeen, 'reasoning_history_not_observed');
+  if (context.opts.efforts && model === MODELS[1]) {
+    const mapped = records(context.reports).slice(beforeReports).filter((row) => row.stage === 'reasoning');
+    requireThat(mapped.length > 0 && mapped.every((row) => row.effective === 'low'), 'manual_effort_not_used');
+  }
   print({ stage: resume ? 'resume' : 'fresh', model, sameSession: !resume || sessionId === context.sessionId, savedModelConfirmed: true, ...counters, history: evidence, native: gateway, fileNonceMatches: true, finalNonceMatches: true, passed: true });
   context.turn += 1;
 }
@@ -282,7 +290,8 @@ async function main(opts) {
   const isolatedHome = path.join(root, 'user-home');
   fs.mkdirSync(work, { mode: 0o700 });
   fs.mkdirSync(isolatedHome, { mode: 0o700 });
-  privateWrite(config, JSON.stringify({ account_id: opts.account, allowed_models: MODELS, key: crypto.randomBytes(32).toString('hex'), output_dir: output, max_requests: opts.requests }));
+  const localKey = crypto.randomBytes(32).toString('hex');
+  privateWrite(config, JSON.stringify({ account_id: opts.account, allowed_models: MODELS, key: localKey, output_dir: output, max_requests: opts.requests, ...(opts.efforts ? {manual_low: true} : {}) }));
   const context = { root, work, opts, turn: 0, activeCli: null };
   let driver;
   const interrupted = () => { context.interrupted = true; context.activeCli?.child.kill('SIGTERM'); driver?.child.stdin.end('stop\n'); };
@@ -316,6 +325,22 @@ async function main(opts) {
     print({ stage: 'synthetic_history_injected', type: 'reasoning', encryptedContent: 'empty', summaryPresent: true, realHistoryModified: false });
     await runTurn(context, MODELS[0], true, opts.negative);
     if (!opts.negative) await runTurn(context, MODELS[1], true);
+    if (opts.efforts) {
+      for (const model of MODELS) {
+        const offset = records(context.reports).length;
+        const expected = model === MODELS[1] ? 'low' : 'high';
+        const response = await fetch(`http://127.0.0.1:${ready.port}/v1/responses`, {
+          method: 'POST', headers: {Authorization: `Bearer ${localKey}`, 'content-type': 'application/json'},
+          body: JSON.stringify({model, stream: false, store: false, reasoning: {effort: 'ultra'}, input: 'This is a synthetic compatibility check. Reply only OK.'}),
+          signal: AbortSignal.timeout(opts.timeout * 1000),
+        });
+        const result = await response.json();
+        requireThat(response.status === 200 && result.status === 'completed', 'mapped_effort_upstream_failed');
+        const mapped = records(context.reports).slice(offset).filter((row) => row.stage === 'reasoning');
+        requireThat(mapped.length > 0 && mapped.every((row) => row.requested === 'ultra' && row.effective === expected), 'mapped_effort_evidence_failed');
+        print({stage: 'effort_mapping', model, requested: 'ultra', effective: expected, status: response.status, manualPolicy: model === MODELS[1], passed: true});
+      }
+    }
     const stopped = await stopProcess(driver, true);
     requireThat(stopped?.code === 0 && !stopped.overflow && !/FAILED|panicked/.test(stopped.stdout || ''), 'driver_shutdown_failed');
     print({ stage: 'complete', turns: context.turn, negativeControl: opts.negative, driverExitCode: 0, passed: true });

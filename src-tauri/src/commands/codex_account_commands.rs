@@ -816,6 +816,7 @@ pub async fn save_codex_quick_config(
     })
     .await
     .map_err(|error| format!("保存 Codex 快捷配置后台任务失败: {}", error))??;
+    crate::modules::codex_local_access::refresh_native_provider_catalog_for_profile(&codex_account::get_codex_home()).await?;
     crate::modules::codex_local_access::trigger_gateway_reload_in_background("实验模型目录已更新");
     Ok(saved)
 }
@@ -837,6 +838,7 @@ pub async fn save_codex_model_catalog(
     })
     .await
     .map_err(|error| format!("保存 Codex 可见模型后台任务失败: {}", error))??;
+    crate::modules::codex_local_access::refresh_native_provider_catalog_for_profile(&codex_account::get_codex_home()).await?;
     crate::modules::codex_local_access::trigger_gateway_reload_in_background("实验模型目录已更新");
     Ok(saved)
 }
@@ -845,10 +847,21 @@ pub async fn save_codex_model_catalog(
 pub async fn get_codex_model_reasoning_efforts(
     models: Vec<crate::models::codex::CodexExperimentalModelDefinition>,
     instance_id: Option<String>,
+    provider_account_id: Option<String>,
 ) -> Result<HashMap<String, Vec<String>>, String> {
     if models.len() > 1000 { return Err("MODEL_CONFIG_TOO_MANY_ITEMS".to_string()); }
     tauri::async_runtime::spawn_blocking(move || {
         let dir = codex_account::model_config_profile_dir(instance_id.as_deref().unwrap_or("__default__"))?;
+        if let Some(account_id) = provider_account_id {
+            let account = codex_account::load_account(&account_id)
+                .filter(|account| account.is_api_key_auth())
+                .ok_or_else(|| "PROVIDER_MODEL_POLICY_ACCOUNT_MISSING".to_string())?;
+            return Ok(models.into_iter().map(|model| {
+                let levels = model.reasoning_efforts.unwrap_or_else(||
+                    crate::modules::codex_local_access::provider_model_reasoning_levels(&account, &model.model_id));
+                (model.model_id, levels)
+            }).collect());
+        }
         Ok(codex_account::model_reasoning_efforts_for_profile(&dir, &models))
     }).await.map_err(|_| "MODEL_CONFIG_READ_FAILED".to_string())?
 }

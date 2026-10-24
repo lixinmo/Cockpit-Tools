@@ -219,3 +219,83 @@ fn native_provider_profile_selection_keeps_acl_and_does_not_guess_unresolved_ali
     )
     .is_err());
 }
+
+#[tokio::test]
+async fn native_provider_profile_selection_manual_efforts_republish_only_owned_scoped_catalog() {
+    let _lock = crate::modules::test_support::env_lock().lock().unwrap_or_else(|e| e.into_inner());
+    let _data = super::native_capability_integration_tests::NativeInstallationTestData::new();
+    let profile = tempfile::tempdir().unwrap();
+    let account = fixture_account();
+    codex_account::save_account(&account).unwrap();
+    let collection = fixture_collection(&account);
+    let slots = provider_gateway_model_slots_for_collection(&collection,
+        collection.api_keys[0].provider_gateway.as_ref().unwrap()).unwrap();
+    native_ensure_provider_profile(profile.path(), &account, collection.clone(),
+        "synthetic-profile-key", &slots).await.unwrap();
+    let runtime_key = provider_gateway_runtime_key(profile.path(), &account.id);
+    let port = provider_gateway_runtime_store().lock().await[&runtime_key].actual_port;
+    let auth = fs::read(profile_auth_path(profile.path())).unwrap();
+    let old_catalog = fs::read(profile.path().join(CODEX_MANAGED_MODEL_CATALOG_FILE)).unwrap();
+    let definitions = vec![
+        crate::models::codex::CodexExperimentalModelDefinition {
+            model_id: "provider-a".into(), display_name: "Provider A".into(),
+            reasoning_efforts: Some(vec!["low".into(), "high".into()]),
+            default_reasoning_effort: Some("high".into()), context_window: None,
+            auto_compact_token_limit: None,
+        },
+        crate::models::codex::CodexExperimentalModelDefinition {
+            model_id: "ungranted-gpt".into(), display_name: "Unrelated saved definition".into(),
+            reasoning_efforts: Some(vec!["ultra".into()]), default_reasoning_effort: None,
+            context_window: None, auto_compact_token_limit: None,
+        },
+    ];
+    codex_account::save_quick_config_for_base_dir_with_default(profile.path(), None, None,
+        Some(true), Some(definitions), None).unwrap();
+    assert_eq!(fs::read(profile.path().join(CODEX_MANAGED_MODEL_CATALOG_FILE)).unwrap(), old_catalog,
+        "generic settings writer must not publish an unscoped intermediate catalog");
+    refresh_native_provider_catalog_for_profile(profile.path()).await.unwrap();
+    let catalog:Value = serde_json::from_slice(&fs::read(profile.path().join(CODEX_MANAGED_MODEL_CATALOG_FILE)).unwrap()).unwrap();
+    let models = catalog["models"].as_array().unwrap();
+    assert!(!models.iter().any(|model| model["slug"] == "ungranted-gpt" || model["slug"] == "gpt-reserve"));
+    let model = models.iter().find(|model| model["slug"] == "provider-a").unwrap();
+    assert_eq!(model["supported_reasoning_levels"].as_array().unwrap().iter().map(|level|level["effort"].as_str().unwrap()).collect::<Vec<_>>(), vec!["low", "high"]);
+    assert_eq!(model["default_reasoning_level"], "high");
+    assert_eq!(model["use_responses_lite"], true);
+    assert_eq!(fs::read(profile_auth_path(profile.path())).unwrap(), auth);
+    assert_eq!(provider_gateway_runtime_store().lock().await[&runtime_key].actual_port, port,
+        "metadata refresh must not restart the listener");
+
+    let doc = crate::modules::codex_config_format::load_codex_config_doc(&profile_config_path(profile.path())).unwrap();
+    assert_eq!(doc["model_providers"][CODEX_LOCAL_ACCESS_RUNTIME_PROVIDER_ID]["wire_api"].as_str(), Some("responses"));
+    codex_account::save_quick_config_for_base_dir_with_default(profile.path(), None, None,
+        Some(false), None, None).unwrap();
+    assert!(profile.path().join(CODEX_MANAGED_MODEL_CATALOG_FILE).is_file());
+    refresh_native_provider_catalog_for_profile(profile.path()).await.unwrap();
+    assert!(codex_account::profile_reasoning_override(profile.path(), "provider-a").unwrap().is_none());
+
+    let scoped = vec![crate::models::codex::CodexExperimentalModelDefinition {
+        model_id: "provider-a".into(), display_name: "Provider A".into(),
+        reasoning_efforts: Some(vec!["none".into(), "minimal".into(), "high".into()]),
+        default_reasoning_effort: Some("high".into()), context_window: None,
+        auto_compact_token_limit: None,
+    }];
+    let config_before = fs::read(profile_config_path(profile.path())).unwrap();
+    codex_account::save_provider_model_quick_config(profile.path(), &account, true, scoped, None).unwrap();
+    assert_eq!(fs::read(profile_config_path(profile.path())).unwrap(), config_before,
+        "provider policy save alone never changes the active instance config");
+    refresh_native_provider_catalog_for_account(profile.path(), Some("different-provider")).await.unwrap();
+    assert_eq!(fs::read(profile_config_path(profile.path())).unwrap(), config_before);
+    refresh_native_provider_catalog_for_account(profile.path(), Some(&account.id)).await.unwrap();
+    let catalog:Value = serde_json::from_slice(&fs::read(profile.path().join(CODEX_MANAGED_MODEL_CATALOG_FILE)).unwrap()).unwrap();
+    let model = catalog["models"].as_array().unwrap().iter().find(|m|m["slug"]=="provider-a").unwrap();
+    assert_eq!(model["supported_reasoning_levels"].as_array().unwrap().iter().map(|level|level["effort"].as_str().unwrap()).collect::<Vec<_>>(), vec!["none", "minimal", "high"]);
+    assert_eq!(provider_gateway_runtime_store().lock().await[&runtime_key].actual_port, port);
+
+    // A stale runtime must never reclaim a profile switched outside its endpoint.
+    fs::write(profile_config_path(profile.path()), "model = \"gpt-6-astra\"\n").unwrap();
+    let switched = fs::read(profile_config_path(profile.path())).unwrap();
+    refresh_native_provider_catalog_for_profile(profile.path()).await.unwrap();
+    assert_eq!(fs::read(profile_config_path(profile.path())).unwrap(), switched);
+    let (_, stopped) = stop_provider_gateway_runtime_checked(&runtime_key, "manual-catalog-test").await;
+    stopped.unwrap();
+}

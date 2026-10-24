@@ -74,7 +74,7 @@ fn reasoning_order_sorts_six_levels_and_preserves_explicit_and_template_defaults
     model.reasoning_efforts = Some(["ultra", "max", "xhigh", "high", "medium", "low"].map(str::to_string).to_vec());
     model.default_reasoning_effort = Some("xhigh".into());
     let normalized = normalize_experimental_model_definitions(vec![model.clone()]).unwrap();
-    assert_eq!(normalized[0].reasoning_efforts.as_ref().unwrap(), CODEX_REASONING_EFFORTS);
+    assert_eq!(normalized[0].reasoning_efforts.as_ref().unwrap(), &["low", "medium", "high", "xhigh", "max", "ultra"]);
     assert_eq!(normalized[0].default_reasoning_effort.as_deref(), Some("xhigh"));
     model.default_reasoning_effort = None;
     assert_eq!(normalize_experimental_model_definitions(vec![model.clone()]).unwrap()[0].default_reasoning_effort, None);
@@ -82,13 +82,13 @@ fn reasoning_order_sorts_six_levels_and_preserves_explicit_and_template_defaults
         (model.model_id.clone(), model.display_name.clone(), model.reasoning_efforts.clone())]);
     assert_eq!(catalog["models"][0]["default_reasoning_level"], "medium");
     assert_eq!(catalog["models"][0]["supported_reasoning_levels"].as_array().unwrap().iter()
-        .map(|level| level["effort"].as_str().unwrap()).collect::<Vec<_>>(), CODEX_REASONING_EFFORTS);
+        .map(|level| level["effort"].as_str().unwrap()).collect::<Vec<_>>(), vec!["low", "medium", "high", "xhigh", "max", "ultra"]);
     model.reasoning_efforts = Some(Vec::new());
-    assert_eq!(normalize_experimental_model_definitions(vec![model]).unwrap()[0].reasoning_efforts, None);
+    assert_eq!(normalize_experimental_model_definitions(vec![model]).unwrap()[0].reasoning_efforts, Some(Vec::new()));
 }
 
 #[test]
-fn reasoning_order_preserves_profile_template_subset_and_its_implicit_default() {
+fn reasoning_order_allows_manual_provider_capabilities_beyond_profile_template() {
     let dir = temp_dir();
     let template = serde_json::json!({ "models": [{ "slug": "provider/custom",
         "default_reasoning_level": "xhigh", "supported_reasoning_levels": [
@@ -97,11 +97,11 @@ fn reasoning_order_preserves_profile_template_subset_and_its_implicit_default() 
     let mut model = definition("provider/custom");
     model.reasoning_efforts = Some(vec!["ultra".into(), "high".into(), "low".into()]);
     let models = normalize_experimental_model_definitions_for_profile(Some(&dir), vec![model.clone()]).unwrap();
-    assert_eq!(models[0].default_reasoning_effort.as_deref(), Some("high"));
+    assert_eq!(models[0].default_reasoning_effort.as_deref(), Some("ultra"));
     let mut rendered = template.clone();
     apply_model_reasoning_config_to_catalog(&mut rendered, &models).unwrap();
-    assert_eq!(rendered["models"][0]["default_reasoning_level"], "high");
-    assert_eq!(rendered["models"][0]["supported_reasoning_levels"], serde_json::json!([{"effort":"low"}, {"effort":"high"}]));
+    assert_eq!(rendered["models"][0]["default_reasoning_level"], "ultra");
+    assert_eq!(rendered["models"][0]["supported_reasoning_levels"], serde_json::json!([{"effort":"low"}, {"effort":"high"}, {"effort":"ultra","description":"ultra"}]));
     let mut existing = snapshot(Vec::new()); existing.profile_dir = Some(dir.clone());
     let (preview, imported) = prepare_model_config_import(&existing, &json(vec![model]), "replace").unwrap();
     assert!(preview.errors.is_empty(), "{:?}", preview.errors);

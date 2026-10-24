@@ -6026,6 +6026,15 @@
       "defaultReasoning": "Default effort",
       "defaultReasoningFollow": "Inherit",
       "defaultReasoningHint": "Leave empty to inherit the model default. The selected effort must be supported.",
+      "reasoningNone": "Off",
+      "reasoningMinimal": "Minimal",
+      "providerPolicyHint": "Configure this provider's model capabilities here. Edit its account model list to add or remove models; instance imports do not apply here.",
+      "providerPolicyDescription": "Use known provider capabilities, with compatibility levels when unavailable. You can configure them manually.",
+      "providerPolicyFollow": "Follow provider",
+      "providerPolicyCustom": "Custom",
+      "providerPolicyConfirm": "Save a separate model policy for this provider. Other accounts are unchanged.",
+      "inheritReasoning": "Follow model",
+      "noReasoning": "No adjustable effort",
       "defaultReasoningInvalid": "The default reasoning effort must be supported by this model."
     },
     "modelConfig": {

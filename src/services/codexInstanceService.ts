@@ -152,10 +152,12 @@ export async function updateInstance(payload: {
 export async function getCodexInstanceQuickConfig(
   instanceId: string,
   apiServicePreview = false,
+  providerAccountId?: string,
 ): Promise<CodexQuickConfig> {
   return await invoke("codex_get_instance_quick_config", {
     instanceId,
     apiServicePreview,
+    providerAccountId: providerAccountId ?? null,
   });
 }
 
@@ -176,9 +178,11 @@ export async function saveCodexInstanceQuickConfig(
   experimentalModelCatalogEnabled?: boolean,
   experimentalModelCatalogModels?: CodexExperimentalModelDefinition[],
   experimentalModelCatalogDefaultModelId?: string | null,
+  providerAccountId?: string,
 ): Promise<CodexQuickConfig> {
   return await invoke("codex_save_instance_quick_config", {
     instanceId,
+    providerAccountId: providerAccountId ?? null,
     modelContextWindow: modelContextWindow ?? null,
     autoCompactTokenLimit: autoCompactTokenLimit ?? null,
     experimentalModelCatalogEnabled: experimentalModelCatalogEnabled ?? null,

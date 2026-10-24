@@ -5806,6 +5806,15 @@
       "defaultReasoning": "預設檔位",
       "defaultReasoningFollow": "沿用預設",
       "defaultReasoningHint": "留空沿用模型預設檔位；所選檔位必須在目前支援範圍內。",
+      "reasoningNone": "關閉推理",
+      "reasoningMinimal": "極低",
+      "providerPolicyHint": "這裡只設定該供應商的模型能力。增刪型號請修改帳號的模型清單；執行個體設定的匯入匯出不適用於此處。",
+      "providerPolicyDescription": "讀取供應商已知能力；未提供時使用相容檔位，可手動設定。",
+      "providerPolicyFollow": "跟隨供應商",
+      "providerPolicyCustom": "已自訂",
+      "providerPolicyConfirm": "為這個供應商儲存獨立的模型能力設定，不影響其他帳號。",
+      "inheritReasoning": "跟隨模型",
+      "noReasoning": "不支援調整推理強度",
       "defaultReasoningInvalid": "預設推理檔位必須屬於目前支援的檔位。"
     },
     "modelConfig": {

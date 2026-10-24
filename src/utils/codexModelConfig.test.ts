@@ -46,5 +46,14 @@ test('reasoning selections sort all six levels without mutating inputs or a vali
   assert.deepEqual(next.reasoning_efforts, ['low', 'medium', 'high', 'xhigh', 'max', 'ultra']);
   assert.equal(next.default_reasoning_effort, 'high');
   assert.deepEqual(reverse, ['ultra', 'max', 'xhigh', 'high', 'medium', 'low']);
-  assert.equal(withSupportedReasoningEfforts(model, []).reasoning_efforts, undefined);
+  assert.deepEqual(withSupportedReasoningEfforts(model, []).reasoning_efforts, []);
+  assert.equal(withSupportedReasoningEfforts(model, []).default_reasoning_effort, undefined);
+});
+
+test('manual provider declarations include none and minimal without confusing empty with inherit', () => {
+  const model: CodexExperimentalModelDefinition = { model_id: 'provider/custom', display_name: 'Custom', default_reasoning_effort: 'none' };
+  assert.deepEqual(withSupportedReasoningEfforts(model, ['high', 'minimal', 'none']).reasoning_efforts, ['none', 'minimal', 'high']);
+  assert.equal(withSupportedReasoningEfforts(model, ['none', 'high']).default_reasoning_effort, 'none');
+  assert.equal(withSupportedReasoningEfforts(model, undefined).reasoning_efforts, undefined);
+  assert.deepEqual(withSupportedReasoningEfforts(model, []).reasoning_efforts, []);
 });

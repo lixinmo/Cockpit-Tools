@@ -43,6 +43,7 @@ test('context and model changes must be detected before saving a draft', () => {
     { detected_model_context_window: 1000000 }, { detected_auto_compact_token_limit: 900000 },
     { experimental_model_catalog_enabled: false },
     { experimental_model_catalog_models: [{ model_id: 'gpt-test', display_name: 'Updated' }] },
+    { experimental_model_catalog_models: [{ model_id: 'gpt-test', display_name: 'Test', default_reasoning_effort: 'high' as const }] },
     { experimental_model_catalog_default_model_id: 'gpt-test' },
   ]) {
     assert.notEqual(codexLaunchPreviewQuickConfigKey(config), codexLaunchPreviewQuickConfigKey({ ...config, ...change }));

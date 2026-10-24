@@ -94,6 +94,20 @@ impl native_contract::Host for IntegrationHost {
             compact,
         )
     }
+    fn prepare_body_for_model<'a>(
+        &'a self,
+        caller: &'a native_contract::Caller,
+        route: &'a native_contract::Route,
+        requested_model: &'a str,
+        headers: &'a axum::http::HeaderMap,
+        body: Value,
+        image: bool,
+        compact: bool,
+    ) -> BoxFuture<'a, Result<Value, native_contract::ServiceError>> {
+        native_contract::Host::prepare_body_for_model(
+            &self.inner, caller, route, requested_model, headers, body, image, compact,
+        )
+    }
     fn models<'a>(
         &'a self,
         caller: &'a native_contract::Caller,
@@ -420,3 +434,6 @@ async fn automatic_fallback_does_not_preempt_legacy_shell_or_unknown_extensions_
     assert!(host.reports.lock().unwrap().iter().all(|report|
         report.diagnostics.as_ref().is_none_or(|diagnostics| diagnostics.attempts.iter().all(|attempt| attempt.capability_fallback.is_none()))));
 }
+
+#[path = "native_provider_reasoning_http_tests.rs"]
+mod provider_reasoning_http_tests;

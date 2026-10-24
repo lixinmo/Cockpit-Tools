@@ -970,6 +970,11 @@ async fn native_models(
             &raw_accounts
         },
     );
+    if let Some(profile) = host.profile_dir.as_deref() {
+        native_decorate_provider_models(profile, &collection, key, &accounts, &mut catalog)
+            .map_err(|_| native_error(400, "provider_reasoning_override_invalid",
+                "The profile model configuration is invalid"))?;
+    }
     Ok(catalog)
 }
 
