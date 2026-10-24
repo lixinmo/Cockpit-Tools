@@ -419,3 +419,69 @@ helpers, including 181,192,304 bytes from the old App. No project build caches o
 temporary acceptance profiles remained. Monitoring scripts ran from standard
 input and left no files. The current App, source/Git history, shared toolchains
 and runtime data were retained. No local compilation or private-data upload occurred.
+
+## Remove the remaining StepFun context table
+
+At the user's request, `ffe80445d8a6ee51032ba24e4d961e8fd845e473` removes the
+remaining StepFun hostname/model context baseline and its wrapper. Both callers
+now invoke the pre-existing account model template directly. No StepFun-specific
+context or effort defaults remain in the Native catalog producer. No equivalent
+values were copied into private settings. Manual adjustments belong in Model
+Management; actual upstream metadata and existing explicit account/profile
+settings continue to take priority over the generic 128K/115200 client fallback.
+The fallback is marked unknown and omitted from public upstream-context claims.
+
+The old public catalog also inferred a tools claim from a template's existence.
+The removed context-only template no longer supplies that implicit claim;
+StepFun now behaves like other unknown Chat providers there. Actual function
+and client-discovery adapters, permissions and request forwarding are unchanged,
+and the real tool loops below passed after removal. Existing dedicated
+DeepSeek/GPT/Grok rules, Credits, Auto Reset and retry contracts were not changed.
+
+[Cloud Build 40118990052](https://github.com/lixinmo/Cockpit-Tools/actions/runs/40118990052)
+passed on the standard Intel runner in approximately 51 minutes. Native
+regressions: 275 passed, zero failed, one ignored; Native retry: 18; Credits: 31;
+Auto Reset: 71; Go CT-CONNECT-RETRY-001 and frontend checks passed. Cross-host
+fixtures cover all three formerly special-cased Step models and an unknown
+model. They verify unknown fallback metadata, explicit 32K account settings,
+192K discovered metadata, and Model Management's 384K/320K manual override,
+including public catalog consistency. These manual-context checks ran in Actions;
+the local acceptance below used the unchanged saved account, not a new private
+context override.
+
+The App/probe archives, provenance commit, x86_64 architecture and signatures
+were verified before local acceptance with the production profile writer:
+
+| Client | Context/catalog checks | Real tool/history checks |
+| --- | --- | --- |
+| CLI 0.162.1 | Both models 128K/115200 and unknown; public context fields absent; Step 5 generic six and temporary Step 3.7 low menu | Three same-session turns; 13 successful Native tool requests, seven successful shell commands, three successful file edits, ten paired calls/results |
+| Desktop backend 0.164.0-alpha.11.1 | Both models generic context and six effort choices, without manual overrides; public context fields absent | Three same-session turns; 13 successful Native tool requests, six successful shell commands, three successful file edits, ten paired calls/results |
+
+Both runs covered fresh Step 5, Step 5 resumed with a synthetic legacy empty
+encrypted reasoning item, then Step 3.7 in the same session. All requests returned
+200 and all file/final nonces matched. The standalone run also confirmed three
+real forwarding controls: Step 5 high stays high, manual-low Step 3.7 high stays
+high, and absent effort stays absent. Six original account/config hashes were
+unchanged per run. Temporary profiles and histories were removed. The desktop
+backend was exercised as its shipped CLI, not through automated GUI clicks.
+
+The verified App was installed and restarted. Its exact new process and binary
+hash passed Ready/version and two Pong checks five seconds apart. Native and
+prefer_regular remained active, and the obsolete codex MCP entry stayed absent.
+The active user profile was not a Native provider, so it was not switched;
+selecting StepFun regenerates its managed catalog, and existing Codex processes
+must reload it.
+
+SHA-256:
+
+- App archive: `f3bf0d30449e79699c9d3b333910d51e3cbf3af0e819501830e22513b4c899c0`.
+- Main executable: `930f3860a40ed276e67f216af329a9c6994e965476e22f30a88aa500a3fde6b9`.
+- Matching Go sidecar: `157c24ae34de049e976a9bbb42e963cfffae3b4603b412d6ddbd1bd511a0ec1e`.
+- Native probe: `1f362a367a3dd6703bde6c3b9cab58a45aa803bc0bc2486dbb1cdd3af4b088a3`.
+- Acceptance harness: `7e358563c0e6018a2c6c3d7c1edd48703d9a6d7923af4df2b6f7eb14bdff0ca4`.
+
+Cleanup removed 468,901,848 bytes of downloads, probe, replaced App and helper,
+including 181,185,616 bytes of old App files. No project build caches or temporary
+acceptance profiles remained. The monitor ran from standard input without
+leaving files. Source/Git history, shared toolchains, runtime data and the current
+App were retained. No local compilation or private-data upload occurred.
