@@ -3,6 +3,8 @@
 //! The cache is scoped to the exact endpoint and credential. It contains only
 //! allowlisted model facts, never credentials, response bodies or conversation
 //! data. Model facts do not grant access to additional accounts or models.
+//! Declared effort levels describe model choices; they are neither a complete
+//! list of compatible input aliases nor a rule for rewriting request values.
 use crate::models::codex::CodexAccount;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -38,6 +40,7 @@ struct LoadedCache {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProviderModelMetadata {
     /// None means unknown. Some([]) explicitly declares no adjustable effort.
+    /// This menu metadata must not be used to infer a provider's input mapping.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_efforts: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -190,13 +193,15 @@ pub fn parse_metadata(item: &Value) -> Option<ProviderModelMetadata> {
             "/modelInfo/reasoningEfforts",
             "/reasoning/supported_efforts",
             "/reasoning/efforts",
+            "/effort/supported_levels",
             "/thinking/levels",
             "/model_info/thinking/levels",
             "/capabilities/reasoning/supported_efforts",
         ],
     );
-    // A boolean false is an explicit refusal. A true flag or the presence of
-    // `reasoning_effort` in supported_parameters does not identify its enum.
+    // False explicitly declares no adjustable levels. It does not establish
+    // whether the endpoint rejects, ignores or otherwise handles an input value.
+    // A true flag or a supported-parameters entry does not identify the enum.
     for value in fields(
         item,
         &[
@@ -240,6 +245,7 @@ pub fn parse_metadata(item: &Value) -> Option<ProviderModelMetadata> {
                 "/modelInfo/defaultReasoningLevel",
                 "/modelInfo/defaultReasoningEffort",
                 "/reasoning/default_effort",
+                "/effort/default_level",
             ],
         ),
         normalized_effort,

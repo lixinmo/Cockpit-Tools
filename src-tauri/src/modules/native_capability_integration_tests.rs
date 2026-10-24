@@ -94,20 +94,6 @@ impl native_contract::Host for IntegrationHost {
             compact,
         )
     }
-    fn prepare_body_for_model<'a>(
-        &'a self,
-        caller: &'a native_contract::Caller,
-        route: &'a native_contract::Route,
-        requested_model: &'a str,
-        headers: &'a axum::http::HeaderMap,
-        body: Value,
-        image: bool,
-        compact: bool,
-    ) -> BoxFuture<'a, Result<Value, native_contract::ServiceError>> {
-        native_contract::Host::prepare_body_for_model(
-            &self.inner, caller, route, requested_model, headers, body, image, compact,
-        )
-    }
     fn models<'a>(
         &'a self,
         caller: &'a native_contract::Caller,

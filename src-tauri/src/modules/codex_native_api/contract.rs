@@ -377,20 +377,6 @@ pub trait Host: Send + Sync + 'static {
     ) -> BoxFuture<'a, Result<Value, ServiceError>> {
         Box::pin(async move { Ok(body) })
     }
-    /// Preserve the authorized client model identity for profile policy lookup
-    /// after routing has replaced body.model with the upstream model.
-    fn prepare_body_for_model<'a>(
-        &'a self,
-        caller: &'a Caller,
-        route: &'a Route,
-        _requested_model: &'a str,
-        headers: &'a HeaderMap,
-        body: Value,
-        dedicated_image: bool,
-        compact: bool,
-    ) -> BoxFuture<'a, Result<Value, ServiceError>> {
-        self.prepare_body(caller, route, headers, body, dedicated_image, compact)
-    }
     fn payload_logging_enabled(&self) -> BoxFuture<'_, bool> {
         Box::pin(async { false })
     }

@@ -1,4 +1,13 @@
 // One resolved metadata source for /models and managed on-disk catalogs.
+fn native_provider_effort_levels(template: &Value) -> Option<Vec<String>> {
+    if template["cockpit_reasoning_known"] == false { return None; }
+    template.get("supported_reasoning_levels")?.as_array().map(|levels| {
+        levels.iter().filter_map(|level|
+            level.as_str().or_else(|| level["effort"].as_str())
+        ).map(str::to_owned).collect()
+    })
+}
+
 pub(crate) fn provider_model_reasoning_levels(account: &CodexAccount, model: &str) -> Vec<String> {
     native_declared_provider_model_metadata(account, model)
         .as_ref().and_then(native_provider_effort_levels)

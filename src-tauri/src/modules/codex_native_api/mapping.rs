@@ -624,10 +624,9 @@ async fn finalize(
     apply_grok_thinking(&selected, &source_body, &mut body, false)?;
     body = super::execution::within(
         state,
-        state.host.prepare_body_for_model(
+        state.host.prepare_body(
             caller,
             &selected,
-            &request.model,
             incoming,
             body,
             image_route_request.is_some(),
@@ -964,10 +963,9 @@ async fn rewrite_body_inner(
     )?;
     body = super::execution::within(
         state,
-        state.host.prepare_body_for_model(
+        state.host.prepare_body(
             &prepared.caller,
             &prepared.route,
-            &prepared.request.model,
             prepared.replay_headers(),
             body,
             prepared.image_route_request.is_some(),

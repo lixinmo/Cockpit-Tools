@@ -30,8 +30,8 @@ Options:
   --max-requests N             Total driver route/send budget, 12..32 (default: 32)
   --expect-legacy-rejection    Negative control: require old probe to reject the
                                first resume with chat_parameter_not_representable
-  --check-effort-mapping       Configure temporary Step 3.7 low-only policy and
-                               verify real ultra requests map to Step 5 high / 3.7 low
+  --check-effort-passthrough   Configure temporary Step 3.7 low-only menu/default;
+                               verify explicit high stays high and absent effort stays absent
   --self-test                 Synthetic helper checks only; no account/network
   --help                      Show this help; no account/network
 
@@ -47,7 +47,7 @@ function options(args) {
   for (let i = 0; i < args.length; i += 1) {
     const name = args[i];
     if (name === '--expect-legacy-rejection') result.negative = true;
-    else if (name === '--check-effort-mapping') result.efforts = true;
+    else if (name === '--check-effort-passthrough') result.efforts = true;
     else if (names[name]) {
       requireThat(i + 1 < args.length && !args[i + 1].startsWith('--'), 'missing_argument');
       result[names[name]] = args[++i];
@@ -271,8 +271,9 @@ async function runTurn(context, model, resume, expectedRejection = false) {
   requireThat(gateway.success && gateway.functionHistorySeen && gateway.customHistorySeen, 'native_tool_replay_not_verified');
   if (resume) requireThat(gateway.reasoningSeen, 'reasoning_history_not_observed');
   if (context.opts.efforts && model === MODELS[1]) {
-    const mapped = records(context.reports).slice(beforeReports).filter((row) => row.stage === 'reasoning');
-    requireThat(mapped.length > 0 && mapped.every((row) => row.effective === 'low'), 'manual_effort_not_used');
+    const efforts = records(context.reports).slice(beforeReports).filter((row) => row.stage === 'reasoning');
+    requireThat(efforts.length > 0 && efforts.every((row) => row.effective === row.requested), 'caller_effort_not_preserved');
+    print({stage: 'client_effort', model, requested: [...new Set(efforts.map((row) => row.requested))], preserved: true});
   }
   print({ stage: resume ? 'resume' : 'fresh', model, sameSession: !resume || sessionId === context.sessionId, savedModelConfirmed: true, ...counters, history: evidence, native: gateway, fileNonceMatches: true, finalNonceMatches: true, passed: true });
   context.turn += 1;
@@ -313,6 +314,14 @@ async function main(opts) {
     context.home = path.join(output, 'codex-home');
     context.config = path.join(context.home, 'config.toml');
     context.reports = path.join(output, 'reports.jsonl');
+    if (opts.efforts) {
+      requireThat(typeof ready.model_catalog === 'string' && path.basename(ready.model_catalog) === ready.model_catalog, 'model_catalog_reference_invalid');
+      const catalog = JSON.parse(fs.readFileSync(path.join(context.home, ready.model_catalog), 'utf8'));
+      const model = catalog.models?.find((item) => item.slug === MODELS[1]);
+      requireThat(model?.default_reasoning_level === 'low'
+        && JSON.stringify(model.supported_reasoning_levels?.map((item) => item.effort)) === '["low"]', 'manual_menu_not_published');
+      print({stage: 'manual_menu', model: MODELS[1], choices: ['low'], default: 'low', temporary: true, passed: true});
+    }
     context.cliEnv = { ...minimalEnvironment(), HOME: isolatedHome, CODEX_HOME: context.home, NO_COLOR: '1' };
     const initial = records(context.reports).find((row) => row.stage === 'ready');
     requireThat(initial?.sidecar_blocked === true && initial.account_snapshot === 'read_only' && initial.saved_policy === 'prefer_regular', 'credits_or_snapshot_contract_missing');
@@ -327,19 +336,23 @@ async function main(opts) {
     await runTurn(context, MODELS[0], true, opts.negative);
     if (!opts.negative) await runTurn(context, MODELS[1], true);
     if (opts.efforts) {
-      for (const model of MODELS) {
+      for (const control of [
+        {model: MODELS[0], requested: 'high', expected: 'high'},
+        {model: MODELS[1], requested: 'high', expected: 'high'},
+        {model: MODELS[1], requested: null, expected: 'absent'},
+      ]) {
+        const {model, requested, expected} = control;
         const offset = records(context.reports).length;
-        const expected = model === MODELS[1] ? 'low' : 'high';
         const response = await fetch(`http://127.0.0.1:${ready.port}/v1/responses`, {
           method: 'POST', headers: {Authorization: `Bearer ${localKey}`, 'content-type': 'application/json'},
-          body: JSON.stringify({model, stream: false, store: false, reasoning: {effort: 'ultra'}, input: 'This is a synthetic compatibility check. Reply only OK.'}),
+          body: JSON.stringify({model, stream: false, store: false, ...(requested === null ? {} : {reasoning: {effort: requested}}), input: 'This is a synthetic compatibility check. Reply only OK.'}),
           signal: AbortSignal.timeout(opts.timeout * 1000),
         });
         const result = await response.json();
-        requireThat(response.status === 200 && result.status === 'completed', 'mapped_effort_upstream_failed');
-        const mapped = records(context.reports).slice(offset).filter((row) => row.stage === 'reasoning');
-        requireThat(mapped.length > 0 && mapped.every((row) => row.requested === 'ultra' && row.effective === expected), 'mapped_effort_evidence_failed');
-        print({stage: 'effort_mapping', model, requested: 'ultra', effective: expected, status: response.status, manualPolicy: model === MODELS[1], passed: true});
+        requireThat(response.status === 200 && result.status === 'completed', 'effort_upstream_failed');
+        const efforts = records(context.reports).slice(offset).filter((row) => row.stage === 'reasoning');
+        requireThat(efforts.length > 0 && efforts.every((row) => row.requested === (requested ?? 'absent') && row.effective === expected), 'effort_preservation_evidence_failed');
+        print({stage: 'effort_contract', model, requested: requested ?? 'absent', effective: expected, status: response.status, manualMenu: model === MODELS[1], passed: true});
       }
     }
     const stopped = await stopProcess(driver, true);

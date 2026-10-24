@@ -6,7 +6,7 @@ Ordinary API-key providers no longer depend on a GPT display alias to populate
 reasoning choices. Model inventory, account/key scope, native protocol/tool
 capabilities and Credits admission remain separate from these parameter facts.
 
-The effective order is:
+The order for client menu choices and defaults is:
 
 1. Explicit provider policy for this profile, account, endpoint and credential.
 2. Explicit instance model policy (where configured).
@@ -41,32 +41,50 @@ writes and no credentials, complete responses, conversations or logs. Cross-orig
 redirects are not followed. All returned IDs still pass existing account/key
 visibility checks before appearing in a gateway catalog.
 
-## Request mapping
+## Effort forwarding: provider semantics take precedence
 
-The gateway resolves and authorizes the real account/model before adjusting an
-effort. It keeps the authorized client model name separately, so aliases and
-namespaces use the same policy in the menu and in the outgoing request.
+The generic API-key path preserves an effort already supplied by the caller.
+The Responses-to-Chat adapter changes `reasoning.effort` to `reasoning_effort`,
+but does not change its value. A native/displayed level list is not an accepted
+input-alias list and does not define a server mapping. Consequently there is no
+generic nearest-level, upper-bound or xhigh/max rewrite, no range-based rejection,
+and no deletion based only on an empty metadata list. Explicit none, auto and
+null remain explicit inputs. The upstream decides whether a value is accepted,
+mapped, ignored or rejected; an error is not retried with a guessed replacement.
 
-For a known range, exact values are preserved. xhigh and max reuse CLIProxyAPI's
-generic cross-provider preference for each other; otherwise the nearest
-supported intensity is selected, with the lower value winning a tie. The order
-includes minimal and ultra. Values above the highest supported intensity end at
-that highest intensity. Examples:
+An absent effort remains absent. Saved defaults are published to the client
+catalog for the client to select; the gateway does not inject a parameter when
+the caller omitted it. A low-only menu is therefore not a rule that rewrites
+explicit high or ultra to low. Model permissions, Credits, tools, history and continuation
+protections remain independent and unchanged. Existing specialized protocol
+adapters retain their own verified handling rather than receiving another
+generic preprocessing layer.
 
-| Actual range | Requested value | Sent value |
-| --- | --- | --- |
-| low / medium / high | xhigh, max or ultra | high |
-| low / high | medium | low |
-| low / high / max | xhigh | max |
-| low / high / ultra | max | ultra |
-| Unknown | ultra | ultra, without claiming a known maximum |
+### Why the earlier generic mapping was withdrawn
 
-none and auto are separate controls and are never converted into increased
-reasoning. A real auto capability is preserved on the wire, although auto is
-not a Codex menu enum. When no adjustable effort is explicitly supported,
-nonempty intensity requests fail before generation; a no-effort/automatic
-request omits the unsupported parameter. Tools, messages, encrypted history,
-model identity, continuation and authorization are not rewritten by this mapper.
+The 8a349790 implementation inferred request conversion from native ranges.
+Although its tests verified that those conversions occurred, vendor documents
+show that the inference is not valid generally. For the same low/high/max range,
+DeepSeek explicitly maps medium and xhigh to high, whereas the former generic
+rules produced low and max respectively. The corrective implementation removes
+that inference instead of adding another guessed vendor table.
+
+Official evidence checked on 2026-10-24:
+
+| Service / scope | Documented behavior |
+| --- | --- |
+| [DeepSeek thinking](https://api-docs.deepseek.com/guides/thinking_mode/) | minimal/low → low; medium/high/xhigh → high; max/ultra → max. Chat uses reasoning_effort, Messages uses output_config.effort, Responses uses reasoning.effort. |
+| [Step 5 via Claude Code / Messages](https://platform.stepfun.com/docs/zh/guides/developer/integrations/claude-code) | Step's server maps xhigh/max to high. Its general API references list low/medium/high; the cited page does not establish an ultra rule for Chat or Responses. |
+| [GLM thinking](https://docs.bigmodel.cn/cn/guide/capabilities/thinking) | GLM-5.3 standard API accepts low/high/max and rejects other values. Coding Plan provides additional compatibility aliases, including medium → high. Endpoint/channel matters. |
+| [Qwen via Chat](https://help.aliyun.com/zh/model-studio/qwen-api-via-openai-chat-completions) | Listed Qwen3.8 models use low/medium/xhigh; minimal → low and high/max → xhigh. The page defines numeric budgets as well; these cannot be inferred by list position. |
+| [MiniMax Responses](https://platform.minimax.io/docs/api-reference/responses-create) | M3.1-Flash supports five documented effort levels; on M3 a non-none effort only enables thinking, while M2.x accepts but ignores none. A field's meaning depends on the model. |
+| [Kimi effort](https://platform.kimi.ai/docs/guide/use-reasoning-effort) | K3/K3.1 Pro document low/high/max. No universal server alias table for medium/xhigh/ultra was established by these pages. |
+
+DeepSeek's [model-list schema](https://api-docs.deepseek.com/api/list-models/)
+uses `effort.supported_levels` and `effort.default_level`; discovery reads those
+facts without deriving alias conversions. Provider-specific rules must be tied
+to endpoint/protocol/model version; accepting a field or returning HTTP 200
+alone does not prove which computation setting was used.
 
 ### Historical Go path: library rules versus the actual provider gateway
 
@@ -85,11 +103,9 @@ the vendor accepted, ignored or normalized it cannot be established from a 200
 response alone. The positional allocation elsewhere in old Cockpit assigned
 **model-name aliases**, not effort levels.
 
-The new Native mapper therefore adds capability-aware behavior to this direct
-provider path, borrowing selected library rules rather than reproducing that
-old StepFun path exactly. It also includes ultra in its intensity order, whereas
-the older generic Go nearest-level order ended at max. Unknown ranges continue
-to use passthrough. Earlier descriptions implying that the old StepFun gateway
+The first Native patch borrowed selected library rules rather than reproducing
+that old StepFun path. That generic conversion has now been removed from the
+corrective source. Earlier descriptions implying that the old StepFun gateway
 itself already ran the library's clamping algorithm were inaccurate.
 
 ## Manual settings
@@ -110,8 +126,9 @@ Removed-model rules remain dormant. Existing instance/API-service import/export
 retains its original scope; the new provider-specific editor does not invoke
 those global mutations.
 
-Menu metadata, on-disk catalog, HTTP catalog and request mapping share these
-sources and precedence. Mixed eligible accounts expose common effort choices,
+Menu metadata, on-disk catalog and HTTP catalog share these sources and
+precedence. Their choices are not a request conversion table. Mixed eligible
+accounts expose common effort choices,
 with defaults in that intersection and conservative context limits.
 
 ## Verification
@@ -124,15 +141,18 @@ isolation, policy disabling, inventory removal and mixed-account intersection.
 Existing empty-Go-history, tool discovery, Credits, Auto Reset and connection
 retry suites remain in the cloud gate.
 
-`scripts/verify-native-provider-history.cjs --check-effort-mapping` uses the
+`scripts/verify-native-provider-history.cjs --check-effort-passthrough` uses the
 cloud-built bounded driver and a read-only saved StepFun account. It exercises
-fresh and resumed real Codex tool loops, a temporary low-only Step 3.7 policy,
-and verifies that explicit ultra requests reach the provider as Step 5 high or
-manually configured Step 3.7 low. Personal profiles and conversations never enter
+fresh and resumed real Codex tool loops and a temporary low-only Step 3.7 menu.
+Explicit high must remain high, including for that low-only menu, and an absent
+effort must remain absent. The saved low menu/default is checked independently.
+Synthetic servers separately verify their
+own alias mapping and strict rejection without a guessed gateway rewrite.
+Personal profiles and conversations never enter
 Actions. Build, actual acceptance, installation and cleanup results must be
 recorded after completion; no pending check is a successful validation.
 
-## Completed validation and installation — 2026-10-24
+## Earlier validation and installation — 2026-10-24 (conversion superseded)
 
 Production App and probe commit: `8a34979007b29beff1286386710a015ef0c136b0`.
 Full Intel Mac Cloud Build:

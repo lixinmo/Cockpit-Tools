@@ -430,24 +430,12 @@ impl Host for ProviderHost {
         image: bool,
         compact: bool,
     ) -> BoxFuture<'a, Result<Value, ServiceError>> {
-        self.prepare_body_for_model(caller, route, &route.model, headers, body, image, compact)
-    }
-    fn prepare_body_for_model<'a>(
-        &'a self,
-        caller: &'a Caller,
-        route: &'a Route,
-        requested_model: &'a str,
-        headers: &'a axum::http::HeaderMap,
-        body: Value,
-        image: bool,
-        compact: bool,
-    ) -> BoxFuture<'a, Result<Value, ServiceError>> {
         Box::pin(async move {
             self.check_route(route, &route.model)?;
             self.evidence(json!({"stage":"prepare","tools":shapes(body.get("tools")),"history":shapes(body.get("input"))}));
             let requested_effort = effort_shape(&body);
             let result = self.inner
-                .prepare_body_for_model(caller, route, requested_model, headers, body, image, compact)
+                .prepare_body(caller, route, headers, body, image, compact)
                 .await
                 .map_err(safe_error)?;
             self.evidence(json!({"stage":"reasoning","requested":requested_effort,"effective":effort_shape(&result)}));
@@ -867,7 +855,8 @@ async fn native_provider_process_driver() -> Result<(), &'static str> {
     write!(
         ready,
         "{}",
-        json!({"port":port,"client_profile":"codex-home","production_client_projection":true})
+        json!({"port":port,"client_profile":"codex-home","production_client_projection":true,
+            "model_catalog":CODEX_MANAGED_MODEL_CATALOG_FILE})
     )
     .and_then(|_| ready.flush())
     .map_err(|_| "Cannot publish provider acceptance port")?;

@@ -34,17 +34,39 @@ fn source(model: &str, effort: Option<&str>, delivery: Delivery, turn: usize) ->
     body
 }
 
+// The fixture intentionally advertises only native levels, while accepting
+// additional client aliases. This is the documented DeepSeek-style server map,
+// not a transformation the gateway is allowed to derive from the level list.
+fn supplier_effort(body: &Value) -> &str {
+    if body["model"] == "no-reasoning" { return "ignored"; }
+    let effort = body["reasoning_effort"].as_str().unwrap_or("high");
+    if body["model"] == "fixture-model" {
+        match effort {
+            "minimal" | "low" => "low",
+            "medium" | "high" | "xhigh" => "high",
+            "max" | "ultra" => "max",
+            other => other,
+        }
+    } else { effort }
+}
+
 fn chat_reply(body: &Value, number: usize) -> Response {
+    if body["model"] == "strict-model" && body["reasoning_effort"] == "medium" {
+        return (axum::http::StatusCode::BAD_REQUEST,
+            Json(json!({"error":{"type":"invalid_request_error","code":"request_params_invalid",
+                "message":"This synthetic endpoint rejects medium"}}))).into_response();
+    }
+    let text = format!("effective:{}", supplier_effort(body));
     if body["stream"] == true {
         let chunk = json!({"id":format!("chat_effort_{number}"),"object":"chat.completion.chunk","model":body["model"],
-            "choices":[{"index":0,"delta":{"role":"assistant","content":"Fixture checked."},"finish_reason":"stop"}]});
+            "choices":[{"index":0,"delta":{"role":"assistant","content":text},"finish_reason":"stop"}]});
         Response::builder()
             .header("content-type", "text/event-stream")
             .body(Body::from(format!("data: {chunk}\n\ndata: [DONE]\n\n")))
             .unwrap()
     } else {
         Json(json!({"id":format!("chat_effort_{number}"),"object":"chat.completion","model":body["model"],
-            "choices":[{"index":0,"message":{"role":"assistant","content":"Fixture checked."},"finish_reason":"stop"}]})).into_response()
+            "choices":[{"index":0,"message":{"role":"assistant","content":text},"finish_reason":"stop"}]})).into_response()
     }
 }
 
@@ -188,6 +210,20 @@ async fn assert_wire(
     let expected_wire = native_api::responses_to_chat_for_test(&canonical).unwrap();
     assert_eq!(actual["model"], canonical["model"]);
     assert_eq!(actual["reasoning_effort"].as_str(), expected);
+    if requested.is_none() {
+        assert!(actual.get("reasoning_effort").is_none(), "an absent effort must remain absent even with a configured client default");
+    }
+    let response = if matches!(delivery, Delivery::Json) { &result } else { &result["response"] };
+    assert_eq!(response["output"][0]["content"][0]["text"], format!("effective:{}", supplier_effort(actual)),
+        "The supplier must receive the original alias and perform its own documented interpretation");
+    if matches!(model, "team/fixture-model" | "team/friendly") {
+        match requested {
+            Some("medium" | "xhigh") => assert_eq!(response["output"][0]["content"][0]["text"], "effective:high"),
+            Some("ultra") => assert_eq!(response["output"][0]["content"][0]["text"], "effective:max"),
+            None => assert_eq!(response["output"][0]["content"][0]["text"], "effective:high", "an absent request uses the supplier default, not the client menu default"),
+            _ => {},
+        }
+    }
     assert_eq!(
         actual["tools"], expected_wire["tools"],
         "effort selection cannot alter tools"
@@ -218,7 +254,8 @@ async fn run_reasoning(delivery: Delivery) {
             async move {
                 discoveries.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                 Json(json!({"data":[
-                    {"id":"fixture-model","supported_reasoning_efforts":["low","medium","high"],"default_reasoning_effort":"medium"},
+                    {"id":"fixture-model","effort":{"supported_levels":["low","high","max"],"default_level":"high"}},
+                    {"id":"strict-model","supported_reasoning_efforts":["low","high","max"],"default_reasoning_effort":"high"},
                     {"id":"unknown-model","supported_parameters":["reasoning_effort"]},
                     {"id":"no-reasoning","supported_reasoning_efforts":[]},
                     {"id":"auto-model","supported_reasoning_efforts":["auto"],"default_reasoning_effort":"auto"}
@@ -252,6 +289,7 @@ async fn run_reasoning(delivery: Delivery) {
         "unknown-model",
         "no-reasoning",
         "auto-model",
+        "strict-model",
     ]
     .iter()
     .map(|model| (*model).into())
@@ -272,6 +310,7 @@ async fn run_reasoning(delivery: Delivery) {
         "unknown-model",
         "no-reasoning",
         "auto-model",
+        "strict-model",
     ]
     .iter()
     .map(|model| (*model).into())
@@ -295,9 +334,9 @@ async fn run_reasoning(delivery: Delivery) {
     assert_levels(
         &first_catalog,
         "team/fixture-model",
-        &["low", "medium", "high"],
+        &["low", "high", "max"],
     );
-    assert_levels(&first_catalog, "team/friendly", &["low", "medium", "high"]);
+    assert_levels(&first_catalog, "team/friendly", &["low", "high", "max"]);
     assert_levels(
         &first_catalog,
         "team/unknown-model",
@@ -305,13 +344,13 @@ async fn run_reasoning(delivery: Delivery) {
     );
     assert_levels(&first_catalog, "team/no-reasoning", &[]);
     assert_levels(&first_catalog, "team/auto-model", &[]);
-    for requested in ["high", "ultra"] {
+    for requested in ["minimal", "low", "medium", "high", "xhigh", "max", "ultra", "none", "auto"] {
         assert_wire(
             &gateway,
             &seen,
             "team/fixture-model",
             Some(requested),
-            Some("high"),
+            Some(requested),
             delivery,
         )
         .await;
@@ -335,28 +374,20 @@ async fn run_reasoning(delivery: Delivery) {
     )
     .await;
 
+    for requested in ["high", "none", "auto"] {
+        assert_wire(&gateway, &seen, "team/no-reasoning", Some(requested), Some(requested), delivery).await;
+    }
+    // A different endpoint can publish the same native range but reject medium.
+    // Forward its error rather than converting medium to an apparently valid low.
     let before = seen.lock().unwrap().len();
-    let (success, failure) = exchange(
-        &gateway,
-        source("team/no-reasoning", Some("high"), delivery, before),
-        delivery,
-    )
-    .await;
+    let (success, failure) = exchange(&gateway,
+        source("team/strict-model", Some("medium"), delivery, before), delivery).await;
     assert!(!success, "{failure}");
-    assert_eq!(
-        seen.lock().unwrap().len(),
-        before,
-        "explicit unsupported effort never reaches upstream"
-    );
-    assert_wire(
-        &gateway,
-        &seen,
-        "team/no-reasoning",
-        Some("none"),
-        None,
-        delivery,
-    )
-    .await;
+    {
+        let calls = seen.lock().unwrap();
+        assert_eq!(calls.len(), before + 1, "one unmodified request, no guessed retry");
+        assert_eq!(calls.last().unwrap()["reasoning_effort"], "medium");
+    }
     let before = seen.lock().unwrap().len();
     assert!(
         !exchange(
@@ -373,8 +404,8 @@ async fn run_reasoning(delivery: Delivery) {
         "metadata cannot expand API-key namespace"
     );
 
-    // Profile policies can be keyed by the authorized exposed model name. The
-    // routing rewrite must not lose this identity before prepare_body_for_model.
+    // Profile menu/default policy can use the authorized exposed model name.
+    // It must not rewrite an explicitly supplied alias such as medium.
     fs::write(
         profile
             .path()
@@ -388,14 +419,14 @@ async fn run_reasoning(delivery: Delivery) {
     assert_levels(
         &alias_catalog,
         "team/fixture-model",
-        &["low", "medium", "high"],
+        &["low", "high", "max"],
     );
     assert_wire(
         &gateway,
         &seen,
         "team/friendly",
         Some("medium"),
-        Some("low"),
+        Some("medium"),
         delivery,
     )
     .await;
@@ -406,10 +437,10 @@ async fn run_reasoning(delivery: Delivery) {
     )
     .unwrap();
 
-    // Real provider-specific editor persistence overrides discovered facts and
-    // can fill a previously unknown model, without editing the subscription list.
+    // Provider-specific editor persistence configures client menus/defaults.
+    // Explicit request values still belong to the caller and supplier.
     let definitions = vec![
-        manual_definition("fixture-model", &["low", "high"], Some("high")),
+        manual_definition("fixture-model", &["low"], Some("low")),
         manual_definition("unknown-model", &["low", "high"], Some("high")),
     ];
     codex_account::save_provider_model_quick_config(
@@ -421,14 +452,14 @@ async fn run_reasoning(delivery: Delivery) {
     )
     .unwrap();
     let manual_catalog = catalog(&gateway).await;
-    assert_levels(&manual_catalog, "team/fixture-model", &["low", "high"]);
+    assert_levels(&manual_catalog, "team/fixture-model", &["low"]);
     assert_levels(&manual_catalog, "team/unknown-model", &["low", "high"]);
     assert_wire(
         &gateway,
         &seen,
         "team/fixture-model",
         Some("medium"),
-        Some("low"),
+        Some("medium"),
         delivery,
     )
     .await;
@@ -437,16 +468,42 @@ async fn run_reasoning(delivery: Delivery) {
         &seen,
         "team/fixture-model",
         None,
-        Some("high"),
+        None,
         delivery,
     )
     .await;
     assert_wire(
         &gateway,
         &seen,
+        "team/fixture-model",
+        Some("ultra"),
+        Some("ultra"),
+        delivery,
+    )
+    .await;
+    // Explicit null, provider-specific strings and the legacy top-level
+    // spelling survive unchanged; client defaults never rewrite these values.
+    for value in [Value::Null, json!(" HIGH "), json!("provider-specific"), json!(""), json!("xhigh")] {
+        for nested in [true, false] {
+            let before = seen.lock().unwrap().len();
+            let mut body = source("team/fixture-model", None, delivery, before);
+            if nested { body["reasoning"] = json!({"effort":value}); }
+            else { body["reasoning_effort"] = value.clone(); }
+            let original = body.clone();
+            let (success, response) = exchange(&gateway, body.clone(), delivery).await;
+            assert!(success, "{response}");
+            let captures = seen.lock().unwrap();
+            assert_eq!(captures.len(), before + 1);
+            assert_eq!(captures.last().unwrap().get("reasoning_effort"), Some(&value));
+            assert_eq!(body, original);
+        }
+    }
+    assert_wire(
+        &gateway,
+        &seen,
         "team/unknown-model",
         Some("ultra"),
-        Some("high"),
+        Some("ultra"),
         delivery,
     )
     .await;
@@ -489,7 +546,7 @@ async fn run_reasoning(delivery: Delivery) {
 }
 
 #[tokio::test]
-async fn native_provider_reasoning_http_sse_websocket_use_discovered_manual_and_unknown_capabilities(
+async fn native_provider_reasoning_http_sse_websocket_preserve_supplier_effort_semantics(
 ) {
     for delivery in [Delivery::Json, Delivery::Sse, Delivery::WebSocket] {
         run_reasoning(delivery).await;

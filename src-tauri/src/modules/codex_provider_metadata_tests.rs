@@ -114,6 +114,66 @@ fn provider_metadata_accepts_explicit_catalog_and_camel_case_variants() {
 }
 
 #[test]
+fn provider_metadata_reads_nested_effort_choices_without_inventing_input_aliases() {
+    // Documented /models shape: https://api-docs.deepseek.com/api/list-models/
+    // The provider separately documents additional accepted inputs. A model's
+    // native level list alone is not an exhaustive request-value whitelist.
+    let response = json!({"object":"list","data":[{
+        "id":"deepseek-flash", "object":"model", "owned_by":"deepseek",
+        "name":"DeepSeek-V4.1-Flash", "context_window":1048576,
+        "max_output_tokens":393216, "input_modalities":["text","image"],
+        "output_modalities":["text"],
+        "effort":{"supported_levels":["low","high","max"],"default_level":"high"},
+        "api_capabilities":{"anthropic_messages":{"system_prompt_update":"in-history"}}
+    }]});
+    let original = response.clone();
+    let models = parse_models(&response).unwrap();
+    assert_eq!(models.len(), 1);
+    let metadata = models[0].metadata.as_ref().unwrap();
+    assert_eq!(metadata.reasoning_efforts, Some(vec!["low".into(), "high".into(), "max".into()]));
+    assert_eq!(metadata.default_reasoning_effort.as_deref(), Some("high"));
+    assert_eq!(metadata.context_window, Some(1048576));
+    assert_eq!(metadata.supports_vision, Some(true));
+    // Do not add aliases or a guessed mapping merely because canonical effort
+    // names such as medium/xhigh/ultra are understood by the local client.
+    let encoded = serde_json::to_value(metadata).unwrap();
+    assert_eq!(encoded.as_object().unwrap().len(), 4);
+    assert!(encoded.get("mapping").is_none());
+    for alias in ["medium", "xhigh", "ultra"] {
+        assert!(!metadata.reasoning_efforts.as_ref().unwrap().iter().any(|value| value == alias));
+    }
+    assert_eq!(response, original);
+}
+
+#[test]
+fn provider_metadata_nested_effort_preserves_unknown_empty_and_conflict_boundaries() {
+    for item in [
+        json!({"effort":{}}),
+        json!({"effort":{"supported_levels":null}}),
+        json!({"effort":{"supported_levels":"low"}}),
+        json!({"effort":{"supported_levels":["low","unrecognized"]}}),
+    ] {
+        assert!(parse_metadata(&item).is_none());
+    }
+    let empty = parse_metadata(&json!({"effort":{"supported_levels":[],"default_level":"high"}})).unwrap();
+    assert_eq!(empty.reasoning_efforts, Some(vec![]));
+    assert_eq!(empty.default_reasoning_effort, None);
+
+    let conflict = parse_metadata(&json!({
+        "supported_reasoning_efforts":["low","high"],
+        "effort":{"supported_levels":["low","high","max"],"default_level":"high"}
+    })).unwrap();
+    assert_eq!(conflict.reasoning_efforts, None);
+    assert_eq!(conflict.default_reasoning_effort.as_deref(), Some("high"));
+
+    let alias_default = parse_metadata(&json!({
+        "effort":{"supported_levels":["low","high","max"],"default_level":"ultra"}
+    })).unwrap();
+    assert_eq!(alias_default.default_reasoning_effort, None);
+    assert_eq!(alias_default.reasoning_efforts, Some(vec!["low".into(), "high".into(), "max".into()]));
+}
+
+#[test]
 fn provider_metadata_duplicate_and_size_checks_do_not_silently_choose_conflicting_facts() {
     let same = json!({"data":[{"id":"same","supported_reasoning_efforts":["low"]},{"id":"SAME","supported_reasoning_efforts":["low"]}]});
     assert_eq!(parse_models(&same).unwrap().len(), 1);
