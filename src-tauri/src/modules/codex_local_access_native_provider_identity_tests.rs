@@ -284,8 +284,12 @@ fn native_provider_identity_mixed_oauth_chat_alias_uses_canonical_metadata() {
 }
 
 #[test]
-fn native_provider_identity_stepfun_limits_use_official_route_and_keep_account_overrides() {
-    let models = vec!["step-5-preview".into(), "step-3.7-flash".into()];
+fn native_provider_identity_stepfun_context_limits_keep_generic_effort_and_account_overrides() {
+    let models = vec![
+        "step-5-preview".into(),
+        "step-3.7-flash".into(),
+        "step-3.5-flash-2603".into(),
+    ];
     let (collection, mut key, mut provider) = identity_fixture(&models, json!([]));
     provider.api_base_url = Some("https://api.stepfun.com/step_plan/v1".into());
     key.provider_gateway.as_mut().unwrap().base_url = provider.api_base_url.clone().unwrap();
@@ -295,9 +299,11 @@ fn native_provider_identity_stepfun_limits_use_official_route_and_keep_account_o
         1_000_000
     );
     assert_eq!(entry(&catalog, "step-3.7-flash")["context_window"], 256_000);
+    assert_eq!(entry(&catalog, "step-3.5-flash-2603")["context_window"], 256_000);
     for id in &models {
         let model = entry(&catalog, id);
         assert_eq!(model["default_reasoning_level"], "medium");
+        assert_eq!(model["cockpit_reasoning_known"], false);
         assert_eq!(
             model["supported_reasoning_levels"]
                 .as_array()
@@ -305,7 +311,7 @@ fn native_provider_identity_stepfun_limits_use_official_route_and_keep_account_o
                 .iter()
                 .map(|level| level["effort"].as_str().unwrap())
                 .collect::<Vec<_>>(),
-            vec!["low", "medium", "high"]
+            vec!["low", "medium", "high", "xhigh", "max", "ultra"]
         );
         assert_eq!(model["supports_reasoning_summary_parameter"], false);
         assert_eq!(model["supports_search_tool"], true);
@@ -317,6 +323,123 @@ fn native_provider_identity_stepfun_limits_use_official_route_and_keep_account_o
     assert_eq!(entry(&limited, "step-5-preview")["context_window"], 32000);
     provider.api_base_url = Some("https://unverified.example/v1".into());
     assert!(native_declared_provider_model_metadata(&provider, "step-5-preview").is_none());
+}
+
+#[test]
+fn native_provider_effort_defaults_do_not_depend_on_hostname_or_model_name() {
+    let models = vec![
+        "step-5-preview".into(),
+        "step-3.7-flash".into(),
+        "step-3.5-flash-2603".into(),
+        "vendor-unknown".into(),
+    ];
+    let compatible = ["low", "medium", "high", "xhigh", "max", "ultra"];
+    for base in [
+        "https://api.stepfun.com/step_plan/v1",
+        "https://api.stepfun.ai/v1",
+        "https://relay.example.invalid/v1",
+    ] {
+        let (collection, mut key, mut provider) = identity_fixture(&models, json!([]));
+        provider.api_base_url = Some(base.into());
+        key.provider_gateway.as_mut().unwrap().base_url = base.into();
+        let profile = tempfile::tempdir().unwrap();
+        let mut catalog = native_catalog(&collection, Some(&key), &[provider.clone()]).unwrap();
+        // Reconciliation must preserve the same unknown-capability menu rather
+        // than turning a context-only baseline into an effort declaration.
+        native_decorate_provider_models(
+            profile.path(), &collection, Some(&key), &[provider.clone()], &mut catalog,
+        ).unwrap();
+        for id in &models {
+            let model = entry(&catalog, id);
+            assert_eq!(provider_model_reasoning_levels(&provider, id), compatible, "{base}: {id}");
+            assert_eq!(model["cockpit_reasoning_known"], false, "{base}: {id}");
+            assert_eq!(model["default_reasoning_level"], "medium", "{base}: {id}");
+            assert_eq!(
+                model["supported_reasoning_levels"].as_array().unwrap().iter()
+                    .map(|level| level["effort"].as_str().unwrap()).collect::<Vec<_>>(),
+                compatible, "{base}: {id}",
+            );
+            let public = catalog["data"].as_array().unwrap().iter()
+                .find(|model| model["id"] == id.as_str()).unwrap();
+            assert!(public["model_info"].get("supported_reasoning_efforts").is_none());
+            assert!(public["model_info"].get("default_reasoning_effort").is_none());
+            assert!(!public["capabilities"].as_array().unwrap().contains(&json!("thinking")));
+        }
+    }
+}
+
+#[test]
+fn native_provider_effort_upstream_metadata_and_manual_policy_override_generic_defaults() {
+    let _lock = crate::modules::test_support::env_lock()
+        .lock().unwrap_or_else(|error| error.into_inner());
+    let _data = super::native_capability_integration_tests::NativeInstallationTestData::new();
+    let models = vec![
+        "step-5-preview".into(),
+        "step-3.7-flash".into(),
+        "step-3.5-flash-2603".into(),
+        "vendor-unknown".into(),
+    ];
+    for base in [
+        "https://api.stepfun.com/step_plan/v1",
+        "https://relay.example.invalid/v1",
+    ] {
+        let (collection, mut key, mut provider) = identity_fixture(&models, json!([]));
+        provider.api_base_url = Some(base.into());
+        // Isolate the synthetic metadata from every other test's account scope.
+        provider.openai_api_key = Some(format!("synthetic-{}", uuid::Uuid::new_v4()));
+        key.provider_gateway.as_mut().unwrap().base_url = base.into();
+        let profile = tempfile::tempdir().unwrap();
+        for id in &models {
+            crate::modules::codex_provider_metadata::cache_for_test(
+                &provider, id,
+                crate::modules::codex_provider_metadata::ProviderModelMetadata {
+                    reasoning_efforts: Some(vec!["none".into(), "high".into(), "ultra".into()]),
+                    default_reasoning_effort: Some("ultra".into()),
+                    context_window: Some(192_000),
+                    ..Default::default()
+                },
+            ).unwrap();
+        }
+        let mut catalog = native_catalog(&collection, Some(&key), &[provider.clone()]).unwrap();
+        native_decorate_provider_models(
+            profile.path(), &collection, Some(&key), &[provider.clone()], &mut catalog,
+        ).unwrap();
+        for id in &models {
+            let model = entry(&catalog, id);
+            assert_eq!(provider_model_reasoning_levels(&provider, id), ["none", "high", "ultra"]);
+            assert_eq!(model["cockpit_reasoning_known"], true);
+            assert_eq!(model["default_reasoning_level"], "ultra");
+            assert_eq!(model["context_window"], 192_000);
+            let public = catalog["data"].as_array().unwrap().iter()
+                .find(|model| model["id"] == id.as_str()).unwrap();
+            assert_eq!(public["model_info"]["supported_reasoning_efforts"], json!(["none", "high", "ultra"]));
+            assert_eq!(public["model_info"]["default_reasoning_effort"], "ultra");
+        }
+
+        codex_account::save_provider_model_quick_config(
+            profile.path(), &provider, true,
+            models.iter().map(|id| crate::models::codex::CodexExperimentalModelDefinition {
+                model_id: id.clone(), display_name: id.clone(),
+                reasoning_efforts: Some(vec!["low".into(), "max".into()]),
+                default_reasoning_effort: Some("max".into()),
+                context_window: None, auto_compact_token_limit: None,
+            }).collect(),
+            None,
+        ).unwrap();
+        native_decorate_provider_models(
+            profile.path(), &collection, Some(&key), &[provider.clone()], &mut catalog,
+        ).unwrap();
+        for id in &models {
+            let model = entry(&catalog, id);
+            assert_eq!(model["cockpit_reasoning_known"], true);
+            assert_eq!(model["default_reasoning_level"], "max");
+            assert_eq!(model["context_window"], 192_000);
+            let public = catalog["data"].as_array().unwrap().iter()
+                .find(|model| model["id"] == id.as_str()).unwrap();
+            assert_eq!(public["model_info"]["supported_reasoning_efforts"], json!(["low", "max"]));
+            assert_eq!(public["model_info"]["default_reasoning_effort"], "max");
+        }
+    }
 }
 
 #[test]

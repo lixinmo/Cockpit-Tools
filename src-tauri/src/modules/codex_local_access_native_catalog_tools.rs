@@ -16,7 +16,7 @@ pub(crate) fn provider_model_reasoning_levels(account: &CodexAccount, model: &st
 }
 
 fn native_declared_provider_model_metadata(account: &CodexAccount, model: &str) -> Option<Value> {
-    let mut declared = native_documented_provider_model_metadata(account, model);
+    let mut declared = native_provider_model_baseline(account, model);
     if let Some(metadata) = crate::modules::codex_provider_metadata::lookup(account, model) {
         let template = declared.get_or_insert_with(|| {
             let mut fallback = codex_protocol::build_provider_client_model(model, 0);
@@ -53,14 +53,14 @@ fn native_declared_provider_model_metadata(account: &CodexAccount, model: &str) 
     declared
 }
 
-fn native_documented_provider_model_metadata(account: &CodexAccount, model: &str) -> Option<Value> {
+fn native_provider_model_baseline(account: &CodexAccount, model: &str) -> Option<Value> {
     if let Some(template) = account_model_template(account, model) {
         return Some(template);
     }
-    // Model limits are provider data, never inferred from a display alias.
+    // Preserve the existing context limits independently of reasoning metadata.
     // Source: https://platform.stepfun.com/docs/zh/guides/developer/integrations/codex
-    // Only reuse documented model limits/efforts. Execution capabilities below
-    // come from this gateway's adapter, not the provider's Responses example.
+    // The hostname/model match supplies context only. Effort choices remain
+    // unknown until upstream metadata or an explicit profile setting supplies them.
     let url = reqwest::Url::parse(account.api_base_url.as_deref()?).ok()?;
     if !account.is_api_key_auth()
         || url.scheme() != "https"
@@ -85,21 +85,7 @@ fn native_documented_provider_model_metadata(account: &CodexAccount, model: &str
     template["max_context_window"] = json!(window);
     template["auto_compact_token_limit"] =
         json!(codex_protocol::derived_auto_compact_token_limit(window));
-    template["default_reasoning_level"] = json!("medium");
-    template["cockpit_reasoning_known"] = json!(true);
-    template["supported_reasoning_levels"] = json!([
-        {"effort":"low","description":"Low"},
-        {"effort":"medium","description":"Medium"},
-        {"effort":"high","description":"High"}
-    ]);
-    // StepFun's Chat API reference explicitly gives the 2603 release two levels.
-    if model == "step-3.5-flash-2603" {
-        template["default_reasoning_level"] = json!("high");
-        template["supported_reasoning_levels"] = json!([
-            {"effort":"low","description":"Low"},
-            {"effort":"high","description":"High"}
-        ]);
-    }
+    template["cockpit_context_known"] = json!(true);
     Some(template)
 }
 

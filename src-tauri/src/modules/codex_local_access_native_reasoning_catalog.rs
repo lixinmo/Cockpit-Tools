@@ -19,21 +19,21 @@ fn native_copy_provider_model_fields(target: &mut Value, source: &Value) {
 }
 
 fn native_provider_catalog_candidate(account: &CodexAccount, actual: &str, model: &Value) -> Value {
-    let documented = native_documented_provider_model_metadata(account, actual).or_else(|| {
+    let baseline = native_provider_model_baseline(account, actual).or_else(|| {
         (native_wire_api(account).ok() == Some(native_contract::WireApi::Responses))
             .then(|| codex_protocol::known_codex_model_template(actual))
             .flatten()
     });
     let discovered = crate::modules::codex_provider_metadata::lookup(account, actual);
     let template = native_declared_provider_model_metadata(account, actual)
-        .or_else(|| documented.clone())
+        .or_else(|| baseline.clone())
         .unwrap_or_else(|| codex_protocol::build_provider_client_model(actual, 0));
     let mut candidate = model.clone();
     native_copy_provider_model_fields(&mut candidate, &template);
     candidate["slug"] = json!(actual);
     candidate["cockpit_reasoning_known"] = json!(template["cockpit_reasoning_known"] != false);
     candidate["cockpit_context_known"] = json!(
-        documented
+        baseline
             .as_ref()
             .and_then(|value| value["context_window"].as_i64())
             .is_some_and(|v| v > 0)

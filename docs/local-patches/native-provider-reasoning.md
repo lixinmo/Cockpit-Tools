@@ -11,9 +11,15 @@ The order for client menu choices and defaults is:
 1. Explicit provider policy for this profile, account, endpoint and credential.
 2. Explicit instance model policy (where configured).
 3. Sanitized capability fields returned by the upstream model-list endpoint.
-4. Previously verified model information, including the official StepFun model
-   limits and the two-level Step 3.5 Flash 2603 release.
-5. Six GPT-compatible choices: low, medium, high, xhigh, max, ultra.
+4. Six GPT-compatible choices: low, medium, high, xhigh, max, ultra.
+
+The generic path does not infer effort choices from provider hostnames or model
+names. The previously added StepFun three-level/two-level tables have been
+removed. Existing context-window baselines remain separate and do not declare
+reasoning capabilities. Pre-existing dedicated provider adapters are unchanged.
+Reading vendor documentation is a human activity, not runtime discovery; any
+resulting user override belongs in Model Management's scoped profile policy,
+not another built-in effort table.
 
 The last case is explicitly a compatibility fallback, not a claim that the
 provider implements those intensities. Unknown capability is distinct from a
@@ -27,6 +33,10 @@ provider protocol adapters keep their original validation paths.
 The existing Get Models operation reads model IDs and optional explicit effort,
 default, context and modality facts. Accepted forms include snake_case,
 camelCase, ModelInfo fields, effort-object arrays and registry thinking levels.
+The endpoint is not required to return these extra fields. The backend caches
+them, when present, before returning IDs to the UI. A list containing only model
+IDs cannot establish effort choices, and does not trigger documentation scraping
+or guessed vendor mappings.
 A boolean saying that reasoning exists, or a supported-parameters list mentioning
 reasoning_effort, does not establish an effort range. Conflicting/malformed
 capabilities do not manufacture a supported range. Visual facts are retained;

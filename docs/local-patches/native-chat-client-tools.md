@@ -139,8 +139,11 @@ Native HTTP catalog and the saved profile. Explicit account context limits and
 saved profile context/reasoning settings remain authoritative. Unknown provider
 models use the existing 128K client fallback, with no invented reasoning or
 verbosity support; the public API does not claim that fallback as an upstream
-limit. Known StepFun limits/efforts are scoped to the official endpoint, based on
-its [Codex guide](https://platform.stepfun.com/docs/zh/guides/developer/integrations/codex).
+limit. Existing StepFun context limits are scoped to the official endpoint,
+based on its [Codex guide](https://platform.stepfun.com/docs/zh/guides/developer/integrations/codex).
+The later generic-effort correction removes the model-specific effort table;
+effort choices now come from explicit settings or upstream metadata, otherwise
+the generic compatibility menu. A context limit does not establish an effort range.
 
 Step 5 does not offer the built-in Chat web-search tool, per the official
 [tool-call reference](https://platform.stepfun.ai/docs/en/api-reference/tool-call).
