@@ -33,8 +33,9 @@ Options:
                                first resume with chat_parameter_not_representable
   --check-effort-passthrough   Configure temporary Step 3.7 low-only menu/default;
                                verify explicit high stays high and absent effort stays absent
-  --check-generic-effort-menu  Require Step 5's production catalog to publish the
-                               six compatibility choices, medium default, and unknown capability;
+  --check-generic-effort-menu  Require both models' production catalogs to publish the
+                               six compatibility choices, medium default, and unknown capability
+                               (Step 5 only when combined with --check-effort-passthrough);
                                fail if upstream/manual capability information is now present
   --self-test                 Synthetic helper checks only; no account/network
   --help                      Show this help; no account/network
@@ -201,9 +202,10 @@ function reportEvidence(file, offset) {
   };
 }
 
-function genericEffortMenuEvidence(catalog) {
+function genericEffortMenuEvidence(catalog, modelId = MODELS[0]) {
+  requireThat(MODELS.includes(modelId), 'model_outside_scope');
   const matches = Array.isArray(catalog.models)
-    ? catalog.models.filter((item) => item?.slug === MODELS[0]) : [];
+    ? catalog.models.filter((item) => item?.slug === modelId) : [];
   requireThat(matches.length === 1, 'generic_effort_model_not_unique');
   const model = matches[0];
   // This check deliberately fails when the source changes. Never discard newly
@@ -214,7 +216,7 @@ function genericEffortMenuEvidence(catalog) {
     ? model.supported_reasoning_levels.map((item) => item?.effort) : [];
   requireThat(JSON.stringify(choices) === JSON.stringify(GENERIC_EFFORTS), 'generic_effort_choices_mismatch');
   requireThat(model.default_reasoning_level === 'medium', 'generic_effort_default_mismatch');
-  return { stage: 'generic_effort_menu', model: MODELS[0], choices: [...GENERIC_EFFORTS],
+  return { stage: 'generic_effort_menu', model: modelId, choices: [...GENERIC_EFFORTS],
     default: 'medium', capabilitiesKnown: false, source: 'compatibility_fallback', passed: true };
 }
 
@@ -343,7 +345,9 @@ async function main(opts) {
     if (opts.efforts || opts.genericMenu) {
       requireThat(typeof ready.model_catalog === 'string' && path.basename(ready.model_catalog) === ready.model_catalog, 'model_catalog_reference_invalid');
       const catalog = JSON.parse(fs.readFileSync(path.join(context.home, ready.model_catalog), 'utf8'));
-      if (opts.genericMenu) print(genericEffortMenuEvidence(catalog));
+      if (opts.genericMenu) {
+        for (const model of opts.efforts ? [MODELS[0]] : MODELS) print(genericEffortMenuEvidence(catalog, model));
+      }
       if (opts.efforts) {
         const model = catalog.models?.find((item) => item.slug === MODELS[1]);
         requireThat(model?.default_reasoning_level === 'low'
@@ -416,9 +420,9 @@ function selfTest() {
       default_reasoning_level: 'low', supported_reasoning_levels: [{effort: 'low'}]}] };
     const before = JSON.stringify(genericCatalog);
     requireThat(genericEffortMenuEvidence(genericCatalog).passed && JSON.stringify(genericCatalog) === before, 'selftest_generic_menu');
-    const expectFailure = (catalog, code) => {
+    const expectFailure = (catalog, code, modelId) => {
       let caught;
-      try { genericEffortMenuEvidence(catalog); } catch (error) { caught = error.safeCode; }
+      try { genericEffortMenuEvidence(catalog, modelId); } catch (error) { caught = error.safeCode; }
       requireThat(caught === code, 'selftest_generic_menu_rejection');
     };
     expectFailure({models: [{...genericModel, cockpit_reasoning_known: true}]}, 'generic_effort_menu_has_declared_capabilities');
@@ -426,6 +430,10 @@ function selfTest() {
     expectFailure({models: [{...genericModel, supported_reasoning_levels: [{effort: 'low'}]}]}, 'generic_effort_choices_mismatch');
     expectFailure({models: [{...genericModel, default_reasoning_level: 'low'}]}, 'generic_effort_default_mismatch');
     expectFailure({models: [genericModel, genericModel]}, 'generic_effort_model_not_unique');
+    expectFailure(genericCatalog, 'generic_effort_menu_has_declared_capabilities', MODELS[1]);
+    expectFailure(genericCatalog, 'model_outside_scope', 'outside-model');
+    const bothGeneric = {models: MODELS.map((slug) => ({...genericModel, slug}))};
+    requireThat(MODELS.every((modelId) => genericEffortMenuEvidence(bothGeneric, modelId).model === modelId), 'selftest_both_generic_menus');
     const scopedArgs = ['--probe', __filename, '--data-dir', root, '--account-id', 'synthetic'];
     requireThat(options(scopedArgs).genericMenu === false, 'selftest_default_options');
     const combined = options([...scopedArgs, '--check-effort-passthrough', '--check-generic-effort-menu']);
