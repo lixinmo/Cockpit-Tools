@@ -72,6 +72,8 @@ function nativeRegressionArgs(selectedTarget) {
     'modules::codex_native_api::capability_fallback_http_tests::',
     'modules::codex_native_api::mapping::capability::diagnostics_tests::',
     'modules::codex_native_api::chat_upstream::',
+    'native_chat_upstream',
+    'chat_legacy_reasoning',
     'modules::codex_native_api::native_chat::',
     'modules::codex_local_access::native_capability_tests::',
     'modules::codex_local_access::native_capability_integration_tests::',

@@ -60,6 +60,37 @@ fn capability_search_history_requires_complete_unambiguous_pairing() {
 }
 
 #[test]
+fn capability_replay_does_not_treat_go_empty_reasoning_as_ciphertext() {
+    let body = json!({"input":[
+        {"role":"user", "content":"Read the saved value."},
+        {"id":"rs_go_history", "type":"reasoning", "encrypted_content":"",
+            "summary":[{"type":"summary_text", "text":"Read the value first."}]},
+        {"type":"function_call", "name":"read_value", "call_id":"call_go_history", "arguments":"{}"},
+        {"type":"function_call_output", "call_id":"call_go_history", "output":"fixture-value"}
+    ]});
+    let original = body.clone();
+    assert!(validate_replay(&HeaderMap::new(), &body).is_ok());
+    assert!(!encrypted(&body));
+    assert_eq!(body, original);
+
+    for value in [json!("opaque-cipher"), json!(" "), json!(false), json!(0), json!({}), json!([])] {
+        let mut nonempty = body.clone();
+        nonempty["input"][1]["encrypted_content"] = value;
+        assert!(encrypted(&nonempty));
+    }
+    for carrier in [
+        json!({"type":"reasoning", "encrypted_content":"", "signature":""}),
+        json!({"type":"reasoning", "encrypted_content":"", "encrypted_function_args":["message"]}),
+        json!({"type":"compaction", "encrypted_content":""}),
+        json!({"type":"message", "role":"assistant", "content":[{"type":"encrypted_content", "encrypted_content":""}]}),
+    ] {
+        let mut mixed = body.clone();
+        mixed["input"].as_array_mut().unwrap().push(carrier);
+        assert!(encrypted(&mixed));
+    }
+}
+
+#[test]
 fn only_precise_pre_execution_capability_errors_are_eligible() {
     let error = json!({"error":{"code":"unsupported_tool","param":"tools[0].type","message":"Unavailable"}});
     assert!(pre_execution_rejection(400, &error));

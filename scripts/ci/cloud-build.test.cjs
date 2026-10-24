@@ -89,6 +89,8 @@ test('native gateway regressions reuse the thin application target and isolate s
     ]);
     assert.ok(!tauriArgs('build', platform.target, 'example.json').some(arg => arg.includes('opt-level')));
     assert.ok(args.includes('--test-threads=1'));
+    assert.ok(args.includes('native_chat_upstream'));
+    assert.ok(args.includes('chat_legacy_reasoning'));
     assert.ok(!args.includes('--ignored') && !args.includes('--include-ignored'));
     for (const name of ['capabilities', 'capability_fallback_http_tests', 'mapping::capability::diagnostics_tests', 'chat_upstream', 'native_chat', 'native_capability_tests', 'native_capability_integration_tests', 'native_catalog_tools_tests', 'native_provider_profile_selection_tests', 'native_provider_wire_projection_', 'api_key_edit_', 'full_key_edit_migrates_persisted_references', 'editing_current_api_key_account_rewrites_relay_key_and_base_url', 'provider_snapshot_sync_updates_account', 'chat_completions_api_key_bundle_defers_catalog', 'passive_native_takeover_preserves_chat_tool_negotiation', 'parity22_http_responses_chat', 'native_provider_live_', 'native_credits', 'native_admission', 'native_gateway_credits']) {
       assert.ok(args.some(arg => arg.includes(name)), `Missing ${name} coverage`);

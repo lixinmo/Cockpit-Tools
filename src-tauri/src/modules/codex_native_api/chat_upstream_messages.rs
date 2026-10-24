@@ -48,7 +48,13 @@ pub(super) fn convert(
         match item["type"].as_str().unwrap_or("message") {
             "additional_tools" => {}
             "reasoning" => {
-                if item.get("encrypted_content").is_some_and(|v| !v.is_null()) {
+                // The Go Chat adapter emitted an empty encrypted_content
+                // placeholder alongside plaintext summaries. Empty is not an
+                // opaque value (the identity collector uses the same rule).
+                if item
+                    .get("encrypted_content")
+                    .is_some_and(|v| !v.is_null() && v.as_str() != Some(""))
+                {
                     return Err(incompatible(
                         "input.encrypted_content",
                         "encrypted reasoning belongs to the original Responses upstream",

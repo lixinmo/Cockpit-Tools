@@ -138,6 +138,85 @@ fn native_chat_upstream_rejects_opaque_state() {
     )
     .is_err());
 }
+
+#[test]
+fn native_chat_upstream_replays_go_empty_reasoning_placeholder_without_changing_history() {
+    // Exact reasoning item shape emitted by the checked-in Go adapter in both
+    // response.output_item.done and the final JSON response. A new Native
+    // conversation omits encrypted_content and therefore missed this regression.
+    let done = json!({
+        "type":"response.output_item.done", "output_index":0, "sequence_number":0,
+        "item":{"id":"rs_go_history", "type":"reasoning", "encrypted_content":"",
+            "summary":[{"type":"summary_text", "text":"Read the saved value first."}]}
+    });
+    let final_response = json!({"output":[done["item"].clone()]});
+    for reasoning in [&done["item"], &final_response["output"][0]] {
+        for model in ["step-3.7-flash", "step-5-preview"] {
+            for stream in [false, true] {
+                let body = json!({
+                    "model":model, "stream":stream,
+                    "input":[
+                        {"type":"message", "role":"user", "content":"Read the saved value."},
+                        reasoning.clone(),
+                        {"type":"function_call", "call_id":"call_go_history", "name":"read_value",
+                            "arguments":"{\"path\":\"fixture.txt\"}"},
+                        {"type":"function_call_output", "call_id":"call_go_history", "output":"fixture-value"},
+                        {"type":"message", "role":"assistant", "content":"The value is fixture-value."},
+                        {"type":"message", "role":"user", "content":"Continue using the same value."}
+                    ],
+                    "tools":[{"type":"function", "name":"read_value", "parameters":{"type":"object",
+                        "properties":{"path":{"type":"string"}}, "required":["path"]}}]
+                });
+                let original = body.clone();
+                let wire = chat_upstream::responses_to_chat(&body).unwrap();
+                assert_eq!(body, original, "the original replay must remain untouched");
+                assert_eq!(wire["model"], model);
+                assert_eq!(wire["stream"], stream);
+                assert_eq!(wire["messages"], json!([
+                    {"role":"user", "content":"Read the saved value."},
+                    {"role":"assistant", "reasoning_content":"Read the saved value first.",
+                        "tool_calls":[{"id":"call_go_history", "type":"function", "function":{
+                            "name":"read_value", "arguments":"{\"path\":\"fixture.txt\"}"}}]},
+                    {"role":"tool", "tool_call_id":"call_go_history", "content":"fixture-value"},
+                    {"role":"assistant", "content":"The value is fixture-value."},
+                    {"role":"user", "content":"Continue using the same value."}
+                ]));
+                assert_eq!(wire["tools"][0]["function"]["name"], "read_value");
+            }
+        }
+    }
+}
+
+#[test]
+fn native_chat_upstream_empty_reasoning_forms_are_equivalent() {
+    for summary in [json!([]), json!([{"type":"summary_text", "text":"Visible reasoning."}])] {
+        let absent = json!({"input":[
+            {"type":"reasoning", "summary":summary},
+            {"role":"assistant", "content":"Answer."}
+        ]});
+        let expected = chat_upstream::responses_to_chat(&absent).unwrap();
+        for value in [Value::Null, json!("")] {
+            let mut body = absent.clone();
+            body["input"][0]["encrypted_content"] = value;
+            let original = body.clone();
+            assert_eq!(chat_upstream::responses_to_chat(&body).unwrap(), expected);
+            assert_eq!(body, original);
+        }
+    }
+}
+
+#[test]
+fn native_chat_upstream_nonempty_reasoning_is_not_an_empty_placeholder() {
+    for value in [json!("opaque-cipher"), json!(" "), json!(false), json!(0), json!({}), json!([])] {
+        let body = json!({"input":[{"type":"reasoning", "encrypted_content":value,
+            "summary":[{"type":"summary_text", "text":"A summary cannot decrypt this."}]}]});
+        let original = body.clone();
+        let error = chat_upstream::responses_to_chat(&body).unwrap_err();
+        assert_eq!(error.code, "chat_parameter_not_representable");
+        assert_eq!(body, original);
+    }
+}
+
 #[test]
 fn native_chat_legacy_completion() {
     let req = prepare_request(

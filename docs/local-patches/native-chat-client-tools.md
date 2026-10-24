@@ -2,6 +2,30 @@
 
 ## Problem and boundary
 
+### Legacy Go reasoning history
+
+The Go Chat-to-Responses adapter writes `encrypted_content: ""` on reasoning
+items in both completed SSE items and final JSON responses. This is an empty
+placeholder alongside the public summary, not ciphertext. Native previously
+rejected any non-null value when translating a resumed conversation to Chat;
+the capability replay check also classified that placeholder as encrypted.
+Fresh Native conversations do not emit this placeholder, so fresh-session tool
+acceptance did not cover the migration failure.
+
+Native now treats an exactly empty string on a reasoning item like an absent or
+null field. Public summaries, messages, tool calls and results retain their
+existing conversion. Stored conversations and the Go reference converter are
+unchanged. Nonempty strings (including whitespace), malformed values, and other
+encrypted carriers retain their existing refusal/ownership rules. This does not
+claim that an opaque Responses conversation can be moved losslessly to Chat.
+
+Regression coverage includes the actual Go output shape, long synthetic resumed
+histories, model changes in both directions, and a complete tool round over JSON,
+SSE and WebSocket. These checks must run in Cloud Build; actual client acceptance
+must resume a saved conversation containing the legacy empty field, rather than
+only starting new conversations. Validation and installation are not complete
+until their run and results are recorded below.
+
 Codex can choose different tool protocols for a known model shell and an unknown
 provider ID. In CLI 0.162.1, an unknown raw model without a managed catalog uses
 full Responses and includes hosted `web_search`. The generic provider template
