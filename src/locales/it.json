@@ -5806,6 +5806,15 @@
       "defaultReasoning": "Livello predefinito",
       "defaultReasoningFollow": "Usa predefinito",
       "defaultReasoningHint": "Lascia vuoto per usare il livello predefinito del modello. Il livello scelto deve essere supportato.",
+      "reasoningNone": "Disattivato",
+      "reasoningMinimal": "Minimo",
+      "providerPolicyHint": "Configura qui le capacità dei modelli di questo fornitore. Per aggiungere o rimuovere modelli, modifica l’elenco dei modelli del suo account; le importazioni delle impostazioni dell’istanza non si applicano qui.",
+      "providerPolicyDescription": "Vengono usate le capacità note del fornitore oppure, se non disponibili, i livelli di compatibilità. Puoi configurarli manualmente.",
+      "providerPolicyFollow": "Segui il fornitore",
+      "providerPolicyCustom": "Personalizzato",
+      "providerPolicyConfirm": "Salva impostazioni dei modelli separate per questo fornitore. Gli altri account rimangono invariati.",
+      "inheritReasoning": "Segui il modello",
+      "noReasoning": "Intensità di ragionamento non regolabile",
       "defaultReasoningInvalid": "Il livello di ragionamento predefinito deve essere supportato da questo modello."
     },
     "modelConfig": {

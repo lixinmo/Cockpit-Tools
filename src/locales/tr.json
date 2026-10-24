@@ -5806,6 +5806,15 @@
       "defaultReasoning": "Varsayılan düzey",
       "defaultReasoningFollow": "Varsayılanı kullan",
       "defaultReasoningHint": "Modelin varsayılan düzeyini kullanmak için boş bırakın. Seçilen düzey desteklenmelidir.",
+      "reasoningNone": "Kapalı",
+      "reasoningMinimal": "En düşük",
+      "providerPolicyHint": "Bu sağlayıcının model yeteneklerini burada yapılandırın. Model eklemek veya kaldırmak için hesabının model listesini düzenleyin; örnek ayarlarını içe aktarma burada geçerli değildir.",
+      "providerPolicyDescription": "Sağlayıcının bilinen yetenekleri kullanılır; bilgi yoksa uyumluluk düzeyleri sunulur. Bunları elle yapılandırabilirsiniz.",
+      "providerPolicyFollow": "Sağlayıcıyı izle",
+      "providerPolicyCustom": "Özel",
+      "providerPolicyConfirm": "Bu sağlayıcı için ayrı model ayarlarını kaydedin. Diğer hesaplar değişmeyecek.",
+      "inheritReasoning": "Modeli izle",
+      "noReasoning": "Akıl yürütme düzeyi ayarlanamaz",
       "defaultReasoningInvalid": "Varsayılan akıl yürütme düzeyi bu model tarafından desteklenmelidir."
     },
     "modelConfig": {

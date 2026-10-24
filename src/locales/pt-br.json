@@ -5806,6 +5806,15 @@
       "defaultReasoning": "Nível padrão",
       "defaultReasoningFollow": "Usar padrão",
       "defaultReasoningHint": "Deixe em branco para usar o nível padrão do modelo. O nível escolhido deve ser compatível.",
+      "reasoningNone": "Desativado",
+      "reasoningMinimal": "Mínimo",
+      "providerPolicyHint": "Configure aqui as capacidades dos modelos deste provedor. Para adicionar ou remover modelos, edite a lista de modelos da conta dele; a importação de configurações de instância não se aplica aqui.",
+      "providerPolicyDescription": "São usadas as capacidades conhecidas do provedor ou, quando indisponíveis, níveis de compatibilidade. Você pode configurá-los manualmente.",
+      "providerPolicyFollow": "Seguir o provedor",
+      "providerPolicyCustom": "Personalizado",
+      "providerPolicyConfirm": "Salvar configurações de modelos separadas para este provedor. As outras contas não serão alteradas.",
+      "inheritReasoning": "Seguir o modelo",
+      "noReasoning": "Intensidade de raciocínio não ajustável",
       "defaultReasoningInvalid": "O nível de raciocínio padrão deve ser compatível com este modelo."
     },
     "modelConfig": {

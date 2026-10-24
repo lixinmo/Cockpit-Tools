@@ -5806,6 +5806,15 @@
       "defaultReasoning": "Nivel predeterminado",
       "defaultReasoningFollow": "Heredar",
       "defaultReasoningHint": "Déjelo vacío para usar el nivel predeterminado del modelo. El nivel elegido debe estar admitido.",
+      "reasoningNone": "Desactivado",
+      "reasoningMinimal": "Mínimo",
+      "providerPolicyHint": "Configura aquí las capacidades de los modelos de este proveedor. Para añadir o quitar modelos, edita la lista de modelos de su cuenta; la importación de configuraciones de instancia no se aplica aquí.",
+      "providerPolicyDescription": "Se usan las capacidades conocidas del proveedor y, cuando no están disponibles, niveles de compatibilidad. Puedes configurarlos manualmente.",
+      "providerPolicyFollow": "Seguir al proveedor",
+      "providerPolicyCustom": "Personalizado",
+      "providerPolicyConfirm": "Guardar una configuración de modelos independiente para este proveedor. Las demás cuentas no cambiarán.",
+      "inheritReasoning": "Seguir al modelo",
+      "noReasoning": "Intensidad de razonamiento no ajustable",
       "defaultReasoningInvalid": "El nivel de razonamiento predeterminado debe estar admitido por este modelo."
     },
     "modelConfig": {

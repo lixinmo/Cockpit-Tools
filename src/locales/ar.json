@@ -5853,6 +5853,15 @@
       "defaultReasoning": "المستوى الافتراضي",
       "defaultReasoningFollow": "استخدام الافتراضي",
       "defaultReasoningHint": "اتركه فارغًا لاستخدام المستوى الافتراضي للنموذج. يجب أن يكون المستوى المحدد مدعومًا.",
+      "reasoningNone": "إيقاف",
+      "reasoningMinimal": "الحد الأدنى",
+      "providerPolicyHint": "اضبط إمكانات نماذج هذا المزوّد هنا. لإضافة نماذج أو إزالتها، عدّل قائمة النماذج في حسابه؛ لا ينطبق استيراد إعدادات المثيل هنا.",
+      "providerPolicyDescription": "استخدم إمكانات المزوّد المعروفة، ومستويات التوافق عند عدم توفرها. يمكنك ضبطها يدويًا.",
+      "providerPolicyFollow": "اتباع المزوّد",
+      "providerPolicyCustom": "مخصص",
+      "providerPolicyConfirm": "احفظ إعدادات نماذج مستقلة لهذا المزوّد. لن تتغير إعدادات الحسابات الأخرى.",
+      "inheritReasoning": "اتباع النموذج",
+      "noReasoning": "لا يمكن ضبط مستوى الاستدلال",
       "defaultReasoningInvalid": "يجب أن يكون مستوى الاستدلال الافتراضي مدعومًا من هذا النموذج."
     },
     "modelConfig": {

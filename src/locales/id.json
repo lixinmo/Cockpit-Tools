@@ -5853,6 +5853,15 @@
       "defaultReasoning": "Tingkat bawaan",
       "defaultReasoningFollow": "Ikuti bawaan",
       "defaultReasoningHint": "Biarkan kosong untuk mengikuti tingkat bawaan model. Tingkat yang dipilih harus didukung.",
+      "reasoningNone": "Nonaktif",
+      "reasoningMinimal": "Sangat rendah",
+      "providerPolicyHint": "Atur kemampuan model penyedia ini di sini. Untuk menambah atau menghapus model, edit daftar model pada akunnya; impor pengaturan instans tidak berlaku di sini.",
+      "providerPolicyDescription": "Gunakan kemampuan penyedia yang diketahui, atau tingkat kompatibilitas jika informasinya tidak tersedia. Anda dapat mengaturnya secara manual.",
+      "providerPolicyFollow": "Ikuti penyedia",
+      "providerPolicyCustom": "Kustom",
+      "providerPolicyConfirm": "Simpan pengaturan model terpisah untuk penyedia ini. Akun lain tidak akan berubah.",
+      "inheritReasoning": "Ikuti model",
+      "noReasoning": "Tingkat penalaran tidak dapat diatur",
       "defaultReasoningInvalid": "Tingkat penalaran bawaan harus didukung oleh model ini."
     },
     "modelConfig": {

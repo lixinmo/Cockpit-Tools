@@ -5806,6 +5806,15 @@
       "defaultReasoning": "Mức mặc định",
       "defaultReasoningFollow": "Dùng mặc định",
       "defaultReasoningHint": "Để trống để dùng mức mặc định của mô hình. Mức đã chọn phải được hỗ trợ.",
+      "reasoningNone": "Tắt",
+      "reasoningMinimal": "Tối thiểu",
+      "providerPolicyHint": "Cấu hình khả năng của các mô hình thuộc nhà cung cấp này tại đây. Để thêm hoặc xóa mô hình, hãy sửa danh sách mô hình trong tài khoản của họ; chức năng nhập cấu hình phiên bản không áp dụng ở đây.",
+      "providerPolicyDescription": "Sử dụng khả năng đã biết của nhà cung cấp; nếu không có thông tin, dùng các mức tương thích. Bạn có thể cấu hình thủ công.",
+      "providerPolicyFollow": "Theo nhà cung cấp",
+      "providerPolicyCustom": "Tùy chỉnh",
+      "providerPolicyConfirm": "Lưu cấu hình mô hình riêng cho nhà cung cấp này. Các tài khoản khác sẽ không thay đổi.",
+      "inheritReasoning": "Theo mô hình",
+      "noReasoning": "Không thể điều chỉnh mức suy luận",
       "defaultReasoningInvalid": "Mức suy luận mặc định phải được mô hình này hỗ trợ."
     },
     "modelConfig": {

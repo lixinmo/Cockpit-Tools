@@ -5806,6 +5806,15 @@
       "defaultReasoning": "Domyślny poziom",
       "defaultReasoningFollow": "Użyj domyślnego",
       "defaultReasoningHint": "Pozostaw puste, aby użyć domyślnego poziomu modelu. Wybrany poziom musi być obsługiwany.",
+      "reasoningNone": "Wyłączone",
+      "reasoningMinimal": "Minimalny",
+      "providerPolicyHint": "Tutaj skonfiguruj możliwości modeli tego dostawcy. Aby dodać lub usunąć modele, edytuj listę modeli jego konta; import ustawień instancji nie ma tutaj zastosowania.",
+      "providerPolicyDescription": "Używane są znane możliwości dostawcy, a gdy brakuje tych informacji — poziomy zgodności. Możesz je skonfigurować ręcznie.",
+      "providerPolicyFollow": "Zgodnie z dostawcą",
+      "providerPolicyCustom": "Własne",
+      "providerPolicyConfirm": "Zapisz osobne ustawienia modeli dla tego dostawcy. Pozostałe konta pozostaną bez zmian.",
+      "inheritReasoning": "Zgodnie z modelem",
+      "noReasoning": "Brak regulacji intensywności rozumowania",
       "defaultReasoningInvalid": "Domyślny poziom rozumowania musi być obsługiwany przez ten model."
     },
     "modelConfig": {

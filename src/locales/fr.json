@@ -5806,6 +5806,15 @@
       "defaultReasoning": "Niveau par défaut",
       "defaultReasoningFollow": "Valeur par défaut",
       "defaultReasoningHint": "Laissez vide pour reprendre le niveau par défaut du modèle. Le niveau choisi doit être pris en charge.",
+      "reasoningNone": "Désactivé",
+      "reasoningMinimal": "Minimale",
+      "providerPolicyHint": "Configurez ici les capacités des modèles de ce fournisseur. Pour ajouter ou supprimer des modèles, modifiez la liste de modèles de son compte ; les imports de configuration d’instance ne s’appliquent pas ici.",
+      "providerPolicyDescription": "Les capacités connues du fournisseur sont utilisées. À défaut, des niveaux de compatibilité sont proposés. Vous pouvez les configurer manuellement.",
+      "providerPolicyFollow": "Suivre le fournisseur",
+      "providerPolicyCustom": "Personnalisé",
+      "providerPolicyConfirm": "Enregistrer une configuration de modèles distincte pour ce fournisseur. Les autres comptes restent inchangés.",
+      "inheritReasoning": "Suivre le modèle",
+      "noReasoning": "Intensité de raisonnement non réglable",
       "defaultReasoningInvalid": "Le niveau de raisonnement par défaut doit être pris en charge par ce modèle."
     },
     "modelConfig": {

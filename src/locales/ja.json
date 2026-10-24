@@ -5806,6 +5806,15 @@
       "defaultReasoning": "既定の推論強度",
       "defaultReasoningFollow": "既定値を使用",
       "defaultReasoningHint": "空欄にするとモデルの既定値を使用します。選択する推論強度は現在の対応範囲内である必要があります。",
+      "reasoningNone": "オフ",
+      "reasoningMinimal": "最小",
+      "providerPolicyHint": "ここでは、このプロバイダーのモデル機能を設定します。モデルを追加・削除するには、アカウントのモデル一覧を編集してください。インスタンス設定のインポートはここには適用されません。",
+      "providerPolicyDescription": "プロバイダーの既知の機能を使用します。情報がない場合は互換性のためのレベルを使用し、手動でも設定できます。",
+      "providerPolicyFollow": "プロバイダーに従う",
+      "providerPolicyCustom": "カスタム",
+      "providerPolicyConfirm": "このプロバイダー専用のモデル設定を保存します。他のアカウントの設定は変更されません。",
+      "inheritReasoning": "モデルに従う",
+      "noReasoning": "推論の強度は調整不可",
       "defaultReasoningInvalid": "既定の推論強度は、このモデルが対応する値である必要があります。"
     },
     "modelConfig": {

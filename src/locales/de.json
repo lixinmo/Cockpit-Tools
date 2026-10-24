@@ -5806,6 +5806,15 @@
       "defaultReasoning": "Standardstufe",
       "defaultReasoningFollow": "Standard übernehmen",
       "defaultReasoningHint": "Leer lassen, um die Modellvorgabe zu übernehmen. Die gewählte Stufe muss unterstützt werden.",
+      "reasoningNone": "Aus",
+      "reasoningMinimal": "Sehr gering",
+      "providerPolicyHint": "Hier kannst du die Fähigkeiten der Modelle dieses Anbieters konfigurieren. Modelle fügst du in der Modellliste seines Kontos hinzu oder entfernst sie dort; Instanzimporte gelten hier nicht.",
+      "providerPolicyDescription": "Die bekannten Fähigkeiten des Anbieters werden verwendet. Sind sie nicht verfügbar, werden Kompatibilitätsstufen angeboten. Du kannst sie manuell konfigurieren.",
+      "providerPolicyFollow": "Anbieter folgen",
+      "providerPolicyCustom": "Benutzerdefiniert",
+      "providerPolicyConfirm": "Separate Modelleinstellungen für diesen Anbieter speichern. Andere Konten bleiben unverändert.",
+      "inheritReasoning": "Modell folgen",
+      "noReasoning": "Keine einstellbare Denkintensität",
       "defaultReasoningInvalid": "Die Standardstufe für Schlussfolgerungen muss vom Modell unterstützt werden."
     },
     "modelConfig": {

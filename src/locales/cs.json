@@ -5806,6 +5806,15 @@
       "defaultReasoning": "Výchozí úroveň",
       "defaultReasoningFollow": "Převzít výchozí",
       "defaultReasoningHint": "Ponechte prázdné pro převzetí výchozí úrovně modelu. Vybraná úroveň musí být podporovaná.",
+      "reasoningNone": "Vypnuto",
+      "reasoningMinimal": "Minimální",
+      "providerPolicyHint": "Zde nastavte schopnosti modelů tohoto poskytovatele. Modely přidávejte nebo odebírejte v seznamu modelů jeho účtu; import nastavení instance se zde nepoužívá.",
+      "providerPolicyDescription": "Použijí se známé schopnosti poskytovatele. Pokud nejsou dostupné, použijí se úrovně kompatibility. Můžete je nastavit ručně.",
+      "providerPolicyFollow": "Podle poskytovatele",
+      "providerPolicyCustom": "Vlastní",
+      "providerPolicyConfirm": "Uložit samostatné nastavení modelů pro tohoto poskytovatele. Ostatní účty zůstanou beze změny.",
+      "inheritReasoning": "Podle modelu",
+      "noReasoning": "Intenzitu uvažování nelze nastavit",
       "defaultReasoningInvalid": "Výchozí úroveň uvažování musí být podporována tímto modelem."
     },
     "modelConfig": {
