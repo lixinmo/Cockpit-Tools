@@ -108,11 +108,11 @@ test('reasoning portal focuses the selected option and keeps multi-selection key
   assert.equal(h.document.activeElement, h.options.find((option) => option.props['data-effort'] === 'medium'));
   assert.equal(menu.props['aria-multiselectable'], 'true');
   assert.equal(h.key(menu, 'End'), true);
-  assert.equal(h.document.activeElement, h.options.at(-1));
+  assert.equal(h.document.activeElement, h.options[h.options.length - 1]);
   h.key(h.menu(), 'ArrowDown');
   assert.equal(h.document.activeElement, h.options[0]);
   h.key(h.menu(), 'ArrowUp');
-  assert.equal(h.document.activeElement, h.options.at(-1));
+  assert.equal(h.document.activeElement, h.options[h.options.length - 1]);
   h.key(h.menu(), 'Home');
   const lowIndex = h.options.findIndex((option) => option.props['data-effort'] === 'low');
   for (let index = 0; index < lowIndex; index += 1) h.key(h.menu(), 'ArrowDown');
