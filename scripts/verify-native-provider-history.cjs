@@ -281,7 +281,8 @@ async function runTurn(context, model, resume, expectedRejection = false) {
 async function main(opts) {
   requireThat(!process.env.GITHUB_ACTIONS, 'local_acceptance_only');
   const version = spawnSync(opts.codex, ['--version'], { encoding: 'utf8', env: minimalEnvironment() });
-  requireThat(version.status === 0 && /codex-cli 0\.162\.1\b/.test(version.stdout), 'unexpected_codex_version');
+  const cliVersion = version.stdout?.trim().match(/^codex-cli (\S+)$/)?.[1];
+  requireThat(version.status === 0 && ['0.162.1', '0.164.0-alpha.11.1'].includes(cliVersion), 'unexpected_codex_version');
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ct-native-history-'));
   fs.chmodSync(root, 0o700);
   const output = path.join(root, 'driver');
@@ -315,7 +316,7 @@ async function main(opts) {
     context.cliEnv = { ...minimalEnvironment(), HOME: isolatedHome, CODEX_HOME: context.home, NO_COLOR: '1' };
     const initial = records(context.reports).find((row) => row.stage === 'ready');
     requireThat(initial?.sidecar_blocked === true && initial.account_snapshot === 'read_only' && initial.saved_policy === 'prefer_regular', 'credits_or_snapshot_contract_missing');
-    print({ stage: 'ready', cliVersion: '0.162.1', productionClientProjection: true, savedPolicy: 'prefer_regular', sidecarBlocked: true, maxRequests: opts.requests });
+    print({ stage: 'ready', cliVersion, productionClientProjection: true, savedPolicy: 'prefer_regular', sidecarBlocked: true, maxRequests: opts.requests });
     await runTurn(context, MODELS[0], false);
     injectLegacyReasoning(context.rollout);
     context.legacyReasoningId = records(context.rollout).findLast((row) =>
