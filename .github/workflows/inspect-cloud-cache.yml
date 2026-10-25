@@ -2,6 +2,9 @@ name: Inspect macOS compiled cache paths
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/inspect-cloud-cache.yml'
 
 permissions:
   contents: read
