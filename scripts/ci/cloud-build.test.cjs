@@ -77,6 +77,28 @@ test('native probe packaging selects Cargo evidence instead of cached executable
   assert.throws(() => nativeProbeExecutable(`${artifact('/old/test')}\n${artifact('/new/test')}`), /exactly one/);
 });
 
+test('cloud compilation state is restored after dependency cleanup and saved after validation', () => {
+  const workflow = fs.readFileSync(path.join(__dirname, '../../.github/workflows/build-matrix.yml'), 'utf8');
+  const build = workflow.slice(workflow.indexOf('  build:\n'), workflow.indexOf('  prune-compilation-state:\n'));
+  assert.ok(build.indexOf('name: Host build cache') < build.indexOf('name: Restore cloud compilation state'));
+  assert.ok(build.indexOf('name: Restore cloud compilation state') < build.indexOf('name: Build selected application'));
+  assert.ok(build.indexOf('name: Measure cloud compilation state') > build.indexOf('name: cockpit-tools-${{ matrix.label }}'));
+  assert.ok(build.indexOf('name: Save cloud compilation state') > build.indexOf('name: Measure cloud compilation state'));
+  for (const name of ['Build selected application', 'Native gateway capability, chat bridge and Credits regressions',
+    'Package optional local Native acceptance driver', 'Build and validate standalone Native acceptance driver']) {
+    const step = build.slice(build.indexOf(`- name: ${name}`)).split('\n      - ')[0];
+    assert.match(step, /CARGO_INCREMENTAL:.*compilation-state\.outputs\.enabled.*'1'.*'0'/);
+  }
+  assert.match(workflow, /CARGO_PROFILE_RELEASE_CODEGEN_UNITS: '16'/);
+  assert.doesNotMatch(build, /actions: write|local-app\.toml/);
+  const prune = workflow.slice(workflow.indexOf('  prune-compilation-state:\n'), workflow.indexOf('  universal:\n'));
+  assert.match(prune, /github\.event_name == 'push'.*github\.event_name == 'workflow_dispatch'/);
+  assert.match(prune, /startsWith\(github\.ref, 'refs\/heads\/'\)/);
+  assert.match(prune, /actions: write/);
+  const release = fs.readFileSync(path.join(__dirname, '../../.github/workflows/release.yml'), 'utf8');
+  assert.doesNotMatch(release, /cloud-build-state-cache|CARGO_INCREMENTAL: ['"]?1|local-app\.toml/);
+});
+
 test('native gateway regressions reuse the thin application target and isolate synthetic fixtures', () => {
   for (const platform of platforms.filter(p => p.native_mac === '1')) {
     const args = nativeRegressionArgs(platform.target);

@@ -47,6 +47,8 @@ concurrency:
 env:
   ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
   CARGO_INCREMENTAL: '0'
+  # Incremental builds otherwise default to 256 units. Preserve release's 16.
+  CARGO_PROFILE_RELEASE_CODEGEN_UNITS: '16'
 
 jobs:
   plan:
@@ -80,7 +82,7 @@ jobs:
         run: |
           npm test
           npm run test:release
-          node --test scripts/ci/cloud-build.test.cjs
+          node --test scripts/ci/cloud-build.test.cjs scripts/ci/cloud-build-state-cache.test.cjs
           node scripts/check_locales.cjs
       - name: Build frontend once
         run: node node_modules/vite/bin/vite.js build
@@ -111,7 +113,7 @@ jobs:
             tests/codex-native-connect-retry -> ../../target/local-app-cache/native-connect-retry-harness/target
             tests/codex-credits-policy
             tests/codex-auto-reset
-          save-if: ${{ github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch }}
+          save-if: ${{ github.event_name != 'pull_request' && (github.ref_name == github.event.repository.default_branch || (github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/'))) }}
       - name: Fetch Native harness dependencies before offline verification
         run: cargo fetch --locked --manifest-path tests/codex-native-connect-retry/Cargo.toml
       - name: Native setup-only retry contract
@@ -158,6 +160,28 @@ jobs:
         with:
           name: cloud-frontend
           path: dist
+      - name: Prepare cloud compilation state key
+        id: compilation-state
+        run: node scripts/ci/cloud-build-state-cache.cjs prepare "${{ matrix.label }}" "${{ inputs.native_probe_only == true && 'probe' || 'full' }}"
+      - name: Restore cloud compilation state
+        id: restore-compilation-state
+        if: steps.compilation-state.outputs.enabled == 'true'
+        continue-on-error: true
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ steps.compilation-state.outputs.paths }}
+          key: ${{ steps.compilation-state.outputs.key }}
+          restore-keys: ${{ steps.compilation-state.outputs.prefix }}
+      - name: Inspect restored cloud compilation state
+        if: steps.compilation-state.outputs.enabled == 'true'
+        continue-on-error: true
+        env:
+          CLOUD_CACHE_PLATFORM: ${{ matrix.label }}
+        run: |
+          node - <<'NODE'
+          const {measureState} = require('./scripts/ci/cloud-build-state-cache.cjs');
+          console.log(JSON.stringify({stage: 'restored_build_state', ...measureState(process.cwd(), process.env.CLOUD_CACHE_PLATFORM)}));
+          NODE
       - name: Build selected application
         if: inputs.native_probe_only != true
         env:
@@ -165,6 +189,7 @@ jobs:
           CLOUD_BUILD_TARGET: ${{ matrix.target }}
           COCKPIT_NATIVE_APP_BUILD: ${{ matrix.native_mac }}
           COCKPIT_SKIP_CLIPROXY_BUILD: '0'
+          CARGO_INCREMENTAL: ${{ steps.compilation-state.outputs.enabled == 'true' && '1' || '0' }}
         run: node scripts/ci/cloud-build.cjs build
       - name: Native gateway capability, chat bridge and Credits regressions
         if: runner.os == 'macOS' && inputs.native_probe_only != true && inputs.native_probe != true
@@ -172,6 +197,7 @@ jobs:
           CLOUD_BUILD_TARGET: ${{ matrix.target }}
           COCKPIT_NATIVE_APP_BUILD: '1'
           COCKPIT_SKIP_CLIPROXY_BUILD: '1'
+          CARGO_INCREMENTAL: ${{ steps.compilation-state.outputs.enabled == 'true' && '1' || '0' }}
         run: node scripts/ci/cloud-build.cjs native-regressions
       - name: Package optional local Native acceptance driver
         if: runner.os == 'macOS' && inputs.native_probe == true && inputs.native_probe_only != true
@@ -179,6 +205,7 @@ jobs:
           CLOUD_BUILD_TARGET: ${{ matrix.target }}
           COCKPIT_NATIVE_APP_BUILD: '1'
           COCKPIT_SKIP_CLIPROXY_BUILD: '1'
+          CARGO_INCREMENTAL: ${{ steps.compilation-state.outputs.enabled == 'true' && '1' || '0' }}
         run: node scripts/ci/cloud-build.cjs build-native-probe
       - name: Build and validate standalone Native acceptance driver
         if: runner.os == 'macOS' && inputs.native_probe_only == true
@@ -186,6 +213,7 @@ jobs:
           CLOUD_BUILD_TARGET: ${{ matrix.target }}
           COCKPIT_NATIVE_APP_BUILD: '1'
           COCKPIT_SKIP_CLIPROXY_BUILD: '1'
+          CARGO_INCREMENTAL: ${{ steps.compilation-state.outputs.enabled == 'true' && '1' || '0' }}
         run: node scripts/ci/cloud-build.cjs build-native-probe
       - uses: actions/upload-artifact@v4
         if: runner.os == 'macOS' && (inputs.native_probe == true || inputs.native_probe_only == true)
@@ -221,6 +249,48 @@ jobs:
           retention-days: 1
           compression-level: 0
           if-no-files-found: error
+      # Save before rust-cache's post step removes workspace/incremental files.
+      - name: Measure cloud compilation state
+        id: compilation-state-size
+        if: steps.compilation-state.outputs.enabled == 'true'
+        run: node scripts/ci/cloud-build-state-cache.cjs measure "${{ matrix.label }}" "${{ inputs.native_probe_only == true && 'probe' || 'full' }}"
+      - name: Save cloud compilation state
+        if: steps.compilation-state-size.outputs.save == 'true' && steps.restore-compilation-state.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ steps.compilation-state.outputs.paths }}
+          key: ${{ steps.compilation-state.outputs.key }}
+
+  prune-compilation-state:
+    name: Retain current branch compilation state
+    needs: [plan, build]
+    if: >-
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      startsWith(github.ref, 'refs/heads/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Prune only this branch's compilation state namespace
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLOUD_STATE_MATRIX: ${{ needs.plan.outputs.matrix }}
+          CLOUD_STATE_MODE: ${{ inputs.native_probe_only == true && 'probe' || 'full' }}
+        run: |
+          node - <<'NODE'
+          const {execFileSync} = require('node:child_process');
+          for (const platform of JSON.parse(process.env.CLOUD_STATE_MATRIX).include) {
+            execFileSync(process.execPath, ['scripts/ci/cloud-build-state-cache.cjs', 'prune', platform.label, process.env.CLOUD_STATE_MODE], {stdio: 'inherit'});
+          }
+          NODE
 
   universal:
     name: Bundle macOS Universal without recompiling

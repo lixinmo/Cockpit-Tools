@@ -1,5 +1,5 @@
 name: Host build cache
-description: Share dependency caches between trusted main builds and tagged releases.
+description: Share dependency caches between trusted branch builds and tagged releases.
 inputs:
   target:
     description: Stable platform and target identifier, shared by CI and release jobs.
@@ -13,7 +13,7 @@ runs:
         shared-key: host-release-v2-${{ inputs.target }}
         workspaces: ". -> target"
         cache-workspace-crates: "false"
-        save-if: ${{ github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) }}
+        save-if: ${{ github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/'))) }}
 
     # macOS embeds create-dmg under target/.../bundle/share; it does not
     # populate ~/Library/Caches/tauri. Only Windows/Linux download tools here.

@@ -45,6 +45,27 @@ Cloud Build 在云端运行 TypeScript 检查及相关测试，并验证同账�
 
 Rust、Go、npm 缓存按平台、架构和依赖输入复用。macOS Universal 使用同一次运行已经生成的两个架构输入合并，避免额外重复编译。缓存只存放构建依赖和编译结果，不存放任何本机账号或运行配置。沿用 GitHub 默认的每仓库 10 GB 免费缓存容量；只使用公开仓库的免费标准托管 runner，不启用 larger runner、付费服务、付费缓存扩容或收费额度，不为构建设置付款方式。GitHub 自身的容量与保留策略仍适用。
 
+Cloud Build 额外为受信任分支的 `push` / `workflow_dispatch` 保留编译状态。
+既有 Rust 缓存继续提供依赖底座；新的状态缓存只包含 release 目录下的
+`build`、`.fingerprint`、`deps`、`incremental`，覆盖 App 和 Native 验收程序。
+它不包含打包后的 App、bundle、运行配置或测试临时 profile。状态在依赖缓存
+恢复后加载，在编译、验证和成品上传完成后保存，避免被 Rust 缓存 action 的
+收尾清理删除。PR 和 tag 不写入该状态缓存。
+
+编译步骤显式开启增量编译，同时保持 release 的 16 个代码生成单元及现有优化
+等级。正式 `release.yml` 不使用这层增量状态，也不加载旧的本地快速编译配置。
+缓存按平台/架构、编译器、runner 镜像、依赖及编译配置区分，提交号用于保存
+新状态；后续提交可以恢复相同配置的最近状态。新分支也可以保存自己的依赖缓存。
+
+单份编译状态上限为 6 GiB 未压缩文件；超过上限或发现不允许的文件类型时跳过
+保存并明确报告，不影响已通过验证的 App。单独的清理任务只处理当前分支、
+当前平台和 full/probe 模式的编译状态命名空间，正常保留最新一份；并发运行时
+不删除更新运行保存的缓存。依赖缓存、其他分支和正式发布缓存不在其清理范围。
+整个仓库仍受 GitHub 默认免费总量和自动淘汰规则约束，不提高付费容量。
+
+首次运行需要建立新状态，可能仍较慢。确认增量生效应查看下一次运行的恢复命中、
+增量文件统计以及 Cargo/App/probe 实际耗时；仅看到开关开启不算完成验证。
+
 正式版本沿用 [Release 工作流](https://github.com/lixinmo/Cockpit-Tools/actions/workflows/release.yml)：版本号、变更记录与 `v<version>` 标签必须对应；标签指向的同一个提交必须先通过 Cloud Build。Release 随后构建各支持平台，并使用维护者配置的发布签名 secret 生成可校验的 updater 成品。私钥只放 GitHub Actions Secrets，不能提交到 Git。发布验证和全部平台构建成功后再发布正式版本。日常只下载当前 Mac 的包，其他用户可按需从 Releases 下载。一次 Intel Mac 构建成功不等于其他平台或正式发布已经完成验证。
 
 Fork 用户先在自己的仓库启用 Actions，再使用 Cloud Build 选择平台。启动器读取 fork 的 `origin`，不会固定向原作者仓库提交构建。普通云端包不依赖本机私有数据，也不需要签名 secret。正式发布前应生成自己的 Tauri updater 密钥，在 GitHub Actions Secrets 设置 `TAURI_SIGNING_PRIVATE_KEY` 和需要时的 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`，并更新 `src-tauri/tauri.conf.json` 的 updater 公钥与下载来源；不能使用其他维护者的私钥。本分支的 updater 来源指向 `lixinmo/Cockpit-Tools`。
