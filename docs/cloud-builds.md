@@ -99,3 +99,40 @@ git push origin main
 对于已经公开的分支，优先合并以保留历史。合并时逐项检查 `docs/local-patches/`，继续复用上游协议、continuation 和 quota-reserve 实现；不得增加第二套 plaintext marker 策略，或在切换引擎/身份时绕过 Credits。
 
 每次上游同步后，按照 `same-account-connect-retry.md` 的 duplicate-retry review 比较上游和本地重试机制，避免两层重试叠加；保持 `CT-CONNECT-RETRY-001` v1.0 和 Go 参考合约。云端运行 `scripts/verify-cockpit-connect-retry.sh`，更新 Native transport 或 patched reqwest/hyper-util 时还要运行 `scripts/verify-native-connect-retry.sh`，并运行受影响的 Credits/Auto Reset 检查。默认不需要 `--cross-platform`；涉及额外平台行为时在云端增加对应验证。最后审查相对 `upstream/main` 的补丁差异，并在提交或发布记录中写明上游基线和通过的云端运行。
+
+## 增量缓存验证记录（2026-10-26）
+
+此前的 [40118990052](https://github.com/lixinmo/Cockpit-Tools/actions/runs/40118990052)
+并非完全从零构建：Rust、Go、npm 均命中依赖缓存。当时仓库有 6 份 main 缓存，
+共 1,896,670,255 字节，但修复分支不保存新 Rust 缓存，workspace 产物不保留，
+增量编译被关闭。App 的 Cargo 编译耗时 30 分 45 秒，验收程序 13 分 27 秒；
+Intel job 总计 48 分 47 秒，全流程约 51 分钟。
+
+新增状态缓存的前两次尝试均通过了 App 和保护检查，但没有成功保存增量状态，
+不能当作已验证提速：
+
+- [40199297468](https://github.com/lixinmo/Cockpit-Tools/actions/runs/40199297468)
+  被过严的路径检查拦截。[40205452637](https://github.com/lixinmo/Cockpit-Tools/actions/runs/40205452637)
+  用标准 Intel runner 仅编译实际 Swift 菜单组件，确认是 SwiftPM 的内部相对
+  `release` 链接。后续加入了有边界的合法链接支持；外部、绝对、断链和循环仍拒绝。
+- [40207258305](https://github.com/lixinmo/Cockpit-Tools/actions/runs/40207258305)
+  完成扫描，但全套编译状态为 7,724,820,815 字节，超过 6 GiB 上限而跳过保存。
+  其中实际增量数据只有 4,618,067,069 字节。因此最终改为依赖与增量分层保存，
+  不重复缓存整套 build/deps/fingerprint，也不提高 GitHub 容量或启用付费服务。
+
+Swift 诊断 [40207227529](https://github.com/lixinmo/Cockpit-Tools/actions/runs/40207227529)
+与 [40211785410](https://github.com/lixinmo/Cockpit-Tools/actions/runs/40211785410) 均通过。
+这些只是编译路径检查，没有生成可交付 App，不能替代完整构建、缓存保存或复用验证。
+
+仅增量策略在 [40211902253](https://github.com/lixinmo/Cockpit-Tools/actions/runs/40211902253)
+首次建立可用状态缓存，构建提交为 `74bcf67d2bb947c38ac99ddabc40d3d3ae6b88b0`。
+扫描得到 4,618,067,064 字节、327 个增量文件，`save=true`，保存耗时 38 秒；
+实际 GitHub 缓存条目为 1,516,255,304 字节，归属当前修复分支，命名空间为
+`ct-cloud-incremental-v1-macos-x86_64-full-`，清理结果为 `keep_latest_one`。
+本轮尚未恢复新增量缓存，App Cargo 编译 32 分 41 秒、验收程序 12 分 56 秒，
+全流程 54 分 04 秒；Native 275 项、重试 18 项、Credits 31 项、Auto Reset
+71 项及 Go 合同均通过。这证明状态已经保存，不单独证明提速。
+
+后续复用验证使用仅修改本说明的新提交，因此编译器、依赖和程序源码保持不变，
+提交号变化会走兼容前缀恢复，而不是依赖完全相同的缓存 key。结果只能作为
+跨 runner、跨提交缓存恢复的实测；实际程序改动仍需重编受影响部分。
