@@ -47,8 +47,8 @@ jobs:
             }
           };
           if (fs.existsSync(directory)) visit(directory);
-          const {measureState} = require('./scripts/ci/cloud-build-state-cache.cjs');
-          const result = measureState(root, 'macos-x86_64');
+          const {inspectCompiledState} = require('./scripts/ci/cloud-build-state-cache.cjs');
+          const result = inspectCompiledState(root, 'macos-x86_64');
           console.log(JSON.stringify(result));
           // This job compiles Swift only: no Rust incremental state is expected.
           // Its legitimate internal release link must not block the scanner.

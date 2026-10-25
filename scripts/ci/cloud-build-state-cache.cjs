@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Cloud-only compiled state. Never cache an App, bundle, profile or user data.
+// Cloud-only rustc incremental state; dependencies use the existing Rust cache.
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
@@ -31,15 +31,18 @@ function selection(platform, mode) {
   return selected;
 }
 
-function cachePaths(platform) {
+function profilePaths(platform) {
   const { target } = selection(platform, 'full');
-  return ['target/release', `target/${target}/release`]
-    .flatMap(directory => BUILD_DIRS.map(name => `${directory}/${name}`));
+  return ['target/release', `target/${target}/release`];
+}
+
+function cachePaths(platform) {
+  return profilePaths(platform).map(directory => `${directory}/incremental`);
 }
 
 function namespace(platform, mode) {
   selection(platform, mode);
-  return `ct-cloud-state-v1-${platform}-${mode}-`;
+  return `ct-cloud-incremental-v1-${platform}-${mode}-`;
 }
 
 function cachePlan({ platform, mode, env, rustVersion, inputs }) {
@@ -73,6 +76,16 @@ function inputHashes(root) {
 }
 
 function measureState(root, platform, maxBytes = MAX_BYTES) {
+  return scanState(root, platform, maxBytes, false);
+}
+
+// Read-only diagnostics retain the broader compilation view. Its paths are
+// never returned to actions/cache and cannot be supplied by callers.
+function inspectCompiledState(root, platform, maxBytes = MAX_BYTES) {
+  return scanState(root, platform, maxBytes, true);
+}
+
+function scanState(root, platform, maxBytes, compiled) {
   if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) throw new Error('invalid_size_cap');
   const result = { bytes: 0, files: 0, symlinks: 0, incrementalBytes: 0, incrementalFiles: 0, save: false, reason: '' };
   let safeRoots = [];
@@ -130,7 +143,10 @@ function measureState(root, platform, maxBytes = MAX_BYTES) {
   };
   try {
     const directories = [];
-    for (const relative of cachePaths(platform)) {
+    const paths = compiled
+      ? profilePaths(platform).flatMap(directory => BUILD_DIRS.map(name => `${directory}/${name}`))
+      : cachePaths(platform);
+    for (const relative of paths) {
       let directory = root;
       let missing = false;
       // Reject a symlink in an ancestor as well as inside a cache directory.
@@ -250,4 +266,4 @@ if (require.main === module) main(process.argv.slice(2)).catch(error => {
   }
 });
 
-module.exports = { MAX_BYTES, BUILD_DIRS, trusted, cachePaths, namespace, cachePlan, measureState, pruneCandidates, prune };
+module.exports = { MAX_BYTES, BUILD_DIRS, trusted, cachePaths, namespace, cachePlan, measureState, inspectCompiledState, pruneCandidates, prune };

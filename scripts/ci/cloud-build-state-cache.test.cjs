@@ -4,7 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const test = require('node:test');
-const { MAX_BYTES, trusted, cachePaths, namespace, cachePlan, measureState, pruneCandidates, prune } = require('./cloud-build-state-cache.cjs');
+const { MAX_BYTES, trusted, cachePaths, namespace, cachePlan, measureState, inspectCompiledState, pruneCandidates, prune } = require('./cloud-build-state-cache.cjs');
 
 const env = {
   GITHUB_ACTIONS: 'true', GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_REF: 'refs/heads/codex/test',
@@ -31,7 +31,7 @@ test('source changes restore the same compatible prefix; toolchain and build inp
   const changedSource = cachePlan({ ...options, env: { ...env, GITHUB_SHA: 'b'.repeat(40) } });
   assert.equal(original.prefix, changedSource.prefix);
   assert.notEqual(original.key, changedSource.key);
-  assert.equal(original.namespace, 'ct-cloud-state-v1-macos-x86_64-full-');
+  assert.equal(original.namespace, 'ct-cloud-incremental-v1-macos-x86_64-full-');
   assert.equal(original.key, original.prefix + env.GITHUB_SHA);
   const variants = [
     { rustVersion: 'rustc next' }, { inputs: { ...options.inputs, 'Cargo.lock': 'new-lock' } },
@@ -47,15 +47,14 @@ test('source changes restore the same compatible prefix; toolchain and build inp
   assert.throws(() => cachePlan({ ...options, platform: 'windows', mode: 'probe' }), /invalid_probe_platform/);
 });
 
-test('cache paths are limited to Cargo compilation state and exclude packages and runtime files', () => {
-  const expected = ['build', '.fingerprint', 'deps', 'incremental'];
+test('cache paths contain only rustc incremental state, without duplicating dependencies or packages', () => {
   for (const platform of ['macos-x86_64', 'macos-aarch64', 'windows', 'linux-x86_64', 'linux-aarch64']) {
     const paths = cachePaths(platform);
-    assert.equal(paths.length, 8);
+    assert.equal(paths.length, 2);
     for (const item of paths) {
       assert.ok(item.startsWith('target/'));
-      assert.ok(expected.includes(path.posix.basename(item)));
-      assert.doesNotMatch(item, /bundle|\.app|profile|\.cargo|credential|account/);
+      assert.equal(path.posix.basename(item), 'incremental');
+      assert.doesNotMatch(item, /bundle|\.app|profile|\.cargo|credential|account|deps|fingerprint|build/);
     }
   }
   assert.throws(() => cachePaths('all'), /invalid_selection/);
@@ -71,30 +70,60 @@ test('measure reports incremental data, caps uploads, ignores out-of-scope files
     };
     assert.equal(measureState(root, 'macos-x86_64').reason, 'incremental_missing');
     write('target/release/deps/dependency.rlib', 'abc');
+    write('target/release/build/generated', 'exclude-build');
+    write('target/release/.fingerprint/manifest', 'exclude-fingerprint');
     write('target/x86_64-apple-darwin/release/incremental/session/state', 'state');
     write('target/x86_64-apple-darwin/release/bundle/Cockpit.app/file', 'must-not-count');
     write('target/private/profile/auth.json', 'synthetic-do-not-cache');
     let result = measureState(root, 'macos-x86_64');
-    assert.deepEqual(result, { bytes: 8, files: 2, symlinks: 0, incrementalBytes: 5, incrementalFiles: 1, save: true, reason: 'ready' });
+    assert.deepEqual(result, { bytes: 5, files: 1, symlinks: 0, incrementalBytes: 5, incrementalFiles: 1, save: true, reason: 'ready' });
+    const inspected = inspectCompiledState(root, 'macos-x86_64');
+    assert.equal(inspected.files, 4);
+    assert.ok(inspected.bytes > result.bytes);
+    assert.equal(inspected.incrementalBytes, result.incrementalBytes);
     assert.equal(MAX_BYTES, 6 * 1024 ** 3);
-    result = measureState(root, 'macos-x86_64', 7);
+    result = measureState(root, 'macos-x86_64', 4);
     assert.equal(result.save, false);
     assert.equal(result.reason, 'size_limit');
-    fs.symlinkSync(path.join(root, 'target/private/profile/auth.json'), path.join(root, 'target/release/deps/linked'));
+    const incremental = path.join(root, 'target/x86_64-apple-darwin/release/incremental');
+    fs.symlinkSync(path.join(root, 'target/private/profile/auth.json'), path.join(incremental, 'linked'));
     result = measureState(root, 'macos-x86_64');
     assert.equal(result.reason, 'unsupported_or_unreadable_path');
-    assert.equal(result.blockedPath, 'target/release/deps/linked');
+    assert.equal(result.blockedPath, 'target/x86_64-apple-darwin/release/incremental/linked');
     assert.equal(result.blockedType, 'symlink');
     assert.equal(result.blockedCode, 'ABSOLUTE_SYMLINK');
     assert.ok(!JSON.stringify(result).includes(root));
-    fs.unlinkSync(path.join(root, 'target/release/deps/linked'));
-    fs.rmSync(path.join(root, 'target/release/deps'), { recursive: true });
-    fs.symlinkSync(path.join(root, 'target/private'), path.join(root, 'target/release/deps'), 'dir');
+    fs.unlinkSync(path.join(incremental, 'linked'));
+    fs.symlinkSync(path.join(root, 'target/private'), path.join(root, 'target/release/incremental'), 'dir');
     result = measureState(root, 'macos-x86_64');
     assert.equal(result.save, false);
-    assert.equal(result.blockedPath, 'target/release/deps');
+    assert.equal(result.blockedPath, 'target/release/incremental');
     assert.equal(result.blockedType, 'symlink');
     assert.equal(result.blockedCode, 'UNSUPPORTED_ANCESTOR');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('incremental cache cannot include a dependency through a link to an uncached root', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ct-cache-lean-link-'));
+  try {
+    const incremental = path.join(root, 'target/release/incremental');
+    const deps = path.join(root, 'target/release/deps');
+    fs.mkdirSync(incremental, { recursive: true });
+    fs.mkdirSync(deps, { recursive: true });
+    fs.writeFileSync(path.join(incremental, 'session.db'), 'state');
+    fs.writeFileSync(path.join(deps, 'dependency.rlib'), 'artifact');
+    const target = '../deps/dependency.rlib';
+    fs.symlinkSync(target, path.join(incremental, 'alias'));
+    const measured = measureState(root, 'macos-x86_64');
+    assert.equal(measured.save, false);
+    assert.equal(measured.blockedPath, 'target/release/incremental/alias');
+    assert.equal(measured.blockedCode, 'EXTERNAL_SYMLINK');
+    const inspected = inspectCompiledState(root, 'macos-x86_64');
+    assert.equal(inspected.save, true);
+    assert.equal(inspected.files, 2);
+    assert.equal(inspected.symlinks, 1);
+    assert.equal(inspected.bytes, 13 + Buffer.byteLength(target));
+    assert.equal(inspected.incrementalBytes, 5);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -106,7 +135,7 @@ test('relative Swift output aliases are preserved without traversing or counting
     fs.mkdirSync(path.join(output, target), { recursive: true });
     fs.writeFileSync(path.join(output, target, 'menu.a'), 'lib');
     fs.symlinkSync(target, path.join(output, 'release'), 'dir');
-    const result = measureState(root, 'macos-x86_64');
+    const result = inspectCompiledState(root, 'macos-x86_64');
     assert.equal(result.reason, 'incremental_missing');
     assert.equal(result.symlinks, 1);
     assert.equal(result.files, 1);
@@ -115,14 +144,18 @@ test('relative Swift output aliases are preserved without traversing or counting
     assert.equal(result.save, false);
     fs.unlinkSync(path.join(output, 'release'));
     fs.symlinkSync(path.join(output, target), path.join(output, 'release'), 'dir');
-    assert.equal(measureState(root, 'macos-x86_64').blockedCode, 'ABSOLUTE_SYMLINK');
+    assert.equal(inspectCompiledState(root, 'macos-x86_64').blockedCode, 'ABSOLUTE_SYMLINK');
+    assert.deepEqual(measureState(root, 'macos-x86_64'), {
+      bytes: 0, files: 0, symlinks: 0, incrementalBytes: 0, incrementalFiles: 0,
+      save: false, reason: 'incremental_missing',
+    });
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
 test('relative links reject external targets, broken chains, cycles and links to ancestors', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ct-cache-link-boundary-'));
   try {
-    const deps = path.join(root, 'target/release/deps');
+    const deps = path.join(root, 'target/release/incremental');
     const outside = path.join(root, 'target/private');
     fs.mkdirSync(deps, { recursive: true });
     fs.mkdirSync(outside, { recursive: true });
@@ -133,7 +166,7 @@ test('relative links reject external targets, broken chains, cycles and links to
       fs.symlinkSync(target, link);
       const result = measureState(root, 'macos-x86_64');
       assert.equal(result.save, false);
-      assert.equal(result.blockedPath, 'target/release/deps/alias');
+      assert.equal(result.blockedPath, 'target/release/incremental/alias');
       assert.equal(result.blockedType, 'symlink');
       assert.equal(result.blockedCode, code);
       fs.unlinkSync(link);
@@ -153,13 +186,13 @@ test('relative links reject external targets, broken chains, cycles and links to
 test('a link cannot authorize another cache root whose ancestor is itself a symlink', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ct-cache-root-link-'));
   try {
-    const deps = path.join(root, 'target/release/deps');
+    const deps = path.join(root, 'target/release/incremental');
     const outside = path.join(root, 'private');
     fs.mkdirSync(deps, { recursive: true });
-    fs.mkdirSync(path.join(outside, 'release/build'), { recursive: true });
-    fs.writeFileSync(path.join(outside, 'release/build/hidden'), 'do-not-cache');
+    fs.mkdirSync(path.join(outside, 'release/incremental'), { recursive: true });
+    fs.writeFileSync(path.join(outside, 'release/incremental/hidden'), 'do-not-cache');
     fs.symlinkSync(outside, path.join(root, 'target/x86_64-apple-darwin'), 'dir');
-    fs.symlinkSync('../../x86_64-apple-darwin/release/build/hidden', path.join(deps, 'alias'));
+    fs.symlinkSync('../../x86_64-apple-darwin/release/incremental/hidden', path.join(deps, 'alias'));
     const result = measureState(root, 'macos-x86_64');
     assert.equal(result.blockedPath, 'target/x86_64-apple-darwin');
     assert.equal(result.blockedCode, 'UNSUPPORTED_ANCESTOR');
@@ -198,6 +231,7 @@ test('pruning retains current latest state and cannot cross branch, platform, mo
     entry(6, 'b', 0, { key: 'host-release-dependencies' }),
     entry(7, 'b', 0, { key: `${scope}unexpected-key-shape` }),
     entry(8, 'b', 0, { created_at: 'invalid' }),
+    entry(10, 'b', 0, { key: old.key.replace('ct-cloud-incremental-v1-', 'ct-cloud-state-v1-') }),
   ];
   assert.deepEqual(pruneCandidates([old, current, old, ...ignored], pruneOptions), { ids: [1], reason: 'keep_latest_one' });
   assert.deepEqual(pruneCandidates([old, ...ignored], pruneOptions), { ids: [], reason: 'current_cache_missing' });
