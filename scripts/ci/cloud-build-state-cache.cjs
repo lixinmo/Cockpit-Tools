@@ -7,7 +7,7 @@ const { execFileSync } = require('node:child_process');
 const { platforms } = require('./cloud-build.cjs');
 
 const ROOT = path.resolve(__dirname, '../..');
-const MAX_BYTES = 6 * 1024 ** 3;
+const MAX_BYTES = 8 * 1024 ** 3;
 const BUILD_DIRS = ['build', '.fingerprint', 'deps', 'incremental'];
 const HELPER_INPUT = 'scripts/ci/cloud-build-state-cache.cjs';
 // Cache-schema migration from 74bcf67d2bb947c38ac99ddabc40d3d3ae6b88b0.

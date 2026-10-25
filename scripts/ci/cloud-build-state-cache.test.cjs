@@ -104,7 +104,7 @@ test('measure reports incremental data, caps uploads, ignores out-of-scope files
     assert.equal(inspected.files, 4);
     assert.ok(inspected.bytes > result.bytes);
     assert.equal(inspected.incrementalBytes, result.incrementalBytes);
-    assert.equal(MAX_BYTES, 6 * 1024 ** 3);
+    assert.equal(MAX_BYTES, 8 * 1024 ** 3);
     result = measureState(root, 'macos-x86_64', 4);
     assert.equal(result.save, false);
     assert.equal(result.reason, 'size_limit');
@@ -126,7 +126,7 @@ test('measure reports incremental data, caps uploads, ignores out-of-scope files
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
-test('hardlinked Rust sessions count contents once while retaining every path and the six-GiB cap', () => {
+test('hardlinked Rust sessions count contents once while retaining every path and the bounded cap', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ct-cache-hardlinks-'));
   try {
     const host = path.join(root, 'target/release/incremental');
@@ -142,7 +142,7 @@ test('hardlinked Rust sessions count contents once while retaining every path an
     assert.deepEqual(result, { bytes: 12, logicalBytes: 24, files: 4, uniqueFiles: 2, hardlinkedFiles: 2,
       symlinks: 0, incrementalBytes: 12, incrementalFiles: 4, save: true, reason: 'ready' });
     assert.equal(measureState(root, 'macos-x86_64', 11).reason, 'size_limit');
-    assert.equal(MAX_BYTES, 6 * 1024 ** 3);
+    assert.equal(MAX_BYTES, 8 * 1024 ** 3);
     fs.symlinkSync('session-one.o', path.join(host, 'alias'));
     const withLink = measureState(root, 'macos-x86_64');
     assert.equal(withLink.bytes, 12 + Buffer.byteLength('session-one.o'));
