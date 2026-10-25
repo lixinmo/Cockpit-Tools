@@ -9,9 +9,14 @@ const { platforms } = require('./cloud-build.cjs');
 const ROOT = path.resolve(__dirname, '../..');
 const MAX_BYTES = 6 * 1024 ** 3;
 const BUILD_DIRS = ['build', '.fingerprint', 'deps', 'incremental'];
+const HELPER_INPUT = 'scripts/ci/cloud-build-state-cache.cjs';
+// Cache-schema migration from 74bcf67d2bb947c38ac99ddabc40d3d3ae6b88b0.
+// Its helper hash was an unnecessary compiler input. Restore that exact old
+// schema only with the same real compiler/environment/dependency fingerprints.
+const LEGACY_HELPER_HASH = 'f65de9bc19fc5e53072c8f3fdb393aeb0ae1964d2c308b85d39b4c60dc1aab70';
 const BUILD_INPUTS = [
   '.github/workflows/build-matrix.yml', '.github/actions/host-build-cache/action.yml',
-  'scripts/ci/cloud-build.cjs', 'scripts/ci/cloud-build-state-cache.cjs',
+  'scripts/ci/cloud-build.cjs',
   'src-tauri/build.rs', 'src-tauri/tauri.conf.json', 'package.json', 'package-lock.json',
 ];
 
@@ -53,14 +58,17 @@ function cachePlan({ platform, mode, env, rustVersion, inputs }) {
   for (const name of ['RUNNER_OS', 'RUNNER_ARCH', 'ImageOS', 'ImageVersion', 'RUSTFLAGS',
     'CARGO_ENCODED_RUSTFLAGS', 'RUSTC_WRAPPER', 'RUSTC_WORKSPACE_WRAPPER', 'CC', 'CXX',
     'CFLAGS', 'CXXFLAGS', 'MACOSX_DEPLOYMENT_TARGET', 'SDKROOT']) compilerEnv[name] = env[name] || '';
-  const fingerprint = crypto.createHash('sha256').update(JSON.stringify({
+  const compilerInputs = { ...inputs };
+  delete compilerInputs[HELPER_INPUT];
+  const fingerprint = values => crypto.createHash('sha256').update(JSON.stringify({
     rustVersion: rustVersion.trim(), compilerEnv,
     profiles: { incremental: true, codegenUnits: 16, appOptLevel: 3, probeOptLevel: 0 },
-    inputs: Object.entries(inputs).sort(([left], [right]) => left.localeCompare(right)),
+    inputs: Object.entries(values).sort(([left], [right]) => left.localeCompare(right)),
   })).digest('hex').slice(0, 32);
-  const prefix = `${scope}${fingerprint}-`;
-  return { enabled: true, key: `${prefix}${env.GITHUB_SHA.toLowerCase()}`,
-    prefix, namespace: scope, paths: cachePaths(platform).join('\n') };
+  const primaryPrefix = `${scope}${fingerprint(compilerInputs)}-`;
+  const legacyPrefix = `${scope}${fingerprint({ ...compilerInputs, [HELPER_INPUT]: LEGACY_HELPER_HASH })}-`;
+  return { enabled: true, key: `${primaryPrefix}${env.GITHUB_SHA.toLowerCase()}`, primaryPrefix,
+    prefix: `${primaryPrefix}\n${legacyPrefix}`, namespace: scope, paths: cachePaths(platform).join('\n') };
 }
 
 function inputHashes(root) {
@@ -85,15 +93,28 @@ function inspectCompiledState(root, platform, maxBytes = MAX_BYTES) {
   return scanState(root, platform, maxBytes, true);
 }
 
+function fileIdentity(stat) {
+  // Do not round 64-bit file identifiers through JS Number. An unavailable
+  // identifier is conservatively counted per path instead of deduplicated.
+  return typeof stat.dev === 'bigint' && typeof stat.ino === 'bigint' && stat.ino > 0n
+    ? `${stat.dev}:${stat.ino}` : null;
+}
+
 function scanState(root, platform, maxBytes, compiled) {
   if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) throw new Error('invalid_size_cap');
-  const result = { bytes: 0, files: 0, symlinks: 0, incrementalBytes: 0, incrementalFiles: 0, save: false, reason: '' };
+  const result = { bytes: 0, logicalBytes: 0, files: 0, uniqueFiles: 0, hardlinkedFiles: 0,
+    symlinks: 0, incrementalBytes: 0, incrementalFiles: 0, save: false, reason: '' };
+  const seenFiles = new Set(), seenIncrementalFiles = new Set();
   let safeRoots = [];
   const fail = (file, type, code) => {
     throw Object.assign(new Error('cache_path_blocked'), {
       blockedPath: path.relative(root, file).split(path.sep).join('/'), blockedType: type,
       blockedCode: /^[A-Z0-9_]+$/.test(code || '') ? code : 'IO_ERROR',
     });
+  };
+  const addBytes = (field, size, file) => {
+    if (!Number.isSafeInteger(size) || !Number.isSafeInteger(result[field] + size)) fail(file, 'file', 'SIZE_OVERFLOW');
+    result[field] += size;
   };
   const kind = stat => stat.isSymbolicLink() ? 'symlink' : stat.isDirectory() ? 'directory'
     : stat.isFile() ? 'file' : 'other';
@@ -103,7 +124,7 @@ function scanState(root, platform, maxBytes, compiled) {
   };
   const visit = (file, incremental) => {
     let stat;
-    try { stat = fs.lstatSync(file); } catch (error) { fail(file, 'unknown', error.code); }
+    try { stat = fs.lstatSync(file, { bigint: true }); } catch (error) { fail(file, 'unknown', error.code); }
     if (stat.isSymbolicLink()) {
       let target, canonical, targetStat, parent;
       try {
@@ -127,7 +148,8 @@ function scanState(root, platform, maxBytes, compiled) {
       // actions/cache archives these directory roots without dereferencing
       // links. The real target is visited normally through its own root once.
       result.symlinks += 1;
-      result.bytes += stat.size;
+      addBytes('bytes', Number(stat.size), file);
+      addBytes('logicalBytes', Number(stat.size), file);
       return;
     }
     if (!stat.isDirectory() && !stat.isFile()) fail(file, kind(stat), 'UNSUPPORTED_ENTRY');
@@ -136,9 +158,23 @@ function scanState(root, platform, maxBytes, compiled) {
       try { entries = fs.readdirSync(file); } catch (error) { fail(file, 'directory', error.code); }
       for (const entry of entries) visit(path.join(file, entry), incremental);
     } else {
-      result.bytes += stat.size;
+      const size = Number(stat.size);
+      const identity = fileIdentity(stat);
+      addBytes('logicalBytes', size, file);
       result.files += 1;
-      if (incremental) { result.incrementalBytes += stat.size; result.incrementalFiles += 1; }
+      if (identity && seenFiles.has(identity)) result.hardlinkedFiles += 1;
+      else {
+        if (identity) seenFiles.add(identity);
+        result.uniqueFiles += 1;
+        addBytes('bytes', size, file);
+      }
+      if (incremental) {
+        result.incrementalFiles += 1;
+        if (!identity || !seenIncrementalFiles.has(identity)) {
+          if (identity) seenIncrementalFiles.add(identity);
+          addBytes('incrementalBytes', size, file);
+        }
+      }
     }
   };
   try {
@@ -266,4 +302,4 @@ if (require.main === module) main(process.argv.slice(2)).catch(error => {
   }
 });
 
-module.exports = { MAX_BYTES, BUILD_DIRS, trusted, cachePaths, namespace, cachePlan, measureState, inspectCompiledState, pruneCandidates, prune };
+module.exports = { MAX_BYTES, BUILD_DIRS, LEGACY_HELPER_HASH, trusted, cachePaths, namespace, cachePlan, fileIdentity, measureState, inspectCompiledState, pruneCandidates, prune };

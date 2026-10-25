@@ -4,7 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const test = require('node:test');
-const { MAX_BYTES, trusted, cachePaths, namespace, cachePlan, measureState, inspectCompiledState, pruneCandidates, prune } = require('./cloud-build-state-cache.cjs');
+const { MAX_BYTES, LEGACY_HELPER_HASH, trusted, cachePaths, namespace, cachePlan, fileIdentity, measureState, inspectCompiledState, pruneCandidates, prune } = require('./cloud-build-state-cache.cjs');
 
 const env = {
   GITHUB_ACTIONS: 'true', GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_REF: 'refs/heads/codex/test',
@@ -32,19 +32,41 @@ test('source changes restore the same compatible prefix; toolchain and build inp
   assert.equal(original.prefix, changedSource.prefix);
   assert.notEqual(original.key, changedSource.key);
   assert.equal(original.namespace, 'ct-cloud-incremental-v1-macos-x86_64-full-');
-  assert.equal(original.key, original.prefix + env.GITHUB_SHA);
+  assert.equal(original.key, original.primaryPrefix + env.GITHUB_SHA);
+  assert.equal(original.prefix.split('\n').length, 2);
   const variants = [
     { rustVersion: 'rustc next' }, { inputs: { ...options.inputs, 'Cargo.lock': 'new-lock' } },
     { inputs: { ...options.inputs, 'Cargo.toml': 'new-manifest' } },
     { inputs: { ...options.inputs, 'scripts/ci/cloud-build.cjs': 'new-build-flags' } },
+    { inputs: { ...options.inputs, '.github/workflows/build-matrix.yml': 'new-profile' } },
     { env: { ...env, RUNNER_OS: 'Linux' } }, { env: { ...env, RUNNER_ARCH: 'ARM64' } },
     { env: { ...env, ImageVersion: 'new-sdk-image' } }, { env: { ...env, RUSTFLAGS: '-C target-cpu=native' } },
     { platform: 'macos-aarch64' }, { mode: 'probe' },
   ];
-  for (const variant of variants) assert.notEqual(cachePlan({ ...options, ...variant }).prefix, original.prefix);
+  for (const variant of variants) {
+    const next = cachePlan({ ...options, ...variant });
+    for (const prefix of next.prefix.split('\n')) assert.ok(!original.prefix.split('\n').includes(prefix));
+  }
   assert.equal(cachePlan({ ...options, inputs: { 'Cargo.toml': 'manifest-hash', 'Cargo.lock': 'lock-hash' } }).key, original.key);
   assert.throws(() => cachePlan({ ...options, platform: '../private' }), /invalid_selection/);
   assert.throws(() => cachePlan({ ...options, platform: 'windows', mode: 'probe' }), /invalid_probe_platform/);
+});
+
+test('maintenance-only changes do not invalidate code and legacy recovery stays exactly fingerprinted', () => {
+  const original = cachePlan(options);
+  const helper = 'scripts/ci/cloud-build-state-cache.cjs';
+  assert.equal(LEGACY_HELPER_HASH, 'f65de9bc19fc5e53072c8f3fdb393aeb0ae1964d2c308b85d39b4c60dc1aab70');
+  for (const hash of [LEGACY_HELPER_HASH, 'changed-housekeeping-code']) {
+    assert.deepEqual(cachePlan({ ...options, inputs: { ...options.inputs, [helper]: hash } }), original);
+  }
+  const [primary, legacy] = original.prefix.split('\n');
+  assert.equal(primary, original.primaryPrefix);
+  assert.notEqual(primary, legacy);
+  // Fixed vector produced by the original 74bcf67d cachePlan with these inputs.
+  assert.equal(legacy, 'ct-cloud-incremental-v1-macos-x86_64-full-3bead129a657a972a2eb3846ac4f14b2-');
+  for (const prefix of [primary, legacy]) {
+    assert.match(prefix, /^ct-cloud-incremental-v1-macos-x86_64-full-[a-f0-9]{32}-$/);
+  }
 });
 
 test('cache paths contain only rustc incremental state, without duplicating dependencies or packages', () => {
@@ -76,7 +98,8 @@ test('measure reports incremental data, caps uploads, ignores out-of-scope files
     write('target/x86_64-apple-darwin/release/bundle/Cockpit.app/file', 'must-not-count');
     write('target/private/profile/auth.json', 'synthetic-do-not-cache');
     let result = measureState(root, 'macos-x86_64');
-    assert.deepEqual(result, { bytes: 5, files: 1, symlinks: 0, incrementalBytes: 5, incrementalFiles: 1, save: true, reason: 'ready' });
+    assert.deepEqual(result, { bytes: 5, logicalBytes: 5, files: 1, uniqueFiles: 1, hardlinkedFiles: 0,
+      symlinks: 0, incrementalBytes: 5, incrementalFiles: 1, save: true, reason: 'ready' });
     const inspected = inspectCompiledState(root, 'macos-x86_64');
     assert.equal(inspected.files, 4);
     assert.ok(inspected.bytes > result.bytes);
@@ -101,6 +124,43 @@ test('measure reports incremental data, caps uploads, ignores out-of-scope files
     assert.equal(result.blockedType, 'symlink');
     assert.equal(result.blockedCode, 'UNSUPPORTED_ANCESTOR');
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('hardlinked Rust sessions count contents once while retaining every path and the six-GiB cap', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ct-cache-hardlinks-'));
+  try {
+    const host = path.join(root, 'target/release/incremental');
+    const target = path.join(root, 'target/x86_64-apple-darwin/release/incremental');
+    fs.mkdirSync(host, { recursive: true });
+    fs.mkdirSync(target, { recursive: true });
+    const original = path.join(host, 'session-one.o');
+    fs.writeFileSync(original, 'object');
+    fs.linkSync(original, path.join(host, 'session-two.o'));
+    fs.linkSync(original, path.join(target, 'session-three.o'));
+    fs.writeFileSync(path.join(target, 'separate-copy.o'), 'object');
+    const result = measureState(root, 'macos-x86_64', 12);
+    assert.deepEqual(result, { bytes: 12, logicalBytes: 24, files: 4, uniqueFiles: 2, hardlinkedFiles: 2,
+      symlinks: 0, incrementalBytes: 12, incrementalFiles: 4, save: true, reason: 'ready' });
+    assert.equal(measureState(root, 'macos-x86_64', 11).reason, 'size_limit');
+    assert.equal(MAX_BYTES, 6 * 1024 ** 3);
+    fs.symlinkSync('session-one.o', path.join(host, 'alias'));
+    const withLink = measureState(root, 'macos-x86_64');
+    assert.equal(withLink.bytes, 12 + Buffer.byteLength('session-one.o'));
+    assert.equal(withLink.logicalBytes, 24 + Buffer.byteLength('session-one.o'));
+    assert.equal(withLink.symlinks, 1);
+    assert.equal(withLink.uniqueFiles, 2);
+    assert.equal(withLink.hardlinkedFiles, 2);
+    assert.equal(fs.readdirSync(host).length, 3);
+    assert.equal(fs.readdirSync(target).length, 2);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('file identities preserve large inode values and distinguish devices', () => {
+  const inode = 9007199254740992n;
+  assert.notEqual(fileIdentity({ dev: 1n, ino: inode }), fileIdentity({ dev: 1n, ino: inode + 1n }));
+  assert.notEqual(fileIdentity({ dev: 1n, ino: inode }), fileIdentity({ dev: 2n, ino: inode }));
+  assert.equal(fileIdentity({ dev: 1n, ino: 0n }), null);
+  assert.equal(fileIdentity({ dev: 1, ino: Number(inode) }), null);
 });
 
 test('incremental cache cannot include a dependency through a link to an uncached root', () => {
@@ -146,7 +206,8 @@ test('relative Swift output aliases are preserved without traversing or counting
     fs.symlinkSync(path.join(output, target), path.join(output, 'release'), 'dir');
     assert.equal(inspectCompiledState(root, 'macos-x86_64').blockedCode, 'ABSOLUTE_SYMLINK');
     assert.deepEqual(measureState(root, 'macos-x86_64'), {
-      bytes: 0, files: 0, symlinks: 0, incrementalBytes: 0, incrementalFiles: 0,
+      bytes: 0, logicalBytes: 0, files: 0, uniqueFiles: 0, hardlinkedFiles: 0,
+      symlinks: 0, incrementalBytes: 0, incrementalFiles: 0,
       save: false, reason: 'incremental_missing',
     });
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
