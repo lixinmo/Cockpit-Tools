@@ -75,7 +75,7 @@ test('measure reports incremental data, caps uploads, ignores out-of-scope files
     write('target/x86_64-apple-darwin/release/bundle/Cockpit.app/file', 'must-not-count');
     write('target/private/profile/auth.json', 'synthetic-do-not-cache');
     let result = measureState(root, 'macos-x86_64');
-    assert.deepEqual(result, { bytes: 8, files: 2, incrementalBytes: 5, incrementalFiles: 1, save: true, reason: 'ready' });
+    assert.deepEqual(result, { bytes: 8, files: 2, symlinks: 0, incrementalBytes: 5, incrementalFiles: 1, save: true, reason: 'ready' });
     assert.equal(MAX_BYTES, 6 * 1024 ** 3);
     result = measureState(root, 'macos-x86_64', 7);
     assert.equal(result.save, false);
@@ -85,7 +85,7 @@ test('measure reports incremental data, caps uploads, ignores out-of-scope files
     assert.equal(result.reason, 'unsupported_or_unreadable_path');
     assert.equal(result.blockedPath, 'target/release/deps/linked');
     assert.equal(result.blockedType, 'symlink');
-    assert.equal(result.blockedCode, 'UNSUPPORTED_ENTRY');
+    assert.equal(result.blockedCode, 'ABSOLUTE_SYMLINK');
     assert.ok(!JSON.stringify(result).includes(root));
     fs.unlinkSync(path.join(root, 'target/release/deps/linked'));
     fs.rmSync(path.join(root, 'target/release/deps'), { recursive: true });
@@ -95,6 +95,77 @@ test('measure reports incremental data, caps uploads, ignores out-of-scope files
     assert.equal(result.blockedPath, 'target/release/deps');
     assert.equal(result.blockedType, 'symlink');
     assert.equal(result.blockedCode, 'UNSUPPORTED_ANCESTOR');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('relative Swift output aliases are preserved without traversing or counting their target twice', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ct-cache-swift-link-'));
+  try {
+    const output = path.join(root, 'target/x86_64-apple-darwin/release/build/cockpit-tools/out/swift-rs/Menu');
+    const target = 'x86_64-apple-macosx/release';
+    fs.mkdirSync(path.join(output, target), { recursive: true });
+    fs.writeFileSync(path.join(output, target, 'menu.a'), 'lib');
+    fs.symlinkSync(target, path.join(output, 'release'), 'dir');
+    const result = measureState(root, 'macos-x86_64');
+    assert.equal(result.reason, 'incremental_missing');
+    assert.equal(result.symlinks, 1);
+    assert.equal(result.files, 1);
+    assert.equal(result.bytes, 3 + Buffer.byteLength(target));
+    assert.equal(result.incrementalBytes, 0);
+    assert.equal(result.save, false);
+    fs.unlinkSync(path.join(output, 'release'));
+    fs.symlinkSync(path.join(output, target), path.join(output, 'release'), 'dir');
+    assert.equal(measureState(root, 'macos-x86_64').blockedCode, 'ABSOLUTE_SYMLINK');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('relative links reject external targets, broken chains, cycles and links to ancestors', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ct-cache-link-boundary-'));
+  try {
+    const deps = path.join(root, 'target/release/deps');
+    const outside = path.join(root, 'target/private');
+    fs.mkdirSync(deps, { recursive: true });
+    fs.mkdirSync(outside, { recursive: true });
+    fs.writeFileSync(path.join(outside, 'private.txt'), 'not-read');
+    const link = path.join(deps, 'alias');
+    for (const [target, code] of [['../../private/private.txt', 'EXTERNAL_SYMLINK'],
+      ['missing-target', 'ENOENT'], ['alias', 'ELOOP'], ['.', 'CYCLIC_SYMLINK']]) {
+      fs.symlinkSync(target, link);
+      const result = measureState(root, 'macos-x86_64');
+      assert.equal(result.save, false);
+      assert.equal(result.blockedPath, 'target/release/deps/alias');
+      assert.equal(result.blockedType, 'symlink');
+      assert.equal(result.blockedCode, code);
+      fs.unlinkSync(link);
+    }
+    fs.symlinkSync('second', link);
+    fs.symlinkSync('alias', path.join(deps, 'second'));
+    assert.equal(measureState(root, 'macos-x86_64').blockedCode, 'ELOOP');
+    fs.unlinkSync(link);
+    fs.unlinkSync(path.join(deps, 'second'));
+    fs.writeFileSync(path.join(deps, 'real-file'), 'lib');
+    fs.symlinkSync(path.join(deps, 'real-file'), path.join(outside, 'back-inside'));
+    fs.symlinkSync('../../private/back-inside', link);
+    assert.equal(measureState(root, 'macos-x86_64').blockedCode, 'EXTERNAL_SYMLINK');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('a link cannot authorize another cache root whose ancestor is itself a symlink', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ct-cache-root-link-'));
+  try {
+    const deps = path.join(root, 'target/release/deps');
+    const outside = path.join(root, 'private');
+    fs.mkdirSync(deps, { recursive: true });
+    fs.mkdirSync(path.join(outside, 'release/build'), { recursive: true });
+    fs.writeFileSync(path.join(outside, 'release/build/hidden'), 'do-not-cache');
+    fs.symlinkSync(outside, path.join(root, 'target/x86_64-apple-darwin'), 'dir');
+    fs.symlinkSync('../../x86_64-apple-darwin/release/build/hidden', path.join(deps, 'alias'));
+    const result = measureState(root, 'macos-x86_64');
+    assert.equal(result.blockedPath, 'target/x86_64-apple-darwin');
+    assert.equal(result.blockedCode, 'UNSUPPORTED_ANCESTOR');
+    assert.equal(result.files, 0);
+    assert.equal(result.symlinks, 0);
+    assert.equal(result.save, false);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 

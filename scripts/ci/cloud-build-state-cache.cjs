@@ -74,7 +74,8 @@ function inputHashes(root) {
 
 function measureState(root, platform, maxBytes = MAX_BYTES) {
   if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) throw new Error('invalid_size_cap');
-  const result = { bytes: 0, files: 0, incrementalBytes: 0, incrementalFiles: 0, save: false, reason: '' };
+  const result = { bytes: 0, files: 0, symlinks: 0, incrementalBytes: 0, incrementalFiles: 0, save: false, reason: '' };
+  let safeRoots = [];
   const fail = (file, type, code) => {
     throw Object.assign(new Error('cache_path_blocked'), {
       blockedPath: path.relative(root, file).split(path.sep).join('/'), blockedType: type,
@@ -83,10 +84,40 @@ function measureState(root, platform, maxBytes = MAX_BYTES) {
   };
   const kind = stat => stat.isSymbolicLink() ? 'symlink' : stat.isDirectory() ? 'directory'
     : stat.isFile() ? 'file' : 'other';
+  const inside = (directory, file) => {
+    const relative = path.relative(directory, file);
+    return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
+  };
   const visit = (file, incremental) => {
     let stat;
     try { stat = fs.lstatSync(file); } catch (error) { fail(file, 'unknown', error.code); }
-    if (stat.isSymbolicLink() || (!stat.isDirectory() && !stat.isFile())) fail(file, kind(stat), 'UNSUPPORTED_ENTRY');
+    if (stat.isSymbolicLink()) {
+      let target, canonical, targetStat, parent;
+      try {
+        target = fs.readlinkSync(file);
+        if (path.isAbsolute(target) || path.win32.isAbsolute(target)) fail(file, 'symlink', 'ABSOLUTE_SYMLINK');
+        parent = fs.realpathSync(path.dirname(file));
+        if (!safeRoots.some(directory => inside(directory, path.resolve(parent, target)))) {
+          fail(file, 'symlink', 'EXTERNAL_SYMLINK');
+        }
+        canonical = fs.realpathSync(file);
+        targetStat = fs.statSync(canonical);
+      } catch (error) {
+        if (error.message === 'cache_path_blocked') throw error;
+        fail(file, 'symlink', error.code);
+      }
+      if (!safeRoots.some(directory => inside(directory, canonical))) fail(file, 'symlink', 'EXTERNAL_SYMLINK');
+      if (!targetStat.isFile() && !targetStat.isDirectory()) fail(file, 'symlink', 'UNSUPPORTED_TARGET');
+      if (targetStat.isDirectory() && inside(canonical, parent)) {
+        fail(file, 'symlink', 'CYCLIC_SYMLINK');
+      }
+      // actions/cache archives these directory roots without dereferencing
+      // links. The real target is visited normally through its own root once.
+      result.symlinks += 1;
+      result.bytes += stat.size;
+      return;
+    }
+    if (!stat.isDirectory() && !stat.isFile()) fail(file, kind(stat), 'UNSUPPORTED_ENTRY');
     if (stat.isDirectory()) {
       let entries;
       try { entries = fs.readdirSync(file); } catch (error) { fail(file, 'directory', error.code); }
@@ -98,6 +129,7 @@ function measureState(root, platform, maxBytes = MAX_BYTES) {
     }
   };
   try {
+    const directories = [];
     for (const relative of cachePaths(platform)) {
       let directory = root;
       let missing = false;
@@ -112,8 +144,11 @@ function measureState(root, platform, maxBytes = MAX_BYTES) {
         }
         if (!stat.isDirectory() || stat.isSymbolicLink()) fail(directory, kind(stat), 'UNSUPPORTED_ANCESTOR');
       }
-      if (!missing) visit(directory, relative.endsWith('/incremental'));
+      if (!missing) directories.push({ directory, incremental: relative.endsWith('/incremental') });
     }
+    // Validate every root before trusting a link into another cache root.
+    safeRoots = directories.map(({ directory }) => fs.realpathSync(directory));
+    for (const { directory, incremental } of directories) visit(directory, incremental);
     result.reason = result.bytes > maxBytes ? 'size_limit' : result.incrementalBytes === 0
       ? 'incremental_missing' : 'ready';
     result.save = result.reason === 'ready';
