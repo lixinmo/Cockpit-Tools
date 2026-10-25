@@ -75,11 +75,22 @@ function inputHashes(root) {
 function measureState(root, platform, maxBytes = MAX_BYTES) {
   if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) throw new Error('invalid_size_cap');
   const result = { bytes: 0, files: 0, incrementalBytes: 0, incrementalFiles: 0, save: false, reason: '' };
+  const fail = (file, type, code) => {
+    throw Object.assign(new Error('cache_path_blocked'), {
+      blockedPath: path.relative(root, file).split(path.sep).join('/'), blockedType: type,
+      blockedCode: /^[A-Z0-9_]+$/.test(code || '') ? code : 'IO_ERROR',
+    });
+  };
+  const kind = stat => stat.isSymbolicLink() ? 'symlink' : stat.isDirectory() ? 'directory'
+    : stat.isFile() ? 'file' : 'other';
   const visit = (file, incremental) => {
-    const stat = fs.lstatSync(file);
-    if (stat.isSymbolicLink() || (!stat.isDirectory() && !stat.isFile())) throw new Error('unsupported_entry');
+    let stat;
+    try { stat = fs.lstatSync(file); } catch (error) { fail(file, 'unknown', error.code); }
+    if (stat.isSymbolicLink() || (!stat.isDirectory() && !stat.isFile())) fail(file, kind(stat), 'UNSUPPORTED_ENTRY');
     if (stat.isDirectory()) {
-      for (const entry of fs.readdirSync(file)) visit(path.join(file, entry), incremental);
+      let entries;
+      try { entries = fs.readdirSync(file); } catch (error) { fail(file, 'directory', error.code); }
+      for (const entry of entries) visit(path.join(file, entry), incremental);
     } else {
       result.bytes += stat.size;
       result.files += 1;
@@ -95,16 +106,24 @@ function measureState(root, platform, maxBytes = MAX_BYTES) {
         directory = path.join(directory, part);
         let stat;
         try { stat = fs.lstatSync(directory); }
-        catch (error) { if (error.code === 'ENOENT') { missing = true; break; } throw error; }
-        if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('unsupported_entry');
+        catch (error) {
+          if (error.code === 'ENOENT') { missing = true; break; }
+          fail(directory, 'unknown', error.code);
+        }
+        if (!stat.isDirectory() || stat.isSymbolicLink()) fail(directory, kind(stat), 'UNSUPPORTED_ANCESTOR');
       }
       if (!missing) visit(directory, relative.endsWith('/incremental'));
     }
     result.reason = result.bytes > maxBytes ? 'size_limit' : result.incrementalBytes === 0
       ? 'incremental_missing' : 'ready';
     result.save = result.reason === 'ready';
-  } catch {
+  } catch (error) {
     result.reason = 'unsupported_or_unreadable_path';
+    if (error.message === 'cache_path_blocked') {
+      result.blockedPath = error.blockedPath;
+      result.blockedType = error.blockedType;
+      result.blockedCode = error.blockedCode;
+    }
   }
   return result;
 }

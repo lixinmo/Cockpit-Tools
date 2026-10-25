@@ -81,11 +81,34 @@ test('measure reports incremental data, caps uploads, ignores out-of-scope files
     assert.equal(result.save, false);
     assert.equal(result.reason, 'size_limit');
     fs.symlinkSync(path.join(root, 'target/private/profile/auth.json'), path.join(root, 'target/release/deps/linked'));
-    assert.equal(measureState(root, 'macos-x86_64').reason, 'unsupported_or_unreadable_path');
+    result = measureState(root, 'macos-x86_64');
+    assert.equal(result.reason, 'unsupported_or_unreadable_path');
+    assert.equal(result.blockedPath, 'target/release/deps/linked');
+    assert.equal(result.blockedType, 'symlink');
+    assert.equal(result.blockedCode, 'UNSUPPORTED_ENTRY');
+    assert.ok(!JSON.stringify(result).includes(root));
     fs.unlinkSync(path.join(root, 'target/release/deps/linked'));
     fs.rmSync(path.join(root, 'target/release/deps'), { recursive: true });
     fs.symlinkSync(path.join(root, 'target/private'), path.join(root, 'target/release/deps'), 'dir');
-    assert.equal(measureState(root, 'macos-x86_64').save, false);
+    result = measureState(root, 'macos-x86_64');
+    assert.equal(result.save, false);
+    assert.equal(result.blockedPath, 'target/release/deps');
+    assert.equal(result.blockedType, 'symlink');
+    assert.equal(result.blockedCode, 'UNSUPPORTED_ANCESTOR');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('cache diagnostics identify a non-directory ancestor without reading its contents', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ct-cache-diagnostic-'));
+  try {
+    fs.mkdirSync(path.join(root, 'target'));
+    fs.writeFileSync(path.join(root, 'target/release'), 'synthetic-private-content');
+    const result = measureState(root, 'macos-x86_64');
+    assert.equal(result.save, false);
+    assert.equal(result.blockedPath, 'target/release');
+    assert.equal(result.blockedType, 'file');
+    assert.equal(result.blockedCode, 'UNSUPPORTED_ANCESTOR');
+    assert.ok(!JSON.stringify(result).includes('synthetic-private-content'));
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 

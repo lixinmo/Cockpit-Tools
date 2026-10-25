@@ -1,0 +1,49 @@
+name: Inspect macOS compiled cache paths
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  swift-paths:
+    runs-on: macos-15-intel
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Reproduce the native menu compiler's output layout
+        run: |
+          swift build --package-path src-tauri/native/macos-native-menu \
+            --configuration release --arch x86_64 \
+            --build-path target/x86_64-apple-darwin/release/build/cockpit-tools-diagnostic/out/swift-rs/MacosNativeMenuSwift
+      - name: Report only compiled-path shapes
+        if: always()
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const root = process.cwd();
+          const directory = path.join(root, 'target/x86_64-apple-darwin/release/build');
+          const visit = file => {
+            const stat = fs.lstatSync(file);
+            if (stat.isSymbolicLink()) {
+              let withinCompiledRoot = false;
+              let target;
+              try {
+                const resolved = fs.realpathSync(file);
+                withinCompiledRoot = resolved.startsWith(directory + path.sep);
+                if (withinCompiledRoot) target = path.relative(root, resolved);
+              } catch {}
+              console.log(JSON.stringify({path: path.relative(root, file), type: 'symlink', withinCompiledRoot, target}));
+            } else if (stat.isDirectory()) {
+              for (const name of fs.readdirSync(file)) visit(path.join(file, name));
+            }
+          };
+          if (fs.existsSync(directory)) visit(directory);
+          const {measureState} = require('./scripts/ci/cloud-build-state-cache.cjs');
+          console.log(JSON.stringify(measureState(root, 'macos-x86_64')));
+          NODE
