@@ -80,6 +80,7 @@ async fn limited_fixture(delivery: LimitDelivery, b: Vec<Step>) -> Fixture {
         axum::serve(listener, app).await.unwrap();
     });
     let host = Arc::new(TestHost {
+        distinct_callers: false,
         base: format!("http://{address}"),
         enabled: AtomicBool::new(true),
         // Exercise the actual Codex OAuth path: HTTP previous expansion,
@@ -87,6 +88,11 @@ async fn limited_fixture(delivery: LimitDelivery, b: Vec<Step>) -> Fixture {
         oauth: AtomicBool::new(true),
         passthrough: AtomicBool::new(false),
         removed_a: AtomicBool::new(false),
+        capacity_recovery_checks: Mutex::new(None),
+        local_quota_preparation_denied: Mutex::new(vec![]),
+        local_quota_send_denied: Mutex::new(vec![]),
+        local_quota_send_checks: Mutex::new(vec![]),
+        local_quota_allow_first_check: AtomicBool::new(false),
         selections: Mutex::new(vec![]),
         failures: Mutex::new(vec![]),
         reports: Mutex::new(vec![]),

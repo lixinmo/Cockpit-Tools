@@ -1,12 +1,22 @@
 //! One-time migration of the local Go Credits settings to the Native policy.
 //! Pure JSON helpers are shared by production and offline configuration tests.
 use crate::models::codex_local_access::{
-    CodexLocalAccessCollection, CodexLocalAccessCreditsPolicy, CodexLocalAccessGatewayMode,
+    CodexApiKeyBudget, CodexLocalAccessCollection, CodexLocalAccessCreditsPolicy, CodexLocalAccessGatewayMode,
 };
 use serde_json::Value;
 
 pub(crate) const NATIVE_CREDITS_ERROR: &str =
     "CREDITS_REQUIRES_NATIVE: Credits 限制仅支持 Rust Native 引擎。请将 API 服务及相关实例切换到 Rust 后重试；已保存策略保持不变。";
+
+pub(crate) const NATIVE_BUDGET_ERROR: &str =
+    "KEY_BUDGET_REQUIRES_NATIVE: API Key 的金额、并发及图片次数预算仅支持 Rust Native 引擎。请先切换到 Rust Native；已保存预算和引擎保持不变。";
+
+fn budget_requires_native(budget: &CodexApiKeyBudget) -> bool {
+    budget.limit_microusd.is_some()
+        || budget.daily_limit_microusd.is_some()
+        || budget.max_concurrent.is_some()
+        || budget.daily_image_limit.is_some()
+}
 
 pub(crate) fn has_restrictions(collection: &CodexLocalAccessCollection) -> bool {
     collection.credits_policy != CodexLocalAccessCreditsPolicy::Default
@@ -20,11 +30,17 @@ pub(crate) fn validate_mode(
     collection: &CodexLocalAccessCollection,
     mode: CodexLocalAccessGatewayMode,
 ) -> Result<(), String> {
-    if mode != CodexLocalAccessGatewayMode::Native && has_restrictions(collection) {
-        Err(NATIVE_CREDITS_ERROR.into())
-    } else {
-        Ok(())
+    if mode != CodexLocalAccessGatewayMode::Native {
+        if has_restrictions(collection) {
+            return Err(NATIVE_CREDITS_ERROR.into());
+        }
+        // These upstream caller budgets are separate from subscription Credits.
+        // Disabled keys retain their limits and must not become a later bypass.
+        if collection.api_keys.iter().any(|key| budget_requires_native(&key.budget)) {
+            return Err(NATIVE_BUDGET_ERROR.into());
+        }
     }
+    Ok(())
 }
 
 pub(crate) fn needs_migration(collection: &CodexLocalAccessCollection) -> bool {
@@ -74,6 +90,20 @@ pub(crate) fn patch_gateway_mode(
             || overrides.values().any(|allowed| !allowed)
         {
             return Err(NATIVE_CREDITS_ERROR.into());
+        }
+        if let Some(keys) = value.get("apiKeys") {
+            let keys = keys.as_array().ok_or("Invalid API key budget configuration")?;
+            for key in keys {
+                let Some(budget) = key.get("budget") else { continue; };
+                let mut budget = budget.as_object().cloned()
+                    .ok_or("Invalid API key budget configuration")?;
+                budget.entry("period").or_insert(Value::String("lifetime".into()));
+                let budget: CodexApiKeyBudget = serde_json::from_value(Value::Object(budget))
+                    .map_err(|error| error.to_string())?;
+                if budget_requires_native(&budget) {
+                    return Err(NATIVE_BUDGET_ERROR.into());
+                }
+            }
         }
     }
     value["gatewayMode"] = serde_json::to_value(mode).map_err(|error| error.to_string())?;

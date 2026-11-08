@@ -8,7 +8,237 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [Unreleased]
+## [1.3.80] - 2026-11-07
+
+### Added
+
+- **GPT-6.1 Terra**: Complete support across default and multi-instance model lists, API routing, wakeup presets, model tests, image-input defaults and model names. Preserve custom model lists and expose Ultra reasoning in benchmark tests.
+
+- **Codex API image generation**: Add native OAuth Images routing for GPT Image 2.6 Sunburst and Flare, with independent image credentials. New API services default to GPT Image 2.6. Configure image models and sources directly from Models & Capabilities, including the 2.6 Flare and Sunburst presets. Forward complexity, SVG/GIF output and markup edits through the standalone Images API, translating JSON and multipart edit inputs into native Codex image references. Standalone OAuth image requests remain available when their unrelated text model is excluded. Omit ineffective geometry parameters on standalone Codex OAuth requests; API-key and Responses sizing stays unchanged.
+- **Codex Chat providers**: Bridge client tool discovery and support remote context compaction with reusable summaries.
+
+- **Codex reset-card automation**: Show automatic-use status in the reset-count entry and edit account rules directly from credit details or set shared defaults, with an option to save the rule to every account and replace existing custom or disabled settings. Default to one hour before expiry and 5% weekly remaining quota without changing saved rules. Keep disabled settings visible with a live trigger preview; automatically use a card before expiry or when weekly remaining quota reaches the configured threshold, with activity records and duplicate-redemption protection while the app is running.
+- **Codex card sorting** Drag account cards to save a custom order while preserving accounts outside the current filter or page. Include the order and its enabled state in backups and restore them by account identity. [#3037](https://github.com/jlcodes99/cockpit-tools/pull/3037) · [@zhbCloud](https://github.com/zhbCloud)
+- **2FA management and migration** Separate query and code panels, search by account or type, and select or batch-delete filtered records. Export selected or all saved accounts as locally generated migration QR codes, with paginated previews and SVG downloads; support SHA1, six-digit, 30-second TOTP credentials. JSON backups continue to include all saved records. [#3037](https://github.com/jlcodes99/cockpit-tools/pull/3037) · [@zhbCloud](https://github.com/zhbCloud)
+- **Model provider key controls** Show or hide an existing API Key while editing and copy the full current value with one click. Keys remain hidden when reopening the editor or switching keys.
+
+### Fixed
+
+- **Codex API startup**: Preserve completed onboarding and local projects when starting API Service or API Key profiles without OAuth through Cockpit on macOS and Windows, including projectless profiles. Keep local projects and conversation membership across account switches within the same instance, including distinct projects that share directories. Keep genuine first-run onboarding and restore account-specific state when returning to OAuth.
+
+- **Codex history order**: Full history repair preserves recent activity order when rebuilding the local conversation list and corrects entries that earlier repairs sorted by last update time.
+- **Codex API quota cooldowns**: Clear stale quota cooldowns after a refresh confirms usable allowance, while keeping newer limits and non-quota cooldowns. [#3030](https://github.com/jlcodes99/cockpit-tools/pull/3030) · [@thinker1008-commits](https://github.com/thinker1008-commits)
+- **Codex Windows gateway ports**: Reassign an instance provider gateway port when Windows denies binding the saved port, while keeping the existing gateway key. [#3040](https://github.com/jlcodes99/cockpit-tools/pull/3040) · [@thekfjie](https://github.com/thekfjie)
+- **Codex Windows project groups**: Preserve verified local projects and groups after Desktop account switches, keeping the target account’s order and isolating cloud projects and remote threads. Fix flushing the history index backup. [#3039](https://github.com/jlcodes99/cockpit-tools/pull/3039) · [@thekfjie](https://github.com/thekfjie)
+- **Codex reset results**: Report the server’s redemption outcome so an unapplied reset no longer appears successful. Retry an unconfirmed outcome with the same request ID. [#3024](https://github.com/jlcodes99/cockpit-tools/issues/3024)
+- **Codex model image input**: Preserve the routed image input capability when saving a custom catalog, taking over a profile, or rebuilding a managed catalog, honoring each model’s settings. [#3035](https://github.com/jlcodes99/cockpit-tools/issues/3035)
+
+- **Codex API routing**: Skip accounts that enter cooldown while a request waits for a concurrency slot, release their slots and use eligible backups without restarting the wait budget. Preserve continuation ownership and return a retryable error when no account is available.
+
+- **Codex API capacity recovery**: Keep safely retryable requests waiting through temporary account cooldowns or concurrency limits, and check for available backup accounts again. Keep the client WebSocket alive while waiting so the original conversation can resume without another message.
+
+- **Codex API compatibility**: Preserve output budgets, normalize invalid item-ID characters, clean output-only metadata on WebSocket replay and restore the caller’s original instructions in responses. HTTP continuations stop repeating a previous forced tool choice when the current request omits it. Unsupported forced hosted images on native Lite routes now return an actionable error while retaining the selected model and protocol. Reduce copying of long histories and streamed tool arguments, and keep image-input support separate from Codex-only original-detail metadata.
+
+- **Codex account switching**: Preserve project registrations and recovery backups when global state is empty or malformed. Speed settings still save normally without rebuilding the damaged state.
+
+- **Codex subscription refresh**: Allow manual subscription-term refresh before expiry in account cards, tables, compact views, and launch previews.
+
+- **Platform layout**: Keep bulk toggles on one line and align the relay row with platform columns; the header checkbox continues to enable or disable all platforms. Show the saved selection count when it exceeds the current layout limit.
+
+## [1.3.79] - 2026-11-05
+
+### Added
+
+- **Platform enable controls** Stop automatic refresh, token renewal, wakeups and check-ins for unused platforms while retaining manual actions. [#2402](https://github.com/jlcodes99/cockpit-tools/pull/2402) · [@qxo](https://github.com/qxo)
+- **Reduced motion** Reduce decorative animation, shadows and filters while retaining loading feedback and account status. [#2964](https://github.com/jlcodes99/cockpit-tools/pull/2964) · [@lcpdeb](https://github.com/lcpdeb)
+- **Codex model catalog** Refresh upstream model metadata with a validated cache and existing local settings so new catalog models become available. [#2669](https://github.com/jlcodes99/cockpit-tools/pull/2669) · [@jiabaoliu101](https://github.com/jiabaoliu101)
+- **TRAE China check-in** Add check-in status, manual claims, scheduled check-ins and logs for China and SOLO China accounts. [#2729](https://github.com/jlcodes99/cockpit-tools/pull/2729) · [@eye-gu](https://github.com/eye-gu)
+- **Account timestamps** Distinguish successful credential switches from quota refresh, allow a preferred timestamp display on account cards, and leave unknown historical times unset. [#2403](https://github.com/jlcodes99/cockpit-tools/pull/2403) · [@qxo](https://github.com/qxo)
+- **Codex native next-step predictions** Support Vite and newer Rspack clients and enable native predictions for local API connections. Accept suggestions into the draft with Tab using the current model and provider, with additional API usage. [#2938](https://github.com/jlcodes99/cockpit-tools/pull/2938) · [@HTExplicit](https://github.com/HTExplicit)
+- **MiniMax Code** Add OAuth, local import, first-time account switching and independent instances. Display official names, plans and credit balances, distinguish zero credit from query failures, and keep card controls contained. Support manual and scheduled check-in with execution history and idempotent rewards; retain healthy tokens during quota refresh and isolate instance start/stop operations. [#2919](https://github.com/jlcodes99/cockpit-tools/pull/2919) · [@SkyblueeeLabs](https://github.com/SkyblueeeLabs)
+- **Codex local project recovery** Retain built-in recovery and add a standalone Windows audit, repair and rollback script. [#2955](https://github.com/jlcodes99/cockpit-tools/pull/2955) · [@harryzhou0106-svg](https://github.com/harryzhou0106-svg)
+- **Codex Windows sandbox recovery** Provide an on-demand diagnostic and permission recovery tool with backup and rollback. [#2982](https://github.com/jlcodes99/cockpit-tools/pull/2982) · [@ws-cczj](https://github.com/ws-cczj)
+- **PR builds** Share frontend artifacts and reuse compilation caches with a CI profile that verifies platform executables. [#1771](https://github.com/jlcodes99/cockpit-tools/pull/1771) · [@khanra17](https://github.com/khanra17)
+- **Release builds** Share build inputs, reuse native macOS artifacts for Universal packages, and support validation runs that produce artifacts without publishing a release. [#1774](https://github.com/jlcodes99/cockpit-tools/pull/1774) · [@khanra17](https://github.com/khanra17)
+
+- **WorkBuddy credit details**: Open an account’s credit overview and browse valid and expired grants, including remaining credits and expiration times. The compact account summary highlights the balance. The dialog keeps loaded details visible while switching tabs or fetching more records, shows the five latest usage records, and links to the full history.
+
+- **Codex API capacity recovery**: Optionally keep retrying safely replayable requests while an upstream model is at capacity. Account statistics show capacity rejections per upstream attempt, including those recovered by retrying or switching accounts.
+
+- **Antigravity desktop switching**: Switching the desktop client with system credentials also updates an initialized native `agy` CLI session.
+
+### Changed
+
+- **Codex API account failover**: Confirmed quota exhaustion excludes the account even when cooldowns are disabled. Replay-safe requests can switch to an eligible backup beyond the retry-account limit, and session affinity keeps backup accounts available.
+
+- **OpenAI usage settings**: Configure an optional admin key separately from the model API key in accounts and model providers. Usage cards identify organization statistics, offer setup and retry actions, and no longer report missing permissions before a query key is configured. Query failures do not affect model access. Missing cost records are distinguished from reported zero charges, and fractional-cent charges remain visible.
+
+- **Model provider deletion**: Deleting Codex model providers also removes their linked API Key accounts, including accounts with invalid or missing credentials, across individual, batch and test-result deletion actions.
+- **Codex quota reset**: Shorten the success message to “Quota reset”, without specifying a quota window.
+
+- **API Key proxies**: API Service requests now use each API Key account's proxy settings, including independent proxies, inherited unified proxies and explicit direct connections. Desktop clients and API requests share the same account proxy entry.
+
+### Fixed
+
+- **Cockpit Gateway**: Shared API services report whether their WebSocket listener is enabled. HTTP/SSE and WebSocket Responses measure first response after the gateway processes the request body and skip keepalives and rate-limit notices.
+
+- **WorkBuddy credit refresh**: Restore credit queries and show the official plan base, plan bonus, platform reward and purchased credit categories. Refresh personal accounts imported with an empty enterprise ID and update display names from the matching profile.
+
+- **Antigravity IDE 2.6+ switching**: Switch the shared App, IDE and initialized `agy` sign-in. With launch enabled, restart the running peer client and refresh the verified macOS App Hub session.
+- **Antigravity IDE login**: Import the current login from macOS Keychain in shared mode and refresh stale account status when switching independent IDE profiles.
+- **Cursor X Subscription**: Display the official weekly allowance reset separately from the billing cycle.
+- **Claude Desktop on Windows**: Locate the Microsoft Store app’s active profile so account switching writes to the data it reads.
+- **Codex gateway compatibility**: Keep hosted tools on standard Responses requests and preserve namespaces on Lite. Record reasoning changes in request logs, reselect an eligible account before dispatch on local quota rejection, and keep serving through transient usage-log write interruptions. Show the local and LAN endpoints separately.
+
+- **Antigravity accounts**: Save the selected IDE account after writing client credentials. Keep detected Google Cloud project and terms-of-service metadata even when quota retrieval fails, and save a replacement refresh token when Google returns one.
+- **Codex API Service**: Accounts can join through the local gateway when their official ChatGPT authorization is no longer valid.
+- **Codex account switching**: Automatically stop lingering app-server processes after a normal shutdown times out, then continue switching and restarting without requiring a manual retry.
+- **Proxy status**: Once the engine is ready, subscription cards no longer show outdated missing-engine, version-mismatch or installation-busy warnings. Genuine connection, configuration and subscription errors remain visible.
+
+## [1.3.78] - 2026-11-01
+
+### Changed
+
+- **Official client compatibility**: Align account login, switching and quota displays with current Claude, Kiro, Cursor, Qoder, ZCode, WorkBuddy, Devin and TRAE clients. Support Devin ACU/USD usage and TRAE credit billing, including unlimited credit allowances.
+- **Codex proxy subscriptions**: Use Mihomo 1.19.33 to run Clash/Mihomo configurations natively, including local and encrypted providers, transformations, download proxies, DNS and subscription rules. Support local resource folders and authenticated HTTP(S) subscriptions and redirects. Preserve group selections and the last usable configuration when refresh fails; unrelated rule-provider download failures no longer block individual nodes or groups.
+- **Codex speed controls**: Automatically enable native speed controls for API Key and API Service access without a separate switch. Preserve supported Ultrafast options and keep the existing model source when model management is disabled.
+
+### Added
+
+- **Codex device restrictions**: Show explicit official device-limit errors by operation, pause affected retries, and provide local records, manual retry controls and official help links. Clearing local records does not release server-side device slots.
+- **Kiro enterprise credentials**: Import and refresh existing Microsoft External IdP credentials through their matching authentication service.
+- **APIKEY.FAN 11.11 offer**: Show a seasonal promotion header, navigation badge and activity links during November 1–11, then restore the regular content automatically.
+
+### Fixed
+
+- **Kiro JSON imports**: Read nested KiroAccountManager credentials and refresh-token-only exports, preserve authentication types and regions, and refresh login state and quotas in the background. Save new credentials before querying quotas and prevent stale refreshes from overwriting newer credentials or restoring deleted accounts.
+- **Claude subscriptions and switching**: Recognize the active organization's actual subscription label, including Free, support newer desktop login cookies, and restore identity and OAuth caches together. Clear stale login state and recover interrupted profile writes on the next switch.
+- **Cursor switching**: Replace credentials together, clear old refresh tokens and account caches, and retain the original session if a write fails.
+- **Qoder quotas and switching**: Separate personal and enterprise quotas, save credentials and both caches together, and avoid blocking the interface during credential access. A 1% usage rate is no longer interpreted as 100%.
+- **WorkBuddy quotas**: Read paid/free resource packages completely and use daily balances for daily allowances. Incomplete refresh results no longer replace cached balances.
+- **Kiro quota errors**: Use the current quota service and stop treating unsupported features or rate limits as account suspensions.
+- **ZCode login**: Use the official web redirect bridge and shared desktop callback for BigModel and Z.ai, while retaining compatibility with the older Z.ai callback.
+- **Quota labels**: Respect Devin's actual billing mode and daily/weekly visibility settings, and stop labeling usage-based Copilot quotas as premium request counts.
+- **Codex authorization notices**: Remove the sign-in-needed badge inferred from login-page observations and its manual clearing controls. Historical observations no longer affect account display; actual credential failures still show authorization errors.
+
+## [1.3.77] - 2026-10-31
+
+### Added
+
+- **Cockpit Gateway**: Connect to LAN-shared services by address and API Key, with dedicated account styling and the host's models, reasoning levels and image capabilities. View your key's budget, usage trends and request history without exposing upstream accounts.
+- **Key budgets**: Set USD-denominated usage budgets based on server-configured prices, with lifetime, daily, weekly or monthly limits, plus daily spending, image-request and concurrency caps.
+- **Request logs**: Filter API Service logs by session, open matching records from the Codex usage dialog, and distinguish image generation from editing requests.
+
+### Changed
+
+- **Local data performance**: Improve account loading, log queries and Codex usage statistics with large histories; process historical data automatically in the background.
+- **OpenAI usage cards**: Keep cards and tables compact by moving the statistics scope note to usage details.
+
+### Fixed
+
+- **Codex reasoning levels**: Restore missing Ultra options for supported models in newer clients' API mode while preserving user settings. Requires the native Fast control to be enabled.
+- **API Service conversations**: Fix continuation failures with existing history or response references after changing API Keys; permissions and usage remain tied to the current key.
+- **Release notes**: Display locally saved and bundled update notes without depending on GitHub API availability.
+
+## [1.3.76] - 2026-10-30
+
+### Added
+
+- **Anthropic access**: Codex model providers and API Service support Anthropic Messages, with configurable authentication, model discovery or manual catalogs, and Claude conversations. Streaming, tools, web search and context compaction are supported; APIKEY.FUN Anthropic accounts can display balance and usage. Actual capabilities depend on the upstream service.
+- **OpenAI official API usage**: Use the existing API Key to query spend, requests and tokens reported in UTC. An admin-key setup guide is available when usage-read permission is missing. Official spend is not displayed as remaining credit.
+- **Codex project and chat repair**: Quick repair restores current local projects and chat assignments; full repair also supports historical snapshots and chat-index recovery. Cloud projects, credentials and chat contents are preserved, with local backups and interrupted-write recovery. Thanks @harryzhou0106-svg for the recovery reference ([#2955](https://github.com/jlcodes99/cockpit-tools/pull/2955)).
+- **My skins**: Save, switch, rename, replace and delete local background images, with independent settings per skin. Restoring defaults keeps saved skins.
+- **Request diagnostics**: Inspect request, history, tool and instruction sizes and account capacity recovery without recording request bodies, making large-request failures easier to investigate.
+- **macOS release signing**: Apple Silicon, Intel and Universal releases support Developer ID signing and Apple notarization. Signed releases can be installed normally without manually removing quarantine attributes.
+
+### Changed
+
+- **API Service**: Use the Rust engine exclusively. Existing engine selections migrate while accounts, keys, ports and conversation history are preserved. Instance gateways and provider tests also use Rust, and installers no longer depend on the Go sidecar.
+- **API protocol compatibility**: Improve Responses, HTTP/SSE and WebSocket conversations with connection recovery, continuations and steering, plus better handling of tools, compressed responses, legacy requests and usage accounting. Requests with output or evidence of tool execution are not automatically replayed.
+- **Account and provider management**: Account overview and model providers share a complete editor for provider defaults and per-key models, while retaining account bindings and model synchronization settings. Existing providers remain available during background reconciliation, and failed saves can be retried in the dialog.
+- **Account usage displays**: Official OpenAI API accounts show today's spend, requests and tokens, with a separate badge and filter based on the official endpoint. Other providers retain balance and quota displays. Details continue to show available usage, subscription and model statistics; a failed quota query without cached data shows an error.
+- **Account cards**: APIKEY.FUN cards use a gold brand name and key background, and Codex subscription labels align to the right.
+- **Release notes**: Read current GitHub Release notes when opening release history or the update dialog, so remote edits and removals appear on the next fetch. Failed loads can be retried in the dialog.
+- **Project homepage**: Update the APIKEY.FUN sponsor link to apikey.fan while retaining the sponsor name and referral parameter.
+
+### Fixed
+
+- **Codex speed controls**: Restore the native Fast control in the model menu for newer ChatGPT/Codex clients. Speed controls remain available independently when quota UI compatibility is unsupported.
+- **API Service continuations and account switching**: Recover verified complete history after incomplete responses, reconnects, service restarts or failed retries. When the original account runs out of quota, switch to an available account when safe. Invalid continuation references and identifiable GPT reasoning ciphertext rejections can be safely recovered and retried before output; instructions, readable summaries and paired tool results are preserved to avoid duplicate execution.
+- **API Service quota and capacity recovery**: When the original account's reset time is known, recheck it within the configured wait budget. On capacity errors, try an available account first and use bounded same-account retries when no alternate is available. Return an appropriate error when the budget is exceeded or a retry is unsafe, rather than misreporting an invalid account binding. Based on [#2962](https://github.com/jlcodes99/cockpit-tools/pull/2962).
+- **API Service connection recovery**: Detect HTTP/2 TLS stream failures and retire the affected connection. Repeated failures on the same route temporarily use HTTP/1.1 before restoring automatic protocol negotiation. Proxy settings and emitted tool calls are preserved, without automatically replaying executed actions.
+- **API Service continuation compatibility**: Recognize legacy `session_id`, valid desktop and terminal host tool results, and omitted empty tool arguments in verified history, reducing false rejections during continuations and account switching while preserving caller and account isolation.
+- **Codex models**: Official DeepSeek accounts use native Responses and retain reasoning levels; later DeepSeek models from third-party providers are recognized. GPT-6.1 Terra gains the Ultra reasoning option. Provider model synchronization can recover model lists taken over by the managed speed catalog while preserving user catalogs and model context settings.
+- **Codex statistics and launch**: Include missing Token usage from continuation and branch sessions, and base dashboard recommendations on quota windows actually present. If instance settings change after opening the launch preview, start and restart use the current settings without overwriting a stale draft.
+- **Background refresh and editing**: Keep provider cards and scroll position stable during refresh. Unsaved API Service routing, pricing, timeout, model, key, port, proxy, group selection and OAuth binding edits survive background updates; save failures appear in the active dialog.
+- **Antigravity quotas and wakeup**: Show all available quota windows in floating cards and correct date hit-testing and tooltip positions in usage trends. Align automatic wakeup model lists and request parameters with the official client, covering Gemini 3.8 Flash, Gemini 4 Argon and Claude 5.5 effort tiers.
+
+
+## [1.3.75] - 2026-10-27
+
+### Added
+
+- Add GPT-6.1 Terra to API Service models and cost estimates, including standard, Fast, Flex and long-context pricing.
+- Add app background customization with four gradient presets, local image selection, a preview, intensity, blur and image positioning. The Custom tile shows a plus sign for choosing an image when none is saved. Changes take effect immediately and save automatically on this device, with a single Restore default action; account cards and controls keep their appearance.
+- Apply Codex account-card skins based on the actual API endpoint, including APIKEY.FUN, ai.ahzm.top and yunmoor.com, while preserving account content and actions.
+- Show the next Codex reset-credit expiry in its original position on account cards and the dashboard using the quota time style, highlighting approaching expiry; persist details, stagger refreshes around six hours with bounded concurrency, and update the shared cache immediately when details are opened. Thanks @iamvicliu ([#2724](https://github.com/jlcodes99/cockpit-tools/pull/2724)).
+- Add Antigravity Gemini 4 Argon, Gemini 3.8 Flash, and Claude 5.5 model groups while preserving older models, effort distinctions, and custom group settings; default automatic rotation checks only model groups actually reported by the current account. Thanks @Chain813 ([#2915](https://github.com/jlcodes99/cockpit-tools/pull/2915)).
+
+### Fixed
+
+- Restore Ultrafast for supported Sol 6.1 and Astra models when local API Key profiles use the client's default model list, including Windows. Preserve the model list and custom catalogs, with selection and requests using the native speed flow.
+- Align New API account-card quota bars with their remaining-quota labels, so the bar and available/total values use the same basis. Thanks @specetator ([#2923](https://github.com/jlcodes99/cockpit-tools/pull/2923)).
+- Prevent canceling one API request from restarting the shared Sidecar and interrupting other requests when cancellation is mistaken for a timeout. Thanks @limaomei-pixel ([#2909](https://github.com/jlcodes99/cockpit-tools/pull/2909)).
+- Restore flattened collaboration-tool calls to their declared namespace and name, preventing unsupported-call errors during agent coordination. Thanks @jamie950315 ([#2901](https://github.com/jlcodes99/cockpit-tools/pull/2901)).
+- Prevent third-party models in the shared client catalog from being routed to ChatGPT accounts that do not support them, while retaining official Reserve model access. Thanks @jamie950315 ([#2902](https://github.com/jlcodes99/cockpit-tools/pull/2902)).
+- Keep Gemini invalid-argument stream errors scoped to the affected request instead of incorrectly cooling down accounts; retain the upstream error for the caller. Thanks @jamie950315 ([#2904](https://github.com/jlcodes99/cockpit-tools/pull/2904)).
+- Send Kiro enterprise device-authorization and token-refresh requests in the JSON format expected by AWS IAM Identity Center. Thanks @peisencn ([#2799](https://github.com/jlcodes99/cockpit-tools/pull/2799)).
+- Preserve Claude Desktop Gateway privacy, permission, network, and model preferences when switching accounts, retaining the working configuration if a write fails; switch in the background without waiting for the old gateway’s in-flight request to finish. Thanks @fflow2023 ([#2907](https://github.com/jlcodes99/cockpit-tools/pull/2907)).
+- Use background-detected version metadata for Antigravity quota requests when legacy installation metadata is unavailable, retaining the minimum protocol version. Thanks @moyuan10086 ([#2900](https://github.com/jlcodes99/cockpit-tools/pull/2900)).
+- Keep data-management settings mounted after their first visit to reduce repeated backup scans, without loading them when other settings tabs are opened. Thanks @xhrxgr ([#2740](https://github.com/jlcodes99/cockpit-tools/pull/2740)).
+- Use the official client's localized Ultrafast description in injected speed menus instead of overriding it with English text; preserve speed-tier selection and request parameters.
+- Stop the development app and frontend server together when cancelling a local development run, preventing leftover windows and terminal logs while preserving unrelated app instances.
+- Avoid false Codex launch failures when Windows process queries are temporarily unavailable. Confirm the process returned by the launcher, preserve history when a session check cannot begin safely, and show an unconfirmed launch with read-only status checks instead of prompting duplicate launches; a detected running instance updates the dialog to success.
+- Unify missing Codex launch-path recovery across account switching, API Service, instances, CLI and native menu actions. Show the path dialog above other dialogs, support app selection, running-app detection and launch-on-switch settings, and resume the original operation after saving without duplicate launches on cancellation or failure.
+
+### Changed
+
+- Allow Repair chat index while Codex clients and CLI sessions are running. Back up and reset invalid indexes without changing chat records, detect concurrent changes before committing, and prompt a client restart afterward.
+- Clear all published announcements so old notices and automatic announcement popups disappear after a successful client refresh.
+
+### Acknowledgments
+
+- Thanks @qxo for the log-content and regular-expression filtering contribution ([#2397](https://github.com/jlcodes99/cockpit-tools/pull/2397)). The existing background-worker implementation is retained, including filtering timeouts and cancellation.
+
+## [1.3.74] - 2026-10-24
+
+### Fixed
+
+- Adapt to newer Codex clients, restoring native speed controls and quota notices for API services without OAuth and mixed OAuth/API profiles while preserving send restrictions for official, remote and image modes.
+- Recognize compressed Codex chat heads in session lists and restore them safely; export and synchronize standalone compressed chats without changing the source history.
+- Align Astra’s native question-dialog and clock tool capabilities and preserve the current Astra/Sol automatic review requirement without resetting saved model, reasoning or context preferences.
+- Keep injected model, speed, quota and chat metrics attached to the focused conversation when multiple composers or model menus are open; new chats no longer reuse another chat’s identity or cached selection.
+- Preserve concurrent chat history during restore and import, append chat index entries without replacing newer records, and allow safe index-repair retries. Respect the official client’s refusal to delete history still referenced by a branch and retain recovery backups when deletion is not confirmed.
+- Keep selection counts and batch action states consistent during rapid Codex session selection; reserve count width and remove fading transitions from the selection toolbar.
+- Fix some existing conversations, tool history and newer message types being rejected by local history checks in the Rust and Go API services. Preserve tool-call compatibility, account permissions, duplicate-execution protection and original upstream errors.
+- Fix CLI Launch in Codex launch previews reopening the same preview or being hidden behind it; continue to the working-directory and terminal dialog with the confirmed settings, and keep failures visible in the preview.
+- Preserve existing macOS Keychain access permissions when switching Antigravity accounts, avoiding repeated password prompts caused by resetting the credential's access policy.
+- API Service Rust engine connection failures now identify the attempted proxy and distinguish timeouts, unavailable local proxies and confirmed proxy authentication failures, instead of masking them as upstream authorization failures. Account and upstream rejections retain their original errors.
+- Recover Codex usage dialogs from temporary local read failures with bounded retries and resume queries after Cockpit reconnects, preserving verified data and pagination. Reduce repeated work in usage statistics queries.
+- Prioritize the configured Codex client path on Windows, including official MSIX installations. Resolve package identity from the selected executable instead of letting an invalid StartApps AppUserModelId block launch. Discover alternative registered clients only after a confirmed pre-launch failure, and avoid duplicate launches when the result is uncertain.
+- Accept Antigravity account files with a UTF-8 BOM after OAuth authorization without rolling back newer account notes. Validate encrypted backups before recovery, retain valid backups if recovery fails or is interrupted, preserve concurrent saves, and report missing encryption keys without replacing them.
+- Keep Antigravity desktop account switches consistent when the client falls back from the system credential store to its local token file. Preserve `id_token` in both stores and report fallback synchronization failures instead of claiming success.
+- Keep Codex account cards' request counts, token usage and costs visible while quota reset estimates update. Refresh statistics in the background without clearing unrelated accounts or windows, and clear expired-window counters when their quota resets.
+
+### Added
+
+- Add a dedicated Repair chat index entry to session management and the launch preview for editing and branching issues. It checks selected conversations and their ancestor history, backs up and resets out-of-bounds paginated indexes only when the original records are complete and the target client is stopped, and preserves chat records, accounts and provider settings.
+- Add a default-on Session ID mapping switch in API Service routing options and member settings. Turn it off to forward the original client Session-Id and Thread-Id values. Both directions show a confirmation explaining identifier isolation and possible cache reuse trade-offs, without persistent inline text; changes take effect after saving.
+
+### Changed
+
+- Align Antigravity quota queries with official client v2.25.0 to include `Gemini 4 Argon (Weekly)` alongside `Claude (5h)`, `Claude (Weekly)`, `Gemini (5h)`, and `Gemini (Weekly)`, and display Antigravity account quotas as single-column per-window progress rows matching Codex.
+- Align Antigravity incremental authorization with Antigravity-Manager v4.9.8 while retaining voice transcription permission. Use native OAuth request headers, refresh credentials with 15 minutes or less remaining, and retry `invalid_grant` once after a short delay before reporting failure. OAuth callbacks support IPv4 and IPv6 loopback addresses.
 
 ## [1.3.73] - 2026-10-22
 

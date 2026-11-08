@@ -559,6 +559,42 @@ fn native_test_routing_host() -> NativeHostBridge {
 }
 
 #[tokio::test]
+async fn native_grok_control_rechecks_current_source_owner_and_revokes_changed_team() {
+    use native_contract::Host;
+    let _env = crate::modules::test_support::env_lock().lock().unwrap_or_else(|error| error.into_inner());
+    let _data = super::native_capability_integration_tests::NativeInstallationTestData::new();
+    let save_source = |team: &str, token: &str| {
+        crate::modules::grok_account::import_from_json(&json!({
+            "id":"control-source","email":"control@example.invalid","auth_mode":"oauth",
+            "access_token":token,"principal_id":"current-principal","team_id":team,
+            "expires_at":4102444800_i64,"created_at":1,"last_used":1
+        }).to_string()).unwrap().remove(0)
+    };
+    let source = save_source("current-team", "fixture-token");
+    let mut host = native_test_routing_host();
+    host.collection_override.as_mut().unwrap().account_ids = vec!["pool-a".into()];
+    host.collection_override.as_mut().unwrap().responses_websockets_enabled = true;
+    let account = host.account_overrides.get_mut("pool-a").unwrap();
+    account.upstream_grok_account_id = Some(source.id.clone());
+    account.api_base_url = Some(codex_account::GROK_CLI_CHAT_PROXY_BASE_URL.into());
+    account.api_model_catalog = vec!["grok-4.7".into()];
+    account.api_supports_websockets = true;
+    account.openai_api_key = None;
+    account.user_id = Some("stale-principal".into());
+    account.account_id = Some("stale-team".into());
+    let caller = native_test_caller(NATIVE_PRIMARY_CALLER);
+    let mut request = native_test_route_request("grok-control");
+    request.model = "grok-4.7".into();
+    let route = native_select_route(&host, &caller, request.clone()).await.unwrap();
+    assert_ne!(native_account_owner(&host.account_overrides["pool-a"], &route.base_url), route.owner_id);
+    host.validate_websocket_control(&caller, &route, &request).await.unwrap();
+    save_source("current-team", "rotated-fixture-token");
+    host.validate_websocket_control(&caller, &route, &request).await.unwrap();
+    save_source("changed-team", "rotated-fixture-token");
+    assert_eq!(host.validate_websocket_control(&caller, &route, &request).await.unwrap_err().code, "websocket_control_denied");
+}
+
+#[tokio::test]
 async fn native_free_agent_identity_keeps_pool_eligibility_without_bypassing_restrictions() {
     let mut host = native_test_routing_host();
     host.collection_override.as_mut().unwrap().account_ids = vec!["pool-a".into()];
@@ -958,6 +994,7 @@ async fn native_websocket_routes_bridge_chat_and_keep_responses_model_mapping() 
 async fn native_image_first_source_uses_free_account_but_continuation_stays_pinned() {
     let mut host = native_test_routing_host();
     let collection = host.collection_override.as_mut().unwrap();
+    collection.image_generation_model = "gpt-image-2.5".into();
     collection.image_generation_account_ids = vec!["pool-a".into(), "pool-b".into()];
     collection.max_concurrent_image_requests = 0;
     for account in host.account_overrides.values_mut() {

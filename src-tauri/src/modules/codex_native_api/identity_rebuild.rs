@@ -3,7 +3,25 @@ use super::*;
 use std::collections::{HashMap, HashSet};
 
 #[path = "identity_checkpoint.rs"]
-mod checkpoint_store;
+pub(super) mod checkpoint_store;
+
+// Checkpoints keep reusable settings, but a prior turn's forced tool choice
+// must not force another call when the current request leaves the choice open.
+pub(super) fn inherited_parameter(key: &str, mut value: Value) -> Value {
+    if key != "tool_choice" {
+        return value;
+    }
+    if value["type"] == "allowed_tools" {
+        if value["mode"] == "required" {
+            value["mode"] = Value::String("auto".into());
+        }
+        return value;
+    }
+    if value == "required" || value.is_object() {
+        return Value::String("auto".into());
+    }
+    value
+}
 
 const MAX_CHECKPOINT_BYTES: usize = 8 * 1024 * 1024;
 const MAX_CACHE_BYTES: i64 = 64 * 1024 * 1024;
@@ -143,17 +161,7 @@ pub(super) fn full_input(
     let Some(previous) = checkpoint_store::transcript(connection, caller, thread, previous)? else {
         return Ok(false);
     };
-    let strip = |items: &[Value]| {
-        items
-            .iter()
-            .map(|item| {
-                let mut item = item.clone();
-                item.as_object_mut().map(|o| o.remove("id"));
-                item
-            })
-            .collect::<Vec<_>>()
-    };
-    Ok(strip(input).starts_with(&strip(&previous)))
+    Ok(matches_checkpoint_prefix(&previous, input))
 }
 
 pub(super) fn blob_accepted(
@@ -305,7 +313,9 @@ pub(super) fn may_publish_affinity(
     generation: Option<&Generation>,
 ) -> Result<bool, ServiceError> {
     let Some(generation) = generation else {
-        return Ok(true);
+        // Binding an unverified continuation is not proof that its upstream
+        // accepted it. An unsent candidate must not leave a new routing pin.
+        return Ok(!context.requires_forwarding_account_pin());
     };
     if generation.activate {
         return Ok(false);
@@ -567,18 +577,52 @@ pub(in crate::modules::codex_native_api) fn paired_tools(items: &[Value]) -> boo
     pending.is_empty()
 }
 
-fn merge_checkpoint(previous: Vec<Value>, incoming: &[Value]) -> Option<Vec<Value>> {
-    let without_ids = |items: &[Value]| {
-        items
-            .iter()
-            .map(|item| {
-                let mut item = item.clone();
-                item.as_object_mut()?.remove("id");
-                Some(item)
-            })
-            .collect::<Option<Vec<_>>>()
-    };
-    if without_ids(incoming)?.starts_with(&without_ids(&previous)?) {
+/// Compare against an authenticated caller/thread checkpoint, never arbitrary
+/// client history. Some clients omit an empty plaintext marker on replay. Only
+/// that direction is equivalent, and only for the otherwise identical call.
+/// Keep the input and opaque-reference validation unchanged.
+fn matches_checkpoint_prefix(previous: &[Value], incoming: &[Value]) -> bool {
+    incoming.len() >= previous.len()
+        && previous.iter().zip(incoming).all(|(saved, replayed)| {
+            let (Some(saved), Some(replayed)) = (saved.as_object(), replayed.as_object()) else {
+                return false;
+            };
+            let mut saved = saved.clone();
+            let mut replayed = replayed.clone();
+            saved.remove("id");
+            replayed.remove("id");
+            if saved == replayed {
+                return true;
+            }
+            let omitted_plaintext_marker = saved.get("type").and_then(Value::as_str)
+                == Some("function_call")
+                && saved.get("namespace").and_then(Value::as_str) == Some("collaboration")
+                && matches!(
+                    saved.get("name").and_then(Value::as_str),
+                    Some("spawn_agent" | "send_message" | "followup_task")
+                )
+                && saved
+                    .get("call_id")
+                    .and_then(Value::as_str)
+                    .is_some_and(|id| !id.trim().is_empty())
+                && saved
+                    .get("encrypted_function_args")
+                    .and_then(Value::as_array)
+                    .is_some_and(Vec::is_empty)
+                && !replayed.contains_key("encrypted_function_args");
+            if !omitted_plaintext_marker {
+                return false;
+            }
+            saved.remove("encrypted_function_args");
+            saved == replayed
+        })
+}
+
+pub(super) fn merge_checkpoint(previous: Vec<Value>, incoming: &[Value]) -> Option<Vec<Value>> {
+    if !previous.iter().chain(incoming).all(Value::is_object) {
+        return None;
+    }
+    if matches_checkpoint_prefix(&previous, incoming) {
         return Some(incoming.to_vec());
     }
     // Incremental input may only finish pending tools or append a fresh user turn.
@@ -672,7 +716,13 @@ impl IdentityStore {
         let mut probe_headers = headers.clone();
         let mut probe = body.clone();
         supplement_identities(context, &mut probe_headers, &mut probe)?;
-        *context = self.inspect_for_rebuild(&context.caller, &probe_headers, &probe)?;
+        let mapping_enabled = context.session_identity_mapping_enabled;
+        *context = if context.forwarding {
+            self.inspect_for_forwarding(&context.caller, &probe_headers, &probe, true)?
+        } else {
+            self.inspect_for_rebuild(&context.caller, &probe_headers, &probe)?
+        };
+        context.session_identity_mapping_enabled = mapping_enabled;
         Ok(true)
     }
 
@@ -730,13 +780,14 @@ impl IdentityStore {
         ] {
             if parameter_source.get(key).is_none() {
                 if let Some(value) = parameters.get(key) {
-                    object.insert(key.into(), value.clone());
+                    object.insert(key.into(), inherited_parameter(key, value.clone()));
                 }
             }
         }
         // Revalidate the real request, including parameter inheritance and all
         // cached tool/cipher evidence, instead of trusting a planning preview.
         let mut expanded = self.inspect_for_rebuild(&context.caller, headers, &candidate)?;
+        expanded.session_identity_mapping_enabled = context.session_identity_mapping_enabled;
         let plan = self
             .configure_rebuild(&mut expanded, headers, &candidate, true)?
             .ok_or_else(incomplete)?;
@@ -776,6 +827,7 @@ impl IdentityStore {
         let mut missing = false;
         for (key, value) in parameters {
             if !object.contains_key(&key) {
+                let value = inherited_parameter(&key, value);
                 object.insert(key, value);
                 missing = true;
             }
@@ -817,6 +869,11 @@ impl IdentityStore {
         )?;
         let mut origin: Option<String> = context.state_account_id.clone();
         for reference in &context.opaque {
+            // History blobs are sent for the upstream to judge. They do not
+            // prove ownership of a server resource or authorize replay.
+            if context.forwarding && reference.kind == "encrypted" {
+                continue;
+            }
             if automatic_history::is_unregistered(context, reference) {
                 return Err(automatic_history::incomplete());
             }
@@ -831,13 +888,19 @@ impl IdentityStore {
             {
                 continue;
             }
-            let (account, _) = validate_opaque(
+            let found = automatic_history::lookup(
                 &connection,
                 &context.caller,
                 reference,
                 context.thread_id.as_deref(),
                 context.turn_id.as_deref(),
             )?;
+            let Some((account, _)) = found else {
+                if context.forwarding {
+                    continue;
+                }
+                return Err(unknown_state());
+            };
             if reference.kind == "encrypted" {
                 if let Some(scope) = &accepted {
                     if blob_accepted(
@@ -1199,12 +1262,17 @@ impl IdentityStore {
 }
 
 impl RequestIdentity {
+    pub(crate) fn requires_forwarding_account_pin(&self) -> bool {
+        self.forwarding && !self.opaque.is_empty()
+    }
+
     pub(crate) fn start_rebuild_generation(&mut self, plan: &Plan) {
         self.rebuild_base_revision = Some(plan.base_revision);
         self.rebuild_new_generation = true;
         self.generation = None;
     }
     pub(crate) fn retain_binding_generation(&mut self, binding: &Binding) {
+        self.session_identity_mapping_enabled = binding.session_identity_mapping_enabled;
         if let Some(generation) = &binding.generation {
             self.generation = Some(generation.id.clone());
         }

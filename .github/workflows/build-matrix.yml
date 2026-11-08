@@ -84,6 +84,7 @@ jobs:
           npm run test:release
           node --test scripts/ci/cloud-build.test.cjs scripts/ci/cloud-build-state-cache.test.cjs
           node scripts/check_locales.cjs
+          python3 -B -m unittest discover -s tests -p 'test_repair_codex_local_projects.py'
       - name: Build frontend once
         run: node node_modules/vite/bin/vite.js build
       - uses: actions/upload-artifact@v4

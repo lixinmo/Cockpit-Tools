@@ -805,7 +805,6 @@
         BOUND_OAUTH_QUOTA_RESERVE_MAX_SNAPSHOT_AGE_SECONDS, CODEX_AUTO_REVIEW_MODEL_ID,
         CODEX_GPT_RESERVE_MODEL_ID,
         CODEX_IMAGEGEN_ACTOR_HEADER, CODEX_IMAGE_MODEL_ID,
-        DEFAULT_CODEX_IMAGE_GENERATION_MODEL,
         CODEX_LEGACY_LOCAL_ACCESS_MODEL_CATALOG_FILE, CODEX_LEGACY_PROVIDER_MODEL_CATALOG_FILE,
         CODEX_LOCAL_ACCESS_DISABLE_HOSTED_IMAGE_GENERATION_HEADER,
         CODEX_LOCAL_ACCESS_DISABLE_HOSTED_IMAGE_GENERATION_HEADER_VALUE,
@@ -1095,7 +1094,8 @@
             access_scope: CodexLocalAccessScope::Localhost,
             client_base_url_host: CodexLocalAccessClientBaseUrlHost::default(),
             image_generation_mode: CodexLocalAccessImageGenerationMode::default(),
-            image_generation_model: DEFAULT_CODEX_IMAGE_GENERATION_MODEL.to_string(),
+            // This fixture represents an existing service that selected 2.5.
+            image_generation_model: "gpt-image-2.5".to_string(),
         image_generation_models: crate::models::codex_local_access::default_image_generation_models(),
         image_generation_deleted_models: Vec::new(),
         image_generation_model_catalog_revision: 0,
@@ -1127,11 +1127,13 @@
             model_pricings: Vec::new(),
             excluded_models: Vec::new(),
             session_affinity: true,
+            session_identity_mapping_enabled: true,
             session_affinity_ttl_ms: DEFAULT_SESSION_AFFINITY_TTL_MS,
             session_affinity_default_enabled_migrated: true,
             responses_websockets_enabled: false,
             max_retry_credentials: 0,
             max_retry_interval_ms: DEFAULT_MAX_RETRY_INTERVAL_MS,
+            continuous_overload_retry: false,
             timeouts: CodexLocalAccessTimeouts::default(),
             active_timeout_preset_id: "long_wait".to_string(),
             timeout_presets: Vec::new(),
@@ -1801,6 +1803,7 @@ HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Internet Settings
     async fn account_pool_compaction_cleanup_does_not_enable_removed_feature() {
         let deepseek_gateway = CodexLocalAccessProviderGateway {
             model_bindings: None,
+            auth_scheme: None,
             base_url: "https://api.deepseek.com/v1".to_string(),
             api_key: "sk-deepseek".to_string(),
             upstream_model: "deepseek-v4-pro".to_string(),
@@ -1826,6 +1829,8 @@ HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Internet Settings
             excluded_models: Vec::new(),
             token_limit: None,
             token_used: 0,
+            budget: Default::default(),
+            budget_usage: Default::default(),
             enabled: true,
             created_at: 0,
             updated_at: 0,
@@ -1838,6 +1843,7 @@ HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Internet Settings
         // 非 GPT 账号池与 DeepSeek 账号池都不再写已移除的压缩开关。
         key.provider_gateway = Some(CodexLocalAccessProviderGateway {
             model_bindings: None,
+            auth_scheme: None,
             base_url: "https://token-plan-cn.xiaomimimo.com/v1".to_string(),
             ..deepseek_gateway.clone()
         });
@@ -3784,6 +3790,7 @@ http_headers = { "x-cockpit-instance-id" = "default" }
             key: "deepseek-local-key".to_string(),
             provider_gateway: Some(CodexLocalAccessProviderGateway {
                 model_bindings: None,
+                auth_scheme: None,
                 base_url: "https://api.deepseek.com/v1".to_string(),
                 api_key: "sk-deepseek".to_string(),
                 upstream_model: "deepseek-v4-pro".to_string(),
@@ -3803,6 +3810,8 @@ http_headers = { "x-cockpit-instance-id" = "default" }
             excluded_models: Vec::new(),
             token_limit: None,
             token_used: 0,
+            budget: Default::default(),
+            budget_usage: Default::default(),
             enabled: true,
             created_at: 0,
             updated_at: 0,
@@ -3834,6 +3843,7 @@ http_headers = { "x-cockpit-instance-id" = "default" }
                 provider_account_id: "cpa-account".to_string(),
                 provider_gateway: CodexLocalAccessProviderGateway {
                     model_bindings: None,
+                    auth_scheme: None,
                     base_url: "https://cpa.example.com/v1".to_string(),
                     api_key: "sk-cpa".to_string(),
                     upstream_model: "gpt-5.5".to_string(),

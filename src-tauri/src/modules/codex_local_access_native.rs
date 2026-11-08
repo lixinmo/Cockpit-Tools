@@ -54,11 +54,26 @@ async fn ensure_native_gateway_locked(
     if let Some(endpoint) = endpoint {
         wait_for_gateway_port_release(&endpoint.bind_host, endpoint.port).await?;
     }
+    // An older detached Go writer must release the port and history journal
+    // before the Rust listener takes over. Match the exact managed config.
+    let config_path = sidecar_config_path(&local_access_sidecar_dir()?);
+    let retired = tokio::task::spawn_blocking(move || {
+        process::stop_managed_sidecar_writer_for_handoff(
+            CODEX_LOCAL_ACCESS_SIDECAR_BIN_NAME,
+            &config_path,
+            std::process::id(),
+        )
+    }).await.map_err(|error| format!("Cannot retire the previous API service: {error}"))??;
+    if retired != 0 {
+        wait_for_gateway_port_release(bind_host, collection.port).await?;
+    }
     let addr = format!("{bind_host}:{}", collection.port)
         .parse()
         .map_err(|_| "NATIVE_API_INVALID_ADDRESS".to_string())?;
     let path = native_global_identity_path()?;
     let options = native_api::Options {
+        shared_continuation_references: true,
+        session_identity_mapping_enabled: collection.session_identity_mapping_enabled,
         request_timeout: Duration::from_millis(
             collection
                 .timeouts
@@ -93,6 +108,10 @@ async fn ensure_native_gateway_locked(
     ));
     Ok(())
 }
+
+
+
+
 
 async fn set_runtime_gateway_mode(mode: CodexLocalAccessGatewayMode) {
     if let Some(collection) = gateway_runtime().lock().await.collection.as_mut() {
@@ -361,6 +380,7 @@ fn native_recorded_failure_cools_account(report: &native_contract::RequestReport
             "upstream_unavailable"
                 | "account_cooling"
                 | "upstream_stream_error"
+                | "upstream_websocket_lost"
                 | "incomplete_upstream_stream"
                 | "upstream_connect_timeout"
                 | "upstream_idle_timeout"
@@ -433,6 +453,11 @@ impl NativeHostBridge {
         }
         if let Ok(mut cooldowns) = self.cooldowns.lock() {
             if self.cooling_disabled.load(Ordering::Acquire) {
+                return;
+            }
+            if report.transient_rate_limit {
+                native_upsert_transient_rate_limit(&mut cooldowns, &report.account_id,
+                    &report.upstream_model, report.retry_after, Instant::now());
                 return;
             }
             if report
@@ -554,6 +579,7 @@ fn native_caller_key<'a>(
             "API key token limit reached",
         ));
     }
+    check_key_budget(key, now_ms(), false)?;
     Ok(Some(key))
 }
 
@@ -666,7 +692,8 @@ fn native_image_allows(collection: &CodexLocalAccessCollection, account: &CodexA
     {
         CodexLocalAccessImageGenerationPolicy::Enabled => true,
         CodexLocalAccessImageGenerationPolicy::Disabled => false,
-        CodexLocalAccessImageGenerationPolicy::Inherit => !account.is_api_key_auth(),
+        CodexLocalAccessImageGenerationPolicy::Inherit => !account.is_api_key_auth()
+            || crate::modules::codex_remote_service::for_routing_account(account).is_some_and(|remote| remote.capabilities.hosted_images),
     }
 }
 
@@ -750,6 +777,11 @@ fn native_model_for_key(
     Ok(canonical.to_string())
 }
 
+fn native_device_restriction_applies(account: &CodexAccount) -> bool {
+    !account.is_api_key_auth() && !account.is_web_session_auth()
+        && !account.is_agent_identity_auth() && !native_is_chatgpt_plan_account(account)
+}
+
 fn native_eligible(account: &CodexAccount) -> bool {
     !account.is_web_session_auth()
         && !account.requires_reauth
@@ -792,6 +824,14 @@ async fn native_load_accounts(
         let _permit = permit;
         ids.iter()
             .filter_map(|id| codex_account::load_account(id))
+            .map(|mut account| {
+                if let Some(remote) = crate::modules::codex_remote_service::for_account(&account) {
+                    for model in remote.image_models {
+                        if !account.api_model_catalog.contains(&model) { account.api_model_catalog.push(model); }
+                    }
+                }
+                account
+            })
             .collect()
     })
     .await
@@ -861,6 +901,9 @@ impl native_contract::Host for NativeHostBridge {
             .map(|mut cache| cache.invalidate(identity))
             .unwrap_or(false)
     }
+    fn invalidate_http2_transport(&self, identity: &str) -> bool {
+        self.clients.lock().map(|mut cache| cache.invalidate_http2(identity, Instant::now())).unwrap_or(false)
+    }
     fn multi_agent_policy<'a>(
         &'a self,
         caller: &'a native_contract::Caller,
@@ -910,7 +953,7 @@ impl native_contract::Host for NativeHostBridge {
         self.cooling_disabled.store(disabled, Ordering::Release);
         if disabled {
             if let Ok(mut states) = self.cooldowns.lock() {
-                states.clear();
+                states.retain(|_, state| state.reason == NATIVE_CONFIRMED_QUOTA);
             }
         }
     }
@@ -960,8 +1003,31 @@ impl native_contract::Host for NativeHostBridge {
                     })
                 })
                 .ok_or_else(|| native_error(401, "invalid_api_key", "Invalid API key"))?;
+            restore_key_budget(self, &caller).await?;
+            let collection = self.collection().await?;
             native_caller_key(&collection, &caller)?;
             Ok(caller)
+        })
+    }
+
+    fn authorize_management<'a>(&'a self, bearer: &'a str) -> futures_util::future::BoxFuture<'a, Result<native_contract::Caller, native_contract::ServiceError>> {
+        Box::pin(async move {
+            let collection = self.collection().await?;
+            let key = collection.api_keys.iter().find(|key| native_key_matches(&key.key, bearer))
+                .ok_or_else(|| native_error(401, "invalid_api_key", "Invalid API key"))?;
+            let caller = native_contract::Caller { id: key.id.clone(), label: key.label.clone() };
+            restore_key_budget(self, &caller).await?;
+            Ok(caller)
+        })
+    }
+
+    fn caller_permit<'a>(&'a self, caller: &'a native_contract::Caller) -> futures_util::future::BoxFuture<'a, Result<Option<Arc<dyn Send + Sync>>, native_contract::ServiceError>> {
+        Box::pin(async move {
+            usage_log_admission()?;
+            let collection = self.collection().await?;
+            let key = native_caller_key(&collection, caller)?;
+            let key_permit=key.map(acquire_key_concurrency).transpose()?;
+            Ok(Some(usage_caller_permit(key_permit)?))
         })
     }
 
@@ -1011,6 +1077,29 @@ impl native_contract::Host for NativeHostBridge {
                     credential_scope,
                     Instant::now(),
                 );
+            }
+        })
+    }
+
+    fn route_quota_exhausted<'a>(
+        &'a self, route: &'a native_contract::Route, _status: u16, retry_after: Option<Duration>,
+    ) -> futures_util::future::BoxFuture<'a, ()> {
+        Box::pin(async move {
+            if self.selected_route_current(route).await {
+                if let Ok(mut states) = self.cooldowns.lock() {
+                    native_mark_quota_exhausted(&mut states, &route.account_id, retry_after, Instant::now());
+                }
+            }
+        })
+    }
+
+    fn route_transient_rate_limited<'a>(
+        &'a self, route: &'a native_contract::Route, model: &'a str, retry_after: Option<Duration>,
+    ) -> futures_util::future::BoxFuture<'a, ()> {
+        Box::pin(async move {
+            if !self.selected_route_current(route).await || self.cooling_disabled.load(Ordering::Acquire) { return; }
+            if let Ok(mut states) = self.cooldowns.lock() {
+                native_upsert_transient_rate_limit(&mut states, &route.account_id, model, retry_after, Instant::now());
             }
         })
     }
@@ -1086,7 +1175,7 @@ impl native_contract::Host for NativeHostBridge {
         Box::pin(async move {
             let collection = self.collection().await?;
             let key = native_caller_key(&collection, caller)?;
-            if route.wire_api == native_contract::WireApi::Chat
+            if route.wire_api != native_contract::WireApi::Responses
                 || key.is_some_and(|key| {
                     key.provider_gateway.is_some() || key.model_routing.is_some()
                 })
@@ -1144,6 +1233,7 @@ impl native_contract::Host for NativeHostBridge {
                 stream_open_max_attempts: limits.sidecar_stream_open_max_attempts.clamp(1, 3),
                 credential_retries: collection.max_retry_credentials,
                 retry_max_delay: Duration::from_millis(collection.max_retry_interval_ms),
+                continuous_overload_retry: self.collection_override.is_none() && collection.continuous_overload_retry,
                 send_retries: limits.upstream_send_retry_attempts,
                 send_retry_max_delay: Duration::from_millis(
                     limits.upstream_send_retry_max_delay_ms,
@@ -1187,6 +1277,14 @@ impl native_contract::Host for NativeHostBridge {
         ))
     }
 
+    fn route_for_rebuild<'a>(
+        &'a self,
+        caller: &'a native_contract::Caller,
+        request: native_contract::RouteRequest,
+    ) -> futures_util::future::BoxFuture<'a, Result<native_contract::Route, native_contract::ServiceError>> {
+        Box::pin(native_select_route_with_owner_wait(self, caller, request, true))
+    }
+
     fn route<'a>(
         &'a self,
         caller: &'a native_contract::Caller,
@@ -1208,6 +1306,33 @@ impl native_contract::Host for NativeHostBridge {
         Result<native_contract::Route, native_contract::ServiceError>,
     > {
         Box::pin(native_refresh_route(self, caller, previous, request))
+    }
+
+    fn validate_websocket_control<'a>(
+        &'a self, caller: &'a native_contract::Caller, route: &'a native_contract::Route,
+        request: &'a native_contract::RouteRequest,
+    ) -> futures_util::future::BoxFuture<'a, Result<(), native_contract::ServiceError>> {
+        Box::pin(async move {
+            let collection = self.collection().await?;
+            let key = native_caller_key(&collection, caller)?;
+            let public_model = native_model_for_key(&collection, key, &request.model)?;
+            let plan = native_model_route_plan(&collection, key, &public_model)?;
+            let mut account = self.load_route_account(route).await?.ok_or_else(|| native_error(404, "account_not_found", "Selected account no longer exists"))?;
+            if codex_account::is_grok_upstream_provider(&account) {
+                account = native_grok::current_account(account).await?;
+            }
+            if !native_model_visible(&collection, key, &plan, &account)
+                || native_wire_api(&account)? != route.wire_api
+                || (account.is_api_key_auth() && !codex_account::is_grok_upstream_provider(&account)
+                    && account.api_base_url.as_deref().filter(|url| !url.trim().is_empty()).unwrap_or("https://api.openai.com/v1").trim_end_matches('/') != route.base_url.trim_end_matches('/'))
+                || native_plan_account_model(&plan, &account).as_deref() != Some(&route.model)
+                || native_account_owner(&account, &route.base_url) != route.owner_id
+                || !self.selected_route_current(route).await
+                || !self.websockets_enabled().await? {
+                return Err(native_error(403, "websocket_control_denied", "The active account or model is no longer authorized for this WebSocket"));
+            }
+            Ok(())
+        })
     }
 
     fn models<'a>(
@@ -1232,6 +1357,14 @@ impl native_contract::Host for NativeHostBridge {
     fn payload_logging_enabled(&self) -> futures_util::future::BoxFuture<'_, bool> {
         Box::pin(async { native_request_payload_logging_enabled() })
     }
+    fn overload_attempt(&self, request_id: &str, attempt: &native_api::diagnostics::DiagnosticAttempt) {
+        if self.collection_override.is_none() { queue_overload_attempt(request_id, attempt); }
+    }
+
+    fn overload_outcome(&self, request_id: &str, outcome: &str, account_id: Option<&str>) {
+        if self.collection_override.is_none() { queue_overload_outcome(request_id, outcome, account_id); }
+    }
+
     fn diagnostic(
         &self,
         context: NativeDiagnosticContext,
@@ -1404,6 +1537,20 @@ impl native_contract::Host for NativeHostBridge {
                 )
                 .await
             };
+            if current && official_feedback && report.official_registration_id.is_none() && self.account_overrides.is_empty() {
+                let restricted = !report.success && report.error_message.as_deref()
+                    .is_some_and(crate::modules::codex_device_restrictions::explicit_message);
+                if report.success || restricted {
+                    if let Ok(accounts) = self.load_accounts(vec![report.account_id.clone()]).await {
+                        if let Some(account) = accounts.first().filter(|a| native_device_restriction_applies(a)) {
+                            let started = crate::modules::codex_device_restrictions::now()
+                                .saturating_sub(report.elapsed.as_millis().min(i64::MAX as u128) as i64);
+                            crate::modules::codex_device_restrictions::observe_account(account,
+                                crate::modules::codex_device_restrictions::API, "api_response", started, restricted).await;
+                        }
+                    }
+                }
+            }
             if current && official_feedback {
                 self.record_failure_cooldown(&report);
                 self.record_soft_binding_result(&report).await;
@@ -1435,7 +1582,10 @@ impl native_contract::Host for NativeHostBridge {
                     })
                     .unwrap_or(CodexLocalAccessRequestKind::Text),
             };
-            let usage = report.usage.as_ref().map(native_usage_capture);
+            let usage = report.usage.as_ref().filter(|usage| {
+                ["input_tokens", "output_tokens", "prompt_tokens", "completion_tokens", "total_tokens"].iter()
+                    .any(|field| usage.get(*field).is_some_and(|value| !value.is_null()))
+            }).map(native_usage_capture);
             if let Err(error) = record_request_stats_with_meta(
                 (!report.account_id.is_empty()).then_some(report.account_id.as_str()),
                 None,
@@ -1552,6 +1702,10 @@ mod native_official_fallback_tests;
 mod native_live_acceptance;
 
 #[cfg(test)]
+#[path = "codex_local_access_native_live_protocol.rs"]
+mod native_live_protocol;
+
+#[cfg(test)]
 #[path = "codex_local_access_native_live_pool.rs"]
 mod native_live_pool;
 
@@ -1564,6 +1718,11 @@ mod native_live_provider;
 mod native_credits_tests;
 
 #[cfg(test)]
+#[path = "codex_local_access_native_live_images.rs"]
+mod native_live_images;
+
+
+#[cfg(test)]
 mod native_host_tests {
     use super::*;
     include!("codex_local_access_tests_native.rs");
@@ -1573,6 +1732,8 @@ mod native_host_tests {
     include!("codex_local_access_tests_native_cooldown.rs");
     include!("codex_local_access_tests_native_health.rs");
     include!("codex_local_access_tests_native_cooling_continuation.rs");
+    include!("codex_local_access_tests_native_quota_continuation.rs");
+    include!("codex_local_access_tests_native_quota_http.rs");
     include!("codex_local_access_tests_native_reserve.rs");
     include!("codex_local_access_tests_native_automatic.rs");
     include!("codex_local_access_tests_native_parity22.rs");

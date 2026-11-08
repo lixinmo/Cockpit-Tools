@@ -317,12 +317,26 @@ jobs:
       - name: 🔄 Sync versions
         run: npm run sync-version
 
+      - name: 🔐 Prepare Apple signing and notarization
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: node scripts/release/macos-signing.cjs prepare
+
       - name: 🏗️ Build macOS Apple Silicon app
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
           node scripts/tauri.cjs build --ci --target aarch64-apple-darwin --config '{"build":{"beforeBuildCommand":"node scripts/prepare-tauri.cjs && node scripts/sync-version.js && node node_modules/typescript/bin/tsc && node node_modules/vite/bin/vite.js build"}}'
@@ -351,6 +365,12 @@ jobs:
           set -euo pipefail
           node scripts/release/inject-dmg-readme.cjs \
             --bundle-dir "target/aarch64-apple-darwin/release/bundle"
+
+      - name: ✅ Notarize final DMG and verify macOS assets
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: node scripts/release/macos-signing.cjs finalize "target/aarch64-apple-darwin/release/bundle"
 
       - name: 📥 Download release metadata
         uses: actions/download-artifact@v4
@@ -397,6 +417,10 @@ jobs:
             --output-dir "target-manifests"
           node scripts/release/upload_release_assets.cjs "v${VERSION}" target-manifests/*.json
 
+      - name: 🧹 Remove temporary Apple signing keychain
+        if: always()
+        run: node scripts/release/macos-signing.cjs cleanup
+
   build-macos-x86_64:
     name: "🏗️ Build: macOS Intel"
     # Parallel with Windows / macOS Apple Silicon after prepare.
@@ -441,12 +465,26 @@ jobs:
       - name: 🔄 Sync versions
         run: npm run sync-version
 
+      - name: 🔐 Prepare Apple signing and notarization
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: node scripts/release/macos-signing.cjs prepare
+
       - name: 🏗️ Build macOS Intel app
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
           node scripts/tauri.cjs build --ci --target x86_64-apple-darwin --config '{"build":{"beforeBuildCommand":"node scripts/prepare-tauri.cjs && node scripts/sync-version.js && node node_modules/typescript/bin/tsc && node node_modules/vite/bin/vite.js build"}}'
@@ -475,6 +513,12 @@ jobs:
           set -euo pipefail
           node scripts/release/inject-dmg-readme.cjs \
             --bundle-dir "target/x86_64-apple-darwin/release/bundle"
+
+      - name: ✅ Notarize final DMG and verify macOS assets
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: node scripts/release/macos-signing.cjs finalize "target/x86_64-apple-darwin/release/bundle"
 
       - name: 📥 Download release metadata
         uses: actions/download-artifact@v4
@@ -520,6 +564,10 @@ jobs:
             --targets "darwin-x86_64-app" \
             --output-dir "target-manifests"
           node scripts/release/upload_release_assets.cjs "v${VERSION}" target-manifests/*.json
+
+      - name: 🧹 Remove temporary Apple signing keychain
+        if: always()
+        run: node scripts/release/macos-signing.cjs cleanup
 
   build-macos-universal:
     name: "🏗️ Build: macOS Universal"
@@ -574,12 +622,26 @@ jobs:
           node scripts/release/macos-universal.cjs --mode merge \
             --inputs universal-inputs --version "${VERSION}"
 
+      - name: 🔐 Prepare Apple signing and notarization
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: node scripts/release/macos-signing.cjs prepare
+
       - name: 📦 Bundle macOS Universal app
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           set -euo pipefail
           node scripts/tauri.cjs bundle --ci --target universal-apple-darwin
@@ -590,6 +652,12 @@ jobs:
           set -euo pipefail
           node scripts/release/inject-dmg-readme.cjs \
             --bundle-dir "target/universal-apple-darwin/release/bundle"
+
+      - name: ✅ Notarize final DMG and verify macOS assets
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: node scripts/release/macos-signing.cjs finalize "target/universal-apple-darwin/release/bundle"
 
       - name: 📦 Stage macOS Universal assets
         shell: bash
@@ -613,6 +681,10 @@ jobs:
           test "${#ASSETS[@]}" -gt 0
           node scripts/release/upload_release_assets.cjs "${TAG}" "${ASSETS[@]}"
           echo "Uploaded ${#ASSETS[@]} macOS Universal assets"
+
+      - name: 🧹 Remove temporary Apple signing keychain
+        if: always()
+        run: node scripts/release/macos-signing.cjs cleanup
 
   build-linux:
     name: "🏗️ Build: Linux (${{ matrix.label }})"

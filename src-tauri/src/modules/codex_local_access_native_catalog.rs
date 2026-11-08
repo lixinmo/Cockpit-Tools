@@ -5,8 +5,9 @@ fn native_public_model_entry(
     account: &CodexAccount,
     id: &str,
     upstream: &str,
+    public_template: Option<&Value>,
 ) -> Value {
-    let template = native_declared_provider_model_metadata(account, upstream).or_else(|| {
+    let template = public_template.cloned().or_else(|| native_declared_provider_model_metadata(account, upstream)).or_else(|| {
         (native_wire_api(account).ok() == Some(native_contract::WireApi::Responses))
             .then(|| codex_protocol::known_codex_model_template(upstream))
             .flatten()
@@ -20,7 +21,9 @@ fn native_public_model_entry(
     let tools = match native_capability_support(collection, account, upstream, "function") {
         Some(CodexLocalAccessCapabilitySupport::Supported) => true,
         Some(CodexLocalAccessCapabilitySupport::Unsupported) => false,
-        None => !account.is_api_key_auth() || template.is_some(),
+        None => !account.is_api_key_auth() || (template.is_some()
+            && (!codex_protocol::is_deepseek_model(upstream)
+                || codex_protocol::is_known_deepseek_model(upstream))),
     };
     let mut entry = native_model_entry_from_metadata(id, template.as_ref(), window, vision, tools);
     entry["model_info"]["upstream_id"] = json!(upstream);

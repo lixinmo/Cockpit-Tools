@@ -25,6 +25,7 @@ import {
   Mail,
   BookOpen,
 } from 'lucide-react';
+import { AccountLastUsed } from '../components/AccountLastUsed';
 import { useWindsurfAccountStore } from '../stores/useWindsurfAccountStore';
 import * as windsurfService from '../services/windsurfService';
 import { TagEditModal } from '../components/TagEditModal';
@@ -877,7 +878,7 @@ export function WindsurfAccountsPage() {
       const summary = resolveQuotaSummary(account);
       const items: WindsurfOfficialUsagePanelItem[] = [];
 
-      if (summary.dailyUsedPercent != null) {
+      if (!summary.hideDaily && summary.dailyUsedPercent != null) {
         const label = t('windsurf.usageSummary.dailyQuota', 'Daily quota usage');
         const value = formatQuotaUsagePercent(summary.dailyUsedPercent);
         const detail = summary.dailyResetAt
@@ -898,7 +899,7 @@ export function WindsurfAccountsPage() {
         });
       }
 
-      if (summary.weeklyUsedPercent != null) {
+      if (!summary.hideWeekly && summary.weeklyUsedPercent != null) {
         const label = t('windsurf.usageSummary.weeklyQuota', 'Weekly quota usage');
         const value = formatQuotaUsagePercent(summary.weeklyUsedPercent);
         const detail = summary.weeklyResetAt
@@ -987,6 +988,14 @@ export function WindsurfAccountsPage() {
       }
 
       const mode = resolveUsageMode(account);
+      if (mode === 'acu') {
+        const items = resolvePresentation(account).quotaItems.map(item => ({
+          key: item.key, label: item.label, value: item.valueText ?? '--', detail: '',
+          title: `${item.label}: ${item.valueText ?? '--'}`, progressPercent: item.progressPercent,
+          quotaClass: item.quotaClass, showProgress: item.showProgress,
+        }));
+        return { mode, headline: '', note: items.length ? '' : t('common.shared.quota.noData'), items, title: items.map(item => item.title).join(' | ') };
+      }
       if (mode === 'quota') {
         const items = buildQuotaDisplayItems(account);
         return {
@@ -1013,7 +1022,7 @@ export function WindsurfAccountsPage() {
         title: [headline, ...items.map((item) => item.title)].join(' | '),
       };
     },
-    [buildCreditsDisplayItems, buildQuotaDisplayItems, formatCreditValue, resolveCreditsSummary, resolveUsageMode, t],
+    [buildCreditsDisplayItems, buildQuotaDisplayItems, formatCreditValue, resolveCreditsSummary, resolveUsageMode, resolvePresentation, t],
   );
 
   // ─── Tier filter ────────────────────────────────────────────────────
@@ -1230,7 +1239,7 @@ export function WindsurfAccountsPage() {
           {renderUsagePanel(usagePanel)}
           {renderPlanDetails(cycleDisplay)}
           <div className="card-footer">
-            <span className="card-date">{formatDate(account.created_at)}</span>
+            <AccountLastUsed accountId={account.id} lastSwitchedAt={account.last_switched_at} createdAt={account.created_at} formatDate={formatDate} />
             <div className="card-actions">
               <button className="card-action-btn success" onClick={() => handleInjectToVSCode?.(account.id)} disabled={!!injecting} title={t('windsurf.injectToVSCode', '切换到 Windsurf')}>
                 {injecting === account.id ? <RefreshCw size={14} className="loading-spinner" /> : <Play size={14} />}

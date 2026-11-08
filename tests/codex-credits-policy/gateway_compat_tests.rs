@@ -207,3 +207,44 @@ fn minimal_go_patch_rejects_invalid_or_restricted_credit_fields() {
         }
     }
 }
+
+#[test]
+fn upstream_key_budget_limits_require_native_without_changing_credits_or_engine() {
+    for field in ["limitMicrousd", "dailyLimitMicrousd", "maxConcurrent", "dailyImageLimit"] {
+        for enabled in [false, true] {
+            let mut raw = fixture();
+            raw["gatewayMode"] = json!("sidecar");
+            raw["nativeGatewayDefaultMigrated"] = json!(true);
+            raw["nativeCreditsPolicyMigrated"] = json!(true);
+            raw["apiKeys"] = json!([{"id":"budget-key","label":"fixture","key":"test-only",
+                "enabled":enabled,"budget":{"period":"daily"}}]);
+            raw["apiKeys"][0]["budget"][field] = json!(1);
+            let collection = parsed(&raw);
+            assert!(!compat::has_restrictions(&collection), "caller budget is not subscription Credits");
+            assert_eq!(compat::migration_target(&raw, &collection), None, "budget must not switch engines");
+            assert!(compat::validate_mode(&collection, CodexLocalAccessGatewayMode::Sidecar)
+                .unwrap_err().contains("KEY_BUDGET_REQUIRES_NATIVE"));
+            assert!(compat::validate_mode(&collection, CodexLocalAccessGatewayMode::Native).is_ok());
+            let original = raw.to_string();
+            assert!(compat::patch_gateway_mode(&original, CodexLocalAccessGatewayMode::Sidecar, 9)
+                .unwrap_err().contains("KEY_BUDGET_REQUIRES_NATIVE"));
+            assert_eq!(raw.to_string(), original);
+            let native: Value = serde_json::from_str(&compat::patch_gateway_mode(
+                &original, CodexLocalAccessGatewayMode::Native, 9).unwrap()).unwrap();
+            assert_eq!(native["apiKeys"], raw["apiKeys"]);
+        }
+    }
+}
+
+#[test]
+fn unlimited_key_budget_and_period_do_not_disable_go() {
+    for budget in [json!({}), json!({"period":"monthly","limitMicrousd":null,
+        "dailyLimitMicrousd":null,"maxConcurrent":null,"dailyImageLimit":null})] {
+        let raw = json!({"apiKeys":[{"id":"partial","budget":budget}],"unrelated":"keep"});
+        let changed: Value = serde_json::from_str(&compat::patch_gateway_mode(
+            &raw.to_string(), CodexLocalAccessGatewayMode::Sidecar, 9).unwrap()).unwrap();
+        assert_eq!(changed["gatewayMode"], "sidecar");
+        assert_eq!(changed["apiKeys"], raw["apiKeys"]);
+        assert_eq!(changed["unrelated"], raw["unrelated"]);
+    }
+}

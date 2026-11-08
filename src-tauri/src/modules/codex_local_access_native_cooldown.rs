@@ -8,6 +8,7 @@ struct NativeCooldownKey {
 #[derive(Clone, Debug)]
 struct NativeCooldown {
     until: Instant,
+    recorded_at: Instant,
     quota: bool,
     backoff_level: u8,
     reason: &'static str,
@@ -17,6 +18,70 @@ fn native_cooldown_key(account: &str, model: &str, credential_scope: bool) -> Na
     NativeCooldownKey {
         account: account.into(),
         model: if credential_scope { "" } else { model }.into(),
+    }
+}
+
+const NATIVE_CONFIRMED_QUOTA: &str = "quota_exhausted";
+
+impl NativeCooldown {
+    fn active(&self, now: Instant, cooling_disabled: bool) -> bool {
+        self.until > now && (!cooling_disabled || self.reason == NATIVE_CONFIRMED_QUOTA)
+    }
+}
+
+fn native_mark_quota_exhausted(
+    states: &mut HashMap<NativeCooldownKey, NativeCooldown>,
+    account: &str,
+    retry_after: Option<Duration>,
+    now: Instant,
+) {
+    let key = native_cooldown_key(account, "", true);
+    if let Some(previous) = states.get_mut(&key)
+        .filter(|state| state.reason == NATIVE_CONFIRMED_QUOTA && state.until > now)
+    {
+        previous.recorded_at = now;
+        if let Some(until) = retry_after.and_then(|wait| now.checked_add(wait)) {
+            previous.until = previous.until.max(until);
+        }
+        return;
+    }
+    native_upsert_cooldown(states, account, "", 429, retry_after, true, now);
+    if let Some(state) = states.get_mut(&key) {
+        state.reason = NATIVE_CONFIRMED_QUOTA;
+    }
+}
+
+fn native_clear_quota_cooldowns(
+    states: &mut HashMap<NativeCooldownKey, NativeCooldown>,
+    account_id: &str,
+    query_started: Instant,
+) -> bool {
+    let before = states.len();
+    states.retain(|key, state| {
+        key.account != account_id || !state.quota || state.recorded_at >= query_started
+    });
+    states.len() != before
+}
+
+pub(crate) async fn clear_native_quota_cooldown_after_refresh(
+    account_id: &str,
+    quota: &CodexQuota,
+    query_started: Instant,
+) {
+    if !quota_refresh_confirms_usable_allowance(quota, query_started, now_ms() / 1000) {
+        return;
+    }
+    let host = gateway_runtime().lock().await.native_health_source.as_ref()
+        .and_then(|host| host.upgrade());
+    let Some(host) = host else { return; };
+    let cleared = host.cooldowns.lock().ok().is_some_and(|mut states| {
+        native_clear_quota_cooldowns(&mut states, account_id, query_started)
+    });
+    if cleared {
+        logger::log_codex_api_info(&format!(
+            "[CodexLocalAccess] 额度刷新确认可用，已清除旧的额度冷却: account_id={account_id}"
+        ));
+        emit_local_access_state_updated();
     }
 }
 
@@ -34,6 +99,9 @@ fn native_upsert_cooldown(
     }
     let key = native_cooldown_key(account, model, credential_scope || model.is_empty());
     let previous = states.get(&key);
+    if previous.is_some_and(|state| state.reason == NATIVE_CONFIRMED_QUOTA && state.until > now) {
+        return;
+    }
     let mut backoff_level = previous.map_or(0, |state| state.backoff_level);
     let (mut until, quota) = if status == 429 {
         let until = if let Some(hint) = retry_after {
@@ -67,6 +135,7 @@ fn native_upsert_cooldown(
         key,
         NativeCooldown {
             until,
+            recorded_at: now,
             quota: quota || retain_quota,
             backoff_level,
             reason: if quota || retain_quota {
@@ -97,9 +166,21 @@ fn native_cooldown_wait(
     ]
     .into_iter()
     .filter_map(|key| states.get(&key))
-    .filter(|state| state.until > now && !disable_cooling)
+    .filter(|state| state.active(now, disable_cooling))
     .map(|state| state.until.saturating_duration_since(now))
     .max()
+}
+
+fn native_upsert_transient_rate_limit(
+    states: &mut HashMap<NativeCooldownKey, NativeCooldown>, account: &str, model: &str,
+    retry_after: Option<Duration>, now: Instant,
+) {
+    let key = native_cooldown_key(account, model, false);
+    if states.get(&key).is_some_and(|state| state.quota && state.until > now) { return; }
+    let until = now.checked_add(retry_after.unwrap_or(Duration::from_secs(1)))
+        .unwrap_or_else(|| now + Duration::from_secs(10 * 365 * 86400));
+    let until = states.get(&key).map_or(until, |state| state.until.max(until));
+    states.insert(key, NativeCooldown { until, recorded_at: now, quota: false, backoff_level: 0, reason: "transient_rate_limit" });
 }
 
 fn native_upsert_challenge_cooldown(
@@ -126,6 +207,7 @@ fn native_upsert_challenge_cooldown(
         key,
         NativeCooldown {
             until: now + delay,
+            recorded_at: now,
             quota: false,
             backoff_level: level.saturating_add(u8::from(delay < Duration::from_secs(1800))),
             reason: "cloudflare_challenge",

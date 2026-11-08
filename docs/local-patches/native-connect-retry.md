@@ -90,5 +90,30 @@ hyper 1.9.0, h2 0.4.13 and tokio 1.52.0 on 2026-10-22.
 
 The Go verifier must still pass when retaining or updating the reference patch.
 After any dependency/upstream refresh, inspect retry/pooling/handshake layers
-again before running both verifiers. The native build remains
-`npm run build:app:local`, preserving the established native caches.
+again before running both verifiers. Builds and compilation-dependent checks run in standard GitHub-hosted Actions
+under `docs/cloud-builds.md`; `npm run build:app:local` is only a compatibility
+alias that dispatches the cloud workflow.
+
+## v1.3.80 integration review (2026-11-08)
+
+The upstream client cache now remembers a scoped HTTP/1 fallback after repeated
+HTTP/2 TLS failures, and decodes response compression at the protocol boundary.
+Both behaviors remain upstream-owned. Client construction calls `configure`
+exactly once. Its exclusion argument is the original WebSocket-only transport
+flag, not the cache's HTTP/1 fallback flag: ordinary HTTP fallback requests to
+`https://chatgpt.com` must retain the same setup fence and reqwest replay denial.
+
+The reqwest 0.12.28 / hyper-util 0.1.20 vendor hooks are unchanged. The setup loop
+still owns only connector/handshake/readiness, uses three attempts and 200/400 ms
+waits under one deadline, and ends before `PoolClient::try_send_request`.
+WebSocket Upgrade/CONNECT and other hosts remain excluded. The cache loop only
+reconciles client construction with concurrent cache policy changes; it does not
+send a request or add a connection-attempt budget.
+
+Upstream's explicit compressed-body rejection fallback remains at the existing
+application request layer, with its execution-evidence check and one plaintext
+fallback. It is not triggered by a transport EOF. A fresh Credits check is now
+also required before that fallback send. The compression regression includes a
+policy denial arriving with the rejection and expects exactly one upstream call.
+This review is static; the merge's cloud verification record supplies execution
+results for both retry verifiers and the Native integration suite.

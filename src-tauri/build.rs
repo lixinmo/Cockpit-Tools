@@ -205,6 +205,7 @@ fn main() {
     if target.ends_with("-windows-msvc") {
         println!("cargo:rustc-link-arg-bin=cockpit-tools=/STACK:8388608");
     }
+    println!("cargo:rustc-env=COCKPIT_RUST_TARGET={target}");
     build_cockpit_cliproxy_sidecar();
 
     // The cfg gate selects the build host. Only link Swift for a macOS target,

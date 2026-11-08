@@ -40,6 +40,7 @@ fn native_gateway_default_first_runtime_load_migrates_every_old_mode_and_preserv
         let path = root.path().join("collection.json");
         let mut original = old_collection(mode);
         original["enabled"] = json!(mode != Some("sidecar"));
+        original["nativeGatewayDefaultMigrated"] = json!(mode.is_some());
         std::fs::write(&path, serde_json::to_vec(&original).unwrap()).unwrap();
         let loaded = load_collection_for_runtime_from_path(&path)
             .unwrap()
@@ -238,4 +239,33 @@ fn native_gateway_credits_later_native_choice_wins_against_initial_local_migrati
         assert_eq!(loaded.gateway_mode, CodexLocalAccessGatewayMode::Native);
         assert!(loaded.native_gateway_default_migrated);
     }
+}
+
+#[test]
+fn native_key_budget_go_save_and_profile_start_fail_without_writing_state() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("collection.json");
+    let mut raw = old_collection(Some("sidecar"));
+    raw["nativeGatewayDefaultMigrated"] = json!(true);
+    raw["nativeCreditsPolicyMigrated"] = json!(true);
+    raw["apiKeys"] = json!([{"id":"budget-fixture","label":"fixture","key":"test-only"}]);
+    std::fs::write(&path, raw.to_string()).unwrap();
+    let original = std::fs::read(&path).unwrap();
+    let mut candidate: CodexLocalAccessCollection = serde_json::from_value(raw).unwrap();
+    // Simulate a stale Native snapshot racing with an explicit saved Go choice.
+    candidate.gateway_mode = CodexLocalAccessGatewayMode::Native;
+    candidate.api_keys[0].budget.daily_limit_microusd = Some(1_000_000);
+    candidate.api_keys[0].updated_at = now_ms();
+    assert!(save_collection_to_path(&path, &candidate).unwrap_err().contains("KEY_BUDGET_REQUIRES_NATIVE"));
+    assert_eq!(std::fs::read(&path).unwrap(), original);
+    // The common profile launch entry refuses before creating auth/config files.
+    let sidecar_dir = root.path().join("not-created");
+    let error = prepare_sidecar_launch_config_in_dir_sync(
+        &candidate, sidecar_dir.clone(), HashMap::new(), None, HashMap::new(), false, None,
+    ).err().expect("Go cannot enforce Native caller budgets");
+    assert!(error.contains("KEY_BUDGET_REQUIRES_NATIVE"));
+    assert!(!sidecar_dir.exists());
+    // A migrated configuration retains the explicit Go choice on load; no silent switch.
+    let loaded = load_collection_for_runtime_from_path(&path).unwrap().unwrap();
+    assert_eq!(loaded.gateway_mode, CodexLocalAccessGatewayMode::Sidecar);
 }

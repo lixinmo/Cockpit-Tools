@@ -506,15 +506,31 @@ async fn fetch_at(
     root: &Path,
     timeout: Duration,
 ) -> Result<FetchedModels, String> {
+    fetch_at_with_protocol(base_url, api_key, root, timeout, None, None).await
+}
+
+async fn fetch_at_with_protocol(
+    base_url: &str,
+    api_key: &str,
+    root: &Path,
+    timeout: Duration,
+    wire_api: Option<&str>,
+    auth_scheme: Option<&str>,
+) -> Result<FetchedModels, String> {
     let scope = scope(base_url, api_key)?;
-    let url = models_url(base_url)?;
-    let origin = reqwest::Url::parse(&url)
-        .map_err(|_| "PROVIDER_BASE_URL_INVALID")?
-        .origin();
+    let protocol = super::codex_provider_protocol::normalize_model_provider_wire_api(wire_api, base_url);
+    let raw_url = if protocol == "anthropic" {
+        super::codex_native_api::anthropic::endpoint(base_url, "models")
+            .map_err(|_| "PROVIDER_BASE_URL_INVALID".to_string())?
+    } else {
+        models_url(base_url)?
+    };
+    let mut url = reqwest::Url::parse(&raw_url).map_err(|_| "PROVIDER_BASE_URL_INVALID")?;
+    let origin = url.origin();
     let started = Instant::now();
     let fetched_at_ms = now_ms();
-    // This matches the existing discovery client's proxy behavior. API-key
-    // providers do not inherit a ChatGPT subscription account's egress proxy.
+    // Keep the existing discovery proxy policy and prevent credential forwarding
+    // to an origin not selected by the user, including paginated discovery.
     let client = reqwest::Client::builder()
         .timeout(timeout)
         .redirect(reqwest::redirect::Policy::custom(move |attempt| {
@@ -526,55 +542,62 @@ async fn fetch_at(
         }))
         .build()
         .map_err(|_| "CREATE_HTTP_CLIENT_FAILED")?;
-    let mut response = client
-        .get(url)
-        .bearer_auth(api_key.trim())
+    let mut models = Vec::<DiscoveredModel>::new();
+    let mut seen = BTreeMap::<String, usize>::new();
+    let mut total_bytes = 0usize;
+    for _ in 0..10 {
+        let remaining = timeout.checked_sub(started.elapsed()).ok_or("PROVIDER_MODELS_NETWORK_FAILED")?;
+        let mut response = super::codex_provider_protocol::authenticate_provider_request(
+            client.get(url.clone()), &protocol, auth_scheme, api_key,
+        )
+        .timeout(remaining)
         .header(reqwest::header::ACCEPT, "application/json")
         .send()
         .await
         .map_err(|_| "PROVIDER_MODELS_NETWORK_FAILED")?;
-    if !response.status().is_success() {
-        return Err(format!(
-            "PROVIDER_MODELS_HTTP_{}",
-            response.status().as_u16()
-        ));
-    }
-    if response
-        .content_length()
-        .is_some_and(|length| length > MAX_BODY_BYTES as u64)
-    {
-        return Err("PROVIDER_MODELS_RESPONSE_TOO_LARGE".into());
-    }
-    let mut bytes = Vec::new();
-    while let Some(chunk) = response
-        .chunk()
-        .await
-        .map_err(|_| "PROVIDER_MODELS_NETWORK_FAILED")?
-    {
-        if chunk.len() > MAX_BODY_BYTES.saturating_sub(bytes.len()) {
+        if !response.status().is_success() {
+            return Err(format!("PROVIDER_MODELS_HTTP_{}", response.status().as_u16()));
+        }
+        if response.content_length().is_some_and(|length| length > MAX_BODY_BYTES.saturating_sub(total_bytes) as u64) {
             return Err("PROVIDER_MODELS_RESPONSE_TOO_LARGE".into());
         }
-        bytes.extend_from_slice(&chunk);
+        let mut bytes = Vec::new();
+        while let Some(chunk) = response.chunk().await.map_err(|_| "PROVIDER_MODELS_NETWORK_FAILED")? {
+            if chunk.len() > MAX_BODY_BYTES.saturating_sub(total_bytes) {
+                return Err("PROVIDER_MODELS_RESPONSE_TOO_LARGE".into());
+            }
+            total_bytes += chunk.len();
+            bytes.extend_from_slice(&chunk);
+        }
+        let parsed: Value = serde_json::from_slice(&bytes).map_err(|_| "PROVIDER_MODELS_PARSE_FAILED")?;
+        for model in parse_models(&parsed)? {
+            let id = model.id.to_ascii_lowercase();
+            if let Some(index) = seen.get(&id) {
+                if models[*index].metadata != model.metadata {
+                    return Err("PROVIDER_MODELS_CONFLICTING_METADATA".into());
+                }
+                continue;
+            }
+            if models.len() >= MAX_MODELS {
+                return Err("PROVIDER_MODELS_RESPONSE_TOO_LARGE".into());
+            }
+            seen.insert(id, models.len());
+            models.push(model);
+        }
+        if parsed["has_more"] != true {
+            break;
+        }
+        let Some(last) = parsed["last_id"].as_str().filter(|last| !last.is_empty()) else { break; };
+        url.query_pairs_mut().clear().append_pair("after_id", last);
     }
-    let parsed: Value =
-        serde_json::from_slice(&bytes).map_err(|_| "PROVIDER_MODELS_PARSE_FAILED")?;
-    let models = parse_models(&parsed)?;
     let entry = CacheEntry {
         version: 1,
         scope,
         fetched_at_ms,
-        models: models
-            .iter()
-            .filter_map(|model| {
-                model
-                    .metadata
-                    .clone()
-                    .map(|value| (model.id.clone(), value))
-            })
-            .collect(),
+        models: models.iter().filter_map(|model| model.metadata.clone()
+            .map(|value| (model.id.clone(), value))).collect(),
     };
-    // Discovery still returns useful model IDs if the optional metadata cache
-    // cannot be written. A failed HTTP/parse never overwrites the last good file.
+    // Cache only sanitized facts after the whole discovery succeeds.
     let _ = save_cache(root, &entry);
     Ok(FetchedModels {
         models,
@@ -583,8 +606,17 @@ async fn fetch_at(
 }
 
 pub async fn fetch(base_url: &str, api_key: &str) -> Result<FetchedModels, String> {
+    fetch_with_protocol(base_url, api_key, None, None).await
+}
+
+pub async fn fetch_with_protocol(
+    base_url: &str,
+    api_key: &str,
+    wire_api: Option<&str>,
+    auth_scheme: Option<&str>,
+) -> Result<FetchedModels, String> {
     let root = super::account::get_data_dir().map_err(|_| "PROVIDER_METADATA_CACHE_FAILED")?;
-    fetch_at(base_url, api_key, &root, Duration::from_secs(20)).await
+    fetch_at_with_protocol(base_url, api_key, &root, Duration::from_secs(20), wire_api, auth_scheme).await
 }
 
 pub fn lookup(account: &CodexAccount, model: &str) -> Option<ProviderModelMetadata> {
@@ -635,7 +667,8 @@ pub async fn refresh(account: &CodexAccount) -> Result<(), String> {
     {
         return Ok(());
     }
-    let result = fetch_at(base, key, &root, Duration::from_secs(4))
+    let result = fetch_at_with_protocol(base, key, &root, Duration::from_secs(4),
+        account.api_wire_api.as_deref(), account.api_auth_scheme.as_deref())
         .await
         .map(|_| ());
     if let Ok(mut failures) = FAILED_REFRESHES.lock() {

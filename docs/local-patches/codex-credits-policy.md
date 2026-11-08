@@ -263,3 +263,35 @@ identity tests cover workspace, organization and Agent changes, token rotation,
 later policy tightening, and Grok/API-key exemptions. App-bundle verification is
 recorded separately in `native-engine-migration.md`; it is not inferred from
 these source tests.
+
+## v1.3.80 budget and lifecycle integration (2026-11-08)
+
+The upstream API-key budget is retained: it accounts for USD by period and
+limits caller concurrency and daily image requests. It does not decide whether
+a ChatGPT subscription request may consume purchased Credits. The local
+`creditsPolicy` / `accountCreditsAllowed` admission therefore remains in addition
+to upstream budget, reserve, account authorization and continuation checks.
+
+The routing merge keeps the upstream quota/cooldown precomputation and the
+post-semaphore cooldown recheck without changing the Credits pool to the
+remaining ready candidates. Quota exhaustion, local rejection and concurrency
+failure remain distinct evidence. The upstream lifecycle now separates
+`quota_candidate`, pre-send validation and `quota_request_started`; the local
+identity-bound send guard is checked within that same pre-send validation.
+Pending, sent and rolled-back dispatches keep their own guard and quota identity.
+The new compressed-request rejection fallback also repeats the guard immediately
+before its second send, so a policy change during rejection inspection cannot
+reuse an earlier permission. A loopback TLS regression covers this denial.
+
+The existing Native/Go selection transaction and pre-stop Credits validation are
+retained because this fork still ships the Go engine. Restrictive settings cannot
+be silently moved to Go. Official authorization and same-account local fallback
+remain upstream-owned. Cloud results for the merge are recorded separately.
+
+Configured API-key budget limits require Native too, with the separate
+`KEY_BUDGET_REQUIRES_NATIVE` error. Selecting Go, starting a saved Go service or
+profile, and saving a new budget while on Go reject before writing configuration
+or replacing the listener. The final atomic collection save rechecks the saved
+engine choice to close a concurrent switch/save race. Unlimited budgets and a
+period choice alone keep Go available. Budget restrictions do not trigger an
+automatic engine migration or become subscription Credits exhaustion evidence.

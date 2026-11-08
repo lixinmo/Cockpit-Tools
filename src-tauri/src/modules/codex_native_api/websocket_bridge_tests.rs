@@ -28,6 +28,9 @@ mod tool_integrity_tests;
 mod client_discovery_tests;
 #[path = "chat_legacy_reasoning_http_tests.rs"]
 mod legacy_reasoning_tests;
+#[path = "anthropic_http_tests.rs"]
+mod anthropic_tests;
+
 
 struct BridgeHost {
     base: String,

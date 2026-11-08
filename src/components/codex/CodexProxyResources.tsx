@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { open as chooseDirectory } from '@tauri-apps/plugin-dialog';
 import { useTranslation } from 'react-i18next';
 import { Activity, ArrowDown, ArrowUp, ArrowRight, ChevronDown, Download, GripVertical, Layers, Link2, MoreHorizontal, Plus, RefreshCw, Search, ShieldCheck, Star, Trash2, TriangleAlert, Pencil, X } from 'lucide-react';
 import { useEscCloseTopmost } from '../../hooks/useEscClose';
 import { CodexProxyPicker } from './CodexProxyPicker';
 import { useProxyLatency } from './useProxyLatency';
+import { useCodexProxyEngine } from './useCodexProxyEngine';
+import { proxySourceDisplayError } from '../../utils/codexProxySourceError';
 import { useProxyResourceOrder } from './useProxyResourceOrder';
 import { useCodexProxyAccountName } from './useCodexProxyExitEditor';
 import { useModalFocusTrap } from '../../hooks/useModalFocusTrap';
@@ -30,6 +33,7 @@ export function CodexProxyResources({ onAssign, onBindingsChanged }: {
   onBindingsChanged: (sourceId: string, sourceRemoved: boolean) => Promise<void>;
 }) {
   const { t } = useTranslation();
+  const { readiness } = useCodexProxyEngine();
   const resolveName = useCodexProxyAccountName();
   const [catalog, setCatalog] = useState<ProxyCatalog>({ sources: [] });
   const [loading, setLoading] = useState(true);
@@ -293,6 +297,7 @@ export function CodexProxyResources({ onAssign, onBindingsChanged }: {
       <div className="codex-resource-list-caption"><span>{t('codex.proxy.managerResources.count', { count: catalog.sources.length })}</span><span>{t('codex.proxy.managerResources.listHint')}</span></div>
       {catalog.sources.length > 1 && <p className="codex-resource-sort-hint">{t(query.trim() ? 'common.dragSortFilteredHint' : 'common.dragSortHint')}</p>}
       <div className={'codex-resource-list' + (ordering.draggingId ? ' is-sorting' : '')} onMouseLeave={ordering.finish}>{visibleSources.map((entry, index) => {
+        const sourceError = proxySourceDisplayError(entry.error, readiness);
         const open = expanded && sourceId === entry.id;
         const strategy = entry.kind === 'strategy';
         const firstNode = entry.nodes.length === 1 ? entry.nodes[0] : null;
@@ -312,7 +317,7 @@ export function CodexProxyResources({ onAssign, onBindingsChanged }: {
               <ChevronDown size={16} className="codex-resource-entry-chevron" aria-hidden="true" />
             </button>
             <div className="codex-resource-entry-status">
-              {entry.defaultInvalidated || entry.error ? <span className="codex-resource-entry-warning"><TriangleAlert size={13} />{t(entry.defaultInvalidated ? 'codex.proxy.catalog.defaultUnavailable' : catalogErrorKey(entry.error))}</span>
+              {entry.defaultInvalidated || sourceError ? <span className="codex-resource-entry-warning"><TriangleAlert size={13} />{t(entry.defaultInvalidated ? 'codex.proxy.catalog.defaultUnavailable' : catalogErrorKey(sourceError))}</span>
                 : entry.kind === 'subscription' && entry.usage ? <span>{t('codex.proxy.resources.usageLine', { used: formatProxyBytes(entry.usage.upload + entry.usage.download), total: entry.usage.total > 0 ? formatProxyBytes(entry.usage.total) : t('codex.proxy.resources.usageUnknown') })}</span>
                   : measured?.status === 'success' ? <CodexProxyLatencyBadge result={measured} /> : <span>{t('codex.proxy.catalog.availabilityCount', { count: entry.nodes.length, available: entry.nodes.filter((node) => node.supported).length })}</span>}
               {entry.kind === 'subscription' && entry.usage?.expireAt ? <small>{t('codex.proxy.resources.expireLine', { date: formatProxyDateTime(entry.usage.expireAt) })}</small>
@@ -328,7 +333,13 @@ export function CodexProxyResources({ onAssign, onBindingsChanged }: {
                   <button type="button" className="btn btn-secondary" disabled={orderDisabled || index === visibleSources.length - 1} onClick={() => ordering.moveBy(entry.id, 1)}><ArrowDown size={14} />{t('codex.more.moveDown')}</button>
                   {strategy ? <button type="button" className="btn btn-secondary" onClick={() => openStrategy(entry.id)}><Pencil size={14} />{t('codex.proxy.catalog.strategyEdit')}</button>
                     : <button type="button" className="btn btn-secondary" onClick={() => editSource(entry)}><Pencil size={14} />{t('codex.proxy.catalog.rename')}</button>}
-                  {entry.kind === 'subscription' && <button type="button" className="btn btn-secondary" onClick={() => { setMenuId(''); void run('refresh', async (id) => { const next = await refreshProxyCatalog(id, entry.id); if (mounted.current) { apply(next); setResult(null); } }, true); }}><RefreshCw size={14} />{t('common.refresh')}</button>}
+                  {(entry.kind === 'subscription' || entry.nativeProfile) && <button type="button" className="btn btn-secondary" onClick={() => { setMenuId(''); void run('refresh', async (id) => { const next = await refreshProxyCatalog(id, entry.id); if (mounted.current) { apply(next); setResult(null); } }, true); }}><RefreshCw size={14} />{t('common.refresh')}</button>}
+                  {(entry.kind === 'subscription' || entry.nativeProfile) && <button type="button" className="btn btn-secondary" onClick={() => { setMenuId(''); void run('refresh', async (id) => {
+                    const directory = await chooseDirectory({ directory: true, multiple: false });
+                    if (typeof directory !== 'string' || !mounted.current) return;
+                    const next = await refreshProxyCatalog(id, entry.id, directory);
+                    if (mounted.current) { apply(next); setResult(null); }
+                  }, true); }}>{t('codex.proxy.catalog.resourceDirectory')}</button>}
                   <button type="button" className="btn btn-secondary" onClick={() => { if (sourceId !== entry.id) changeSource(entry.id); setExpanded(true); setAdvanced(true); setMenuId(''); }}><Star size={14} />{t('common.advancedSettings')}</button>
                   <button type="button" className="btn btn-secondary codex-resource-delete-action" onClick={(event) => { deleteButton.current = event.currentTarget.closest('.codex-resource-more')?.querySelector<HTMLButtonElement>('.codex-resource-more-trigger') ?? null; setMenuId(''); if (strategy) setStrategyDeleting(entry.id); else { setDeleting({ id: entry.id, name: entry.name }); setDeleteError(''); } }}><Trash2 size={14} />{t('common.delete')}</button>
                 </div>}

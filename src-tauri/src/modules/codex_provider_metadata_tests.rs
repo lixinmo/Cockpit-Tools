@@ -381,3 +381,43 @@ async fn provider_metadata_discovery_follows_only_same_origin_redirects() {
     assert_eq!(error, "PROVIDER_MODELS_HTTP_307");
     task.abort();
 }
+
+#[tokio::test]
+async fn provider_metadata_anthropic_discovery_preserves_auth_pagination_and_capability_facts() {
+    use axum::{extract::Query, routing::get, Json, Router};
+    use std::sync::{atomic::{AtomicUsize, Ordering}, Arc};
+    let received = Arc::new(AtomicUsize::new(0));
+    let observed = received.clone();
+    let app = Router::new().route("/v1/models", get(move |
+        headers: axum::http::HeaderMap,
+        Query(query): Query<std::collections::HashMap<String, String>>,
+    | {
+        let observed = observed.clone();
+        async move {
+            assert_eq!(headers["x-api-key"], "synthetic-key");
+            assert!(!headers.contains_key("authorization"));
+            assert!(headers.contains_key("anthropic-version"));
+            observed.fetch_add(1, Ordering::SeqCst);
+            if query.get("after_id").map(String::as_str) == Some("model-one") {
+                Json(json!({"data":[{"id":"model-two","context_window":192000}],"has_more":false}))
+            } else {
+                Json(json!({"data":[{"id":"model-one","supported_reasoning_efforts":["low","high"]}],
+                    "has_more":true,"last_id":"model-one"}))
+            }
+        }
+    }));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}/v1", listener.local_addr().unwrap());
+    let task = tokio::spawn(async move { axum::serve(listener, app).await.unwrap(); });
+    let root = tempfile::tempdir().unwrap();
+    let fetched = fetch_at_with_protocol(&base, "synthetic-key", root.path(), Duration::from_secs(2),
+        Some("anthropic"), Some("x-api-key")).await.unwrap();
+    assert_eq!(received.load(Ordering::SeqCst), 2);
+    assert_eq!(fetched.models.len(), 2);
+    assert_eq!(fetched.models[0].metadata.as_ref().unwrap().reasoning_efforts,
+        Some(vec!["low".into(), "high".into()]));
+    assert_eq!(fetched.models[1].metadata.as_ref().unwrap().context_window, Some(192000));
+    let cached = read_cache(root.path(), &scope(&base, "synthetic-key").unwrap()).unwrap();
+    assert_eq!(cached.models.len(), 2);
+    task.abort();
+}

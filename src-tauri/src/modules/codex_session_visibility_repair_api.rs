@@ -52,6 +52,7 @@ fn acquire_session_visibility_repair_lock() -> Result<MutexGuard<'static, ()>, S
 pub enum CodexSessionVisibilityRepairMode {
     Quick,
     Deep,
+    History,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -134,7 +135,7 @@ pub struct CodexSessionVisibilityRepairInstanceList {
     pub instances: Vec<CodexSessionVisibilityRepairInstanceOption>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CodexSessionVisibilityRepairItem {
     pub instance_id: String,
@@ -153,9 +154,11 @@ pub struct CodexSessionVisibilityRepairItem {
     pub metadata_rebuild_failed: bool,
     pub backup_dir: Option<String>,
     pub running: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub history_projection_count: Option<usize>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CodexSessionVisibilityRepairSummary {
     pub instance_count: usize,
@@ -175,6 +178,11 @@ pub struct CodexSessionVisibilityRepairSummary {
     pub items: Vec<CodexSessionVisibilityRepairItem>,
     pub backup_dirs: Vec<String>,
     pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub history_projection_count: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub local_project_recovery: Option<local_projects::Counts>,
+    pub local_project_recovery_deferred: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -225,6 +233,7 @@ struct RepairTargetSelection {
     target_provider: Option<String>,
     session_ids: Option<HashSet<String>>,
     instance_ids: Option<HashSet<String>>,
+    prepare_desktop_projects: bool,
 }
 
 impl RepairTargetSelection {
@@ -253,6 +262,7 @@ impl RepairTargetSelection {
             .filter(|value| !value.is_empty())
             .collect::<HashSet<_>>();
         Ok(Self {
+            prepare_desktop_projects: false,
             target_provider,
             session_ids: if session_ids.is_empty() {
                 None
@@ -340,6 +350,10 @@ impl CodexSessionVisibilityRepairOptions {
         match mode {
             CodexSessionVisibilityRepairMode::Quick => Self::official_state_db_only(mode),
             CodexSessionVisibilityRepairMode::Deep => Self::full_provider_migration(),
+            CodexSessionVisibilityRepairMode::History => Self {
+                repair_referenced_rollouts: false,
+                ..Self::official_state_db_only(mode)
+            },
         }
     }
 
@@ -466,6 +480,7 @@ pub fn repair_session_visibility_quick_for_instance(
     instance_id: &str,
     instance_name: &str,
     data_dir: &Path,
+    launch_desktop: bool,
 ) -> Result<CodexSessionVisibilityRepairSummary, String> {
     let _repair_guard = acquire_session_visibility_repair_lock()?;
     let started = std::time::Instant::now();
@@ -482,7 +497,10 @@ pub fn repair_session_visibility_quick_for_instance(
             ),
             None,
             None,
-            RepairTargetSelection::default(),
+            RepairTargetSelection {
+                prepare_desktop_projects: launch_desktop,
+                ..Default::default()
+            },
             vec![CodexSyncInstance {
                 id: instance_id.to_string(),
                 name: instance_name.to_string(),
@@ -575,6 +593,8 @@ pub fn repair_session_visibility_across_instances_with_target(
     dry_run: bool,
 ) -> Result<CodexSessionVisibilityRepairSummary, String> {
     let options = CodexSessionVisibilityRepairOptions::for_mode(mode).with_dry_run(dry_run);
+    let target_provider = (mode != CodexSessionVisibilityRepairMode::History)
+        .then_some(target_provider).flatten();
     let selection = RepairTargetSelection::from_inputs(target_provider, session_ids, instance_ids)?;
     repair_session_visibility_across_instances_with_options(
         options,
@@ -614,17 +634,24 @@ fn repair_session_visibility_across_instances_with_options(
     )
 }
 
-fn repair_session_visibility_for_instances_with_options(
+fn repair_provider_visibility_for_instances_with_options(
     options: CodexSessionVisibilityRepairOptions,
     run_id: Option<String>,
     progress_reporter: ProgressReporter<'_>,
     selection: RepairTargetSelection,
     instances: Vec<CodexSyncInstance>,
 ) -> Result<CodexSessionVisibilityRepairSummary, String> {
+    if options.mode == CodexSessionVisibilityRepairMode::History {
+        return repair_history_projections_for_instances(options, run_id, progress_reporter, selection, instances);
+    }
     if instances.is_empty() {
         return Err("未找到要修复的 Codex 实例".to_string());
     }
-    let process_entries = modules::process::collect_codex_process_entries();
+    let process_entries = if launch_visibility_budget().is_some() {
+        modules::process::collect_codex_launch_maintenance_process_entries()?
+    } else {
+        modules::process::collect_codex_process_entries()
+    };
     check_launch_visibility_budget("process_snapshot")?;
     let mut items = Vec::with_capacity(instances.len());
     let mut backup_dirs = Vec::new();
@@ -800,6 +827,7 @@ fn repair_session_visibility_for_instances_with_options(
                 metadata_rebuild_failed: false,
                 backup_dir: None,
                 running,
+                history_projection_count: None,
             });
             continue;
         }
@@ -839,6 +867,7 @@ fn repair_session_visibility_for_instances_with_options(
                 metadata_rebuild_failed,
                 backup_dir: None,
                 running,
+                history_projection_count: None,
             });
             continue;
         }
@@ -987,12 +1016,14 @@ fn repair_session_visibility_for_instances_with_options(
             metadata_rebuild_failed,
             backup_dir: Some(backup_dir_string),
             running,
+            history_projection_count: None,
         });
     }
 
     // Backup retention is maintenance, not a precondition for launching a
     // repaired instance. A large legacy backup tree must not delay this path.
-    if !options.dry_run && launch_visibility_budget().is_none() {
+    if !options.dry_run && launch_visibility_budget().is_none()
+        && !instances.iter().any(|instance| local_projects::has_pending(&instance.data_dir)) {
         report_repair_progress(
             progress_reporter,
             &run_id,
@@ -1066,6 +1097,9 @@ fn repair_session_visibility_for_instances_with_options(
         items,
         backup_dirs,
         message,
+        history_projection_count: None,
+        local_project_recovery: None,
+        local_project_recovery_deferred: false,
     };
     report_repair_progress(
         progress_reporter,

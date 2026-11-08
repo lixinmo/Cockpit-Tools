@@ -2,6 +2,7 @@
 //! Slow credential reads and all network work stay outside the launch transaction.
 
 mod fast;
+mod browser_preload;
 
 use crate::modules::{app_lifecycle, codex_account, config, logger};
 use serde::Deserialize;
@@ -22,8 +23,8 @@ fn runtimes() -> &'static Mutex<HashMap<PathBuf, watch::Sender<bool>>> {
 }
 
 pub fn enabled() -> bool {
-    let cfg = config::get_user_config();
-    cfg.codex_app_native_fast_enabled || cfg.codex_app_api_quota_compat_enabled
+    // API-only Fast adaptation is automatic; actual credentials gate each profile.
+    true
 }
 
 pub fn start_for_profile(
@@ -71,13 +72,14 @@ pub fn stop_all() {
 #[derive(Clone, Default, PartialEq, Eq)]
 struct Profile {
     native_fast: bool,
+    native_predictions: bool,
     api_key_auth_verified: bool,
     quota_compat: bool,
 }
 
 impl Profile {
     fn active(&self) -> bool {
-        self.native_fast || self.quota_compat
+        self.native_fast || self.quota_compat || self.native_predictions
     }
 }
 
@@ -134,7 +136,8 @@ fn profile_from_values(
         })
     });
     Profile {
-        native_fast: cfg.codex_app_native_fast_enabled && api_key_auth_verified,
+        native_fast: api_key_auth_verified,
+        native_predictions: cfg.codex_app_native_predictions_enabled && api_key_auth_verified && valid_api_base,
         api_key_auth_verified,
         quota_compat: cfg.codex_app_api_quota_compat_enabled
             && requires_auth == Some(true)
@@ -154,6 +157,41 @@ fn read_profile(profile: &Path) -> Result<Profile, ()> {
         .map_err(|_| ())?
         .unwrap_or(Value::Null);
     Ok(profile_from_values(&doc, &auth, &cfg))
+}
+
+pub(crate) fn native_fast_enabled_for_profile(profile: &Path) -> bool {
+    read_profile(profile).is_ok_and(|profile| profile.native_fast)
+}
+
+pub(crate) fn prepare_native_fast_for_profile(base_dir: &Path) -> Result<(), String> {
+    if !native_fast_enabled_for_profile(base_dir) {
+        return Ok(());
+    }
+    enable_native_fast_feature(base_dir)
+}
+
+fn enable_native_fast_feature(base_dir: &Path) -> Result<(), String> {
+    let text = std::fs::read_to_string(base_dir.join("config.toml")).map_err(|e| e.to_string())?;
+    let mut doc = crate::modules::codex_config_format::read_codex_config_doc_from_str(&text)
+        .map_err(|e| e.to_string())?;
+    if doc
+        .get("features")
+        .and_then(|v| v.get("fast_mode"))
+        .and_then(|v| v.as_bool())
+        == Some(true)
+    {
+        return Ok(());
+    }
+    if doc.get("features").is_none() {
+        doc["features"] = toml_edit::table();
+    }
+    doc["features"]["fast_mode"] = toml_edit::value(true);
+    let text = crate::modules::codex_config_format::codex_config_doc_to_string(&mut doc);
+    crate::modules::codex_config_format::write_codex_config_toml_atomic(
+        &base_dir.join("config.toml"),
+        &text,
+    )
+    .map_err(|e| e.to_string())
 }
 
 #[derive(Deserialize)]
@@ -225,6 +263,23 @@ fn profile_or_api_fallback(profile: Option<Profile>, api_service: bool) -> Optio
     profile.or_else(|| api_service.then(Profile::default))
 }
 
+fn trusted_preload_source(profile: Option<&Profile>, api_service: bool, port: u16) -> Option<String> {
+    profile.filter(|profile| profile.active() || api_service).map(|profile| {
+        fast::browser_preload_source(profile.native_fast, profile.native_predictions, profile.quota_compat,
+            profile.api_key_auth_verified, api_service, &format!("preload-{port}"))
+    })
+}
+
+// Browser pre-registration also protects restored macOS conversations from
+// needing a reload. Only Windows requires the page worker to stay reload-free;
+// macOS retains its existing guarded fallback if browser attachment is late.
+fn startup_preload_policy(platform: &str, fresh_launch: bool) -> (bool, bool) {
+    (
+        fresh_launch && matches!(platform, "windows" | "macos"),
+        fresh_launch && platform == "windows",
+    )
+}
+
 async fn run_profile(
     profile_dir: PathBuf,
     instance: String,
@@ -233,11 +288,11 @@ async fn run_profile(
     api_service: bool,
     mut stop: watch::Receiver<bool>,
 ) {
-    // API-service launches use the live quota breakpoint path. Its TCP CDP
-    // endpoint becomes available after the first navigation, so a startup
-    // preload cannot win that race and must not trigger a renderer reload.
-    let preload_first =
-        cfg!(target_os = "windows") && startup.is_some() && !api_service;
+    // The launch transaction starts this worker before starting the process.
+    // Browser discovery must race neither a blocking keyring read nor a second
+    // copy of that read. No target is paused while the trusted snapshot loads.
+    let (browser_preload_enabled, preload_first) =
+        startup_preload_policy(std::env::consts::OS, startup.is_some());
     let Ok(client) = reqwest::Client::builder()
         .no_proxy()
         .timeout(Duration::from_secs(2))
@@ -246,52 +301,25 @@ async fn run_profile(
     else {
         return;
     };
-    if preload_first {
-        // The API-service binding is already verified by the launch transaction.
-        // Waiting for the keyring/profile reader here lets the page navigate
-        // before Chromium auto-attaches, which defeats first-document preload.
-        let preload_profile = if api_service {
-            Some(Profile {
-                quota_compat: true,
-                ..Profile::default()
-            })
-        } else {
-            profile_or_api_fallback(
-                tokio::task::spawn_blocking({
-                    let path = profile_dir.clone();
-                    move || read_profile(&path)
-                })
-                .await
-                .ok()
-                .and_then(Result::ok),
-                false,
-            )
-        };
-        if let Some(profile) = preload_profile {
-            let preload_stop = stop.clone();
-            tauri::async_runtime::spawn(async move {
-                if let Err(error) = fast::preload_browser(
-                    port,
-                    profile.native_fast,
-                    profile.quota_compat,
-                    profile.api_key_auth_verified,
-                    api_service,
-                    preload_stop,
-                )
-                .await
-                {
-                    logger::log_warn(&format!(
-                        "[Codex enhancements] browser preload failed: {error}"
-                    ));
-                }
-            });
-        }
-    }
+    let preload_source = if browser_preload_enabled {
+        let (source, receiver) = watch::channel(None);
+        let preload_stop = stop.clone();
+        let launch = startup.clone().expect("preload requires an explicit launch");
+        tauri::async_runtime::spawn(async move {
+            if let Err(error) = browser_preload::run(port, receiver, preload_stop, launch.remaining()).await {
+                logger::log_warn(&format!("[Codex enhancements] browser preload ended: {error}"));
+            }
+        });
+        Some(source)
+    } else { None };
     let mut children: HashMap<String, Child> = HashMap::new();
     let mut retry_at: HashMap<String, Instant> = HashMap::new();
     let mut current = profile_or_api_fallback(None, api_service);
     let mut read: Option<JoinHandle<Result<Profile, ()>>> = None;
     let mut read_started = Instant::now();
+    let mut read_timed_out = false;
+    let mut initial_snapshot_ready = !browser_preload_enabled;
+    let mut current_verified = false;
     // New launches discover the first completed credential read promptly, before
     // the user starts editing. Later refreshes retain the ordinary polling rate.
     let mut initial_polling = startup.is_some();
@@ -309,9 +337,10 @@ async fn run_profile(
             break;
         }
         if read.as_ref().is_some_and(JoinHandle::is_finished) {
-            let next = profile_or_api_fallback(
-                read.take().unwrap().await.ok().and_then(Result::ok), api_service,
-            );
+            let verified = read.take().unwrap().await.ok().and_then(Result::ok);
+            initial_snapshot_ready = true;
+            current_verified = verified.is_some();
+            let next = profile_or_api_fallback(verified, api_service);
             if initial_polling {
                 initial_polling = false;
                 tick = tokio::time::interval(POLL);
@@ -324,9 +353,19 @@ async fn run_profile(
                 retry_at.clear();
                 current = next;
             }
-        } else if read.is_some() && read_started.elapsed() > Duration::from_secs(10) {
+        } else if read.is_some() && !read_timed_out && read_started.elapsed() > Duration::from_secs(10) {
             // A stalled keyring probe remains single-flight; revoke active adapters
             // while waiting rather than launching more blocking credential reads.
+            if let Some(sender) = &preload_source { sender.send_replace(None); }
+            read_timed_out = true;
+            initial_snapshot_ready = true;
+            current_verified = false;
+            if initial_polling {
+                initial_polling = false;
+                tick = tokio::time::interval(POLL);
+                tick.reset();
+            }
+            logger::log_warn("[Codex enhancements] profile snapshot timed out; optional adaptations suspended");
             let safe = profile_or_api_fallback(None, api_service);
             if current != safe {
                 for (_, child) in children.drain() {
@@ -337,13 +376,33 @@ async fn run_profile(
         }
         if read.is_none() {
             let path = profile_dir.clone();
+            let sender = preload_source.clone();
             read_started = Instant::now();
-            read = Some(tokio::task::spawn_blocking(move || read_profile(&path)));
+            read_timed_out = false;
+            read = Some(tokio::task::spawn_blocking(move || {
+                let result = read_profile(&path);
+                // Publish immediately from the one existing read worker, not
+                // after page discovery's network timeout or the next poll.
+                // An API binding without a verified snapshot publishes nothing.
+                if let Some(sender) = sender {
+                    sender.send_replace(trusted_preload_source(result.as_ref().ok(), api_service, port));
+                }
+                result
+            }));
         }
+        // An unverified per-page fallback must not race the browser preloader
+        // and install a disabled-feature module into the first document.
+        if !initial_snapshot_ready { continue; }
         let Some(profile) = current.as_ref().filter(|profile| profile.active() || api_service) else {
             continue;
         };
-        let Some(available) = targets(&client, port, preload_first).await else {
+        let allow_blank = preload_first
+            || (cfg!(target_os = "windows")
+                && startup.is_some()
+                && (profile.native_fast || profile.native_predictions)
+                && profile.api_key_auth_verified
+                && !profile.quota_compat);
+        let Some(available) = targets(&client, port, allow_blank).await else {
             continue;
         };
         let ended: Vec<_> = children
@@ -369,17 +428,19 @@ async fn run_profile(
             let (child_stop, receiver) = watch::channel(false);
             let profile = profile.clone();
             let instance = instance.clone();
-            let startup = startup.clone();
+            let startup = current_verified.then(|| startup.clone()).flatten();
+            let child_preload_first = preload_first && current_verified;
             let draft_profile = profile_dir.clone();
             let task = tokio::spawn(async move {
                 let result = fast::run(
                     socket,
                     draft_profile,
                     profile.native_fast,
+                    profile.native_predictions,
                     profile.quota_compat,
                     profile.api_key_auth_verified,
                     api_service,
-                    preload_first,
+                    child_preload_first,
                     startup,
                     receiver,
                 )
@@ -402,10 +463,36 @@ mod tests {
     use serde_json::json;
 
     #[test]
+    fn enabling_native_fast_preserves_catalog_reference_and_selected_speed() {
+        let dir = tempfile::tempdir().unwrap();
+        for reference in [None, Some("cockpit-model-catalog.json"), Some("user-models.json")] {
+            let mut text = "service_tier = 'default'\n".to_string();
+            if let Some(reference) = reference {
+                text.push_str(&format!("model_catalog_json = '{reference}'\n"));
+            }
+            text.push_str("[features]\nfast_mode = false\nother = true\n");
+            std::fs::write(dir.path().join("config.toml"), text).unwrap();
+            enable_native_fast_feature(dir.path()).unwrap();
+            let content = std::fs::read_to_string(dir.path().join("config.toml")).unwrap();
+            let doc = crate::modules::codex_config_format::read_codex_config_doc_from_str(&content).unwrap();
+            assert_eq!(doc.get("model_catalog_json").and_then(|v| v.as_str()), reference);
+            assert_eq!(doc["service_tier"].as_str(), Some("default"));
+            assert_eq!(doc["features"]["fast_mode"].as_bool(), Some(true));
+            assert_eq!(doc["features"]["other"].as_bool(), Some(true));
+            assert!(!dir.path().join("cockpit-model-catalog.json").exists());
+            assert!(!dir.path().join("cockpit-native-speed-models.json").exists());
+            enable_native_fast_feature(dir.path()).unwrap();
+            assert_eq!(std::fs::read_to_string(dir.path().join("config.toml")).unwrap(), content);
+        }
+    }
+
+    #[test]
     fn enhancement_scope_requires_actual_auth_and_separate_api_route() {
-        let mut cfg = config::UserConfig::default();
-        cfg.codex_app_native_fast_enabled = true;
-        cfg.codex_app_api_quota_compat_enabled = true;
+        // Retired user opt-out must not suppress the automatic API adaptation.
+        let cfg: config::UserConfig = serde_json::from_value(json!({
+            "codex_app_native_fast_enabled": false,
+            "codex_app_api_quota_compat_enabled": true
+        })).unwrap();
         let doc: toml_edit::Document = "model_provider='relay'\n[model_providers.relay]\nbase_url='http://127.0.0.1:8000/v1'\nexperimental_bearer_token='local-key'\nrequires_openai_auth=true\n".parse().unwrap();
         let oauth = json!({"tokens":{"id_token":"id", "access_token":"access"}});
         let profile = profile_from_values(&doc, &oauth, &cfg);
@@ -456,6 +543,29 @@ mod tests {
     }
 
     #[test]
+    fn prediction_only_profile_is_opt_in_local_api_and_independent_of_fast() {
+        let mut cfg = config::UserConfig::default();
+
+        cfg.codex_app_api_quota_compat_enabled = false;
+        let doc: toml_edit::Document = "model_provider='relay'\n[model_providers.relay]\nbase_url='https://api.example.test/v1'\nrequires_openai_auth=false\n".parse().unwrap();
+        let api = json!({"auth_mode":"apikey", "OPENAI_API_KEY":"synthetic-key"});
+        assert!(!profile_from_values(&doc, &api, &cfg).native_predictions);
+        cfg.codex_app_native_predictions_enabled = true;
+        let profile = profile_from_values(&doc, &api, &cfg);
+        assert!(profile.native_predictions);
+        assert!(profile.active());
+        assert!(profile.native_fast);
+        assert!(!profile.quota_compat);
+        let script = trusted_preload_source(Some(&profile), false, 9333).unwrap();
+        assert!(script.contains("\"nativePredictions\":true"));
+        assert!(script.contains("__cockpitNativePredictions"));
+        let oauth = json!({"tokens":{"id_token":"synthetic-id", "access_token":"synthetic-access"}});
+        assert!(!profile_from_values(&doc, &oauth, &cfg).native_predictions);
+        let unsafe_base: toml_edit::Document = doc.to_string().replace("https://api.example.test/v1", "https://api.example.test/v1?key=secret").parse().unwrap();
+        assert!(!profile_from_values(&unsafe_base, &api, &cfg).native_predictions);
+    }
+
+    #[test]
     fn cdp_target_must_stay_on_the_launched_instances_loopback_port() {
         assert!(safe_socket("ws://127.0.0.1:9333/devtools/page/one", 9333));
         for url in [
@@ -470,8 +580,7 @@ mod tests {
 
     #[test]
     fn quota_route_does_not_accept_embedded_credentials_or_url_queries() {
-        let mut cfg = config::UserConfig::default();
-        cfg.codex_app_api_quota_compat_enabled = true;
+        let cfg = config::UserConfig::default();
         let auth = json!({"tokens":{"id_token":"id", "access_token":"access"}});
         for base in [
             "https://user:secret@example.test/v1",
@@ -490,6 +599,34 @@ mod tests {
         assert!(profile_or_api_fallback(None, false).is_none());
         let configured = Profile { native_fast: true, ..Profile::default() };
         assert!(profile_or_api_fallback(Some(configured), true).unwrap().native_fast);
+    }
+
+    #[test]
+    fn browser_preload_requires_completed_profile_evidence_even_for_api_service() {
+        assert!(trusted_preload_source(None, true, 9333).is_none());
+        assert!(trusted_preload_source(None, false, 9333).is_none());
+        assert!(trusted_preload_source(Some(&Profile::default()), false, 9333).is_none());
+        let verified = Profile { native_fast:true, api_key_auth_verified:true, quota_compat:false, ..Profile::default() };
+        let script = trusted_preload_source(Some(&verified), true, 9333).unwrap();
+        assert!(script.contains("\"nativeFast\":true"));
+        assert!(script.contains("\"apiKeyAuthVerified\":true"));
+        assert!(script.contains("\"quotaCompat\":false"));
+        assert!(script.contains("\"apiService\":true"));
+        assert!(script.contains("__cockpitStartupPreloadStarted"));
+        assert!(script.contains("document-already-started"));
+    }
+
+    #[test]
+    fn browser_preload_platform_policy_preserves_mac_guarded_fallback_and_windows_no_reload() {
+        for (platform, expected_fresh) in [
+            ("windows", (true, true)),
+            ("macos", (true, false)),
+            ("linux", (false, false)),
+        ] {
+            assert_eq!(startup_preload_policy(platform, true), expected_fresh, "{platform}");
+            assert_eq!(startup_preload_policy(platform, false), (false, false),
+                "reattaching an existing {platform} process is never a fresh launch");
+        }
     }
 
 }

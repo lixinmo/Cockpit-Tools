@@ -1,4 +1,4 @@
-//! Client-owned tool discovery over the ordinary Chat function bridge.
+//! Missing preflight validation for the shared upstream client-tool discovery adapter.
 //! Hosted tools are never reinterpreted as client execution or silently dropped.
 use super::super::{chatgpt_plan_tools, contract::ServiceError};
 use serde_json::Value;
@@ -147,15 +147,9 @@ fn validate_history(body: &Value, client_declared: bool) -> Result<(), ServiceEr
     Ok(())
 }
 
-pub(super) fn prepare(body: &Value) -> Result<(Value, chatgpt_plan_tools::Context), ServiceError> {
+pub(super) fn validate(body: &Value) -> Result<(), ServiceError> {
     let client_declared = chatgpt_plan_tools::has_client_declaration(body);
     validate_tools(body.get("tools"), 0)?;
     validate_choice(body.get("tool_choice"), client_declared, 0)?;
-    validate_history(body, client_declared)?;
-    let mut lowered = body.clone();
-    // Reuse the strict plan adapter: request-local collision-free names,
-    // discovery schema precedence, history lowering and reversible SSE state.
-    let context = chatgpt_plan_tools::prepare(&mut lowered)?;
-    validate_tools(lowered.get("tools"), 0)?;
-    Ok((lowered, context))
+    validate_history(body, client_declared)
 }

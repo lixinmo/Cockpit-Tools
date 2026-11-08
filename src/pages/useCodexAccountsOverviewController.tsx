@@ -1,11 +1,14 @@
+import { formatOpenAIUsageMoney, currentOpenAIUsageState, isOpenAIOfficialUsageAccount } from "../utils/openaiOfficialUsage";
 import { codexOverviewMutableAccountIds } from "../utils/chatgptPlanOverview";
 import { resolveCodexAccountDisplayName } from "../utils/codexAccountDisplayName";
 import { useEffect, useMemo, useCallback, type MouseEvent as ReactMouseEvent } from "react";
 import { RefreshCw, RotateCw } from "lucide-react";
+import { CodexResetCreditExpiry } from '../components/CodexResetCreditExpiry';
+import { CodexResetAutomationStatus } from '../components/codex/CodexResetAutomation';
 import * as codexService from "../services/codexService";
 import * as codexLocalAccessService from "../services/codexLocalAccessService";
 import { type CodexAccountGroup } from "../services/codexAccountGroupService";
-import { hasCodexAccountStructure, hasCodexAccountName, isCodexApiKeyAccount, isCodexChatgptPlanAccount, isCodexNewApiAccount, isCodexTeamLikePlan } from "../types/codex";
+import { hasCodexAccountStructure, hasCodexAccountName, isCodexApiKeyAccount, isCodexChatgptPlanAccount, isCodexWebSessionAccount, isCodexNewApiAccount, isCodexTeamLikePlan } from "../types/codex";
 import { summarizeCodexQuotaErrorMessage } from "../utils/codexQuotaError";
 import { buildCodexAccountPresentation } from "../presentation/platformAccountPresentation";
 import { formatCodexWindowStatsText } from "../utils/codexWindowStats";
@@ -321,7 +324,10 @@ export function useCodexAccountsOverviewController(context: Pick<ReturnType<type
         const providerName = isApiKey
           ? resolveApiProviderDisplayName(account)
           : "";
-        const usage = isApiKey ? apiKeyUsageMap[account.id]?.summary : undefined;
+        const usageProvider = resolveUsageProviderForApiKeyAccount(account);
+        const usage = isApiKey ? (isOpenAIOfficialUsageAccount(account, usageProvider?.baseUrl)
+          ? currentOpenAIUsageState(usageProvider, account.openai_api_key ?? '', apiKeyUsageMap[account.id])
+          : apiKeyUsageMap[account.id])?.summary : undefined;
         const useTodayUsage =
           usage?.todayRequests != null ||
           usage?.todayTotalTokens != null ||
@@ -348,12 +354,10 @@ export function useCodexAccountsOverviewController(context: Pick<ReturnType<type
                 .join(" · "),
           statusLabel: account.requires_reauth
             ? t("codex.authError.badge", "授权异常")
-            : account.client_auth_status === "login_required"
-              ? t("codex.switchAuth.apiOnlyBadge", "客户端需授权")
-              : overviewCurrentAccountId === account.id
+            : overviewCurrentAccountId === account.id
                 ? t("codex.current", "当前")
                 : undefined,
-          statusTone: account.requires_reauth || account.client_auth_status === "login_required"
+          statusTone: account.requires_reauth
             ? "warning"
             : overviewCurrentAccountId === account.id
               ? "success"
@@ -417,7 +421,7 @@ export function useCodexAccountsOverviewController(context: Pick<ReturnType<type
                       : null,
                   cost:
                     cost != null
-                      ? formatApiKeyUsageMoney(cost, usage.unit)
+                      ? usage.mode === 'openai_official' ? formatOpenAIUsageMoney(cost) : formatApiKeyUsageMoney(cost, usage.unit)
                       : null,
                   extraLabel: usage.planName
                     ? t("codex.modelProviders.usage.fields.planName", "订阅")
@@ -426,7 +430,7 @@ export function useCodexAccountsOverviewController(context: Pick<ReturnType<type
                 }
               : null,
           tags: account.tags,
-          footerText: formatDate(account.created_at),
+          footerText: account.last_used > 0 ? formatDate(account.last_used) : '—',
         };
       },
       [
@@ -435,6 +439,7 @@ export function useCodexAccountsOverviewController(context: Pick<ReturnType<type
         overviewCurrentAccountId,
         resolveAccountMeta,
         resolveApiProviderDisplayName,
+        resolveUsageProviderForApiKeyAccount,
         resolvePresentation,
         resolveSubscriptionPresentation,
         showAdditionalQuota,
@@ -486,7 +491,7 @@ export function useCodexAccountsOverviewController(context: Pick<ReturnType<type
       if (
         subscription &&
         !isPendingOAuthCodexAccount(account) &&
-        (subscription.bucket === "missing" || subscription.bucket === "expired")
+        subscription.bucket !== "access_token_only"
       ) {
         actions.push({
           id: "subscription",
@@ -655,8 +660,8 @@ export function useCodexAccountsOverviewController(context: Pick<ReturnType<type
           description: `${accountName} · ${t("instances.defaultName", "默认实例")}`,
           actionLabel: t("common.open", "打开"),
           disabled: cliLaunchingAccountId === account.id,
-          onAction: async () => {
-            await handleLaunchCodexCli(account);
+          onAction: async (launchOptions) => {
+            await handleLaunchCodexCli(account, launchOptions);
           },
         },
       );
@@ -924,8 +929,8 @@ export function useCodexAccountsOverviewController(context: Pick<ReturnType<type
             description: `${t("codex.localAccess.title", "API 服务")} · ${baseUrl}`,
             actionLabel: t("common.open", "打开"),
             disabled: cliLaunchingAccountId === CODEX_API_SERVICE_BIND_ID,
-            onAction: async () => {
-              await handleLaunchLocalAccessCli();
+            onAction: async (launchOptions) => {
+              await handleLaunchLocalAccessCli(launchOptions);
             },
           },
           {
@@ -1650,17 +1655,27 @@ export function useCodexAccountsOverviewController(context: Pick<ReturnType<type
       [showAdditionalQuota, showCodeReviewQuota],
     );
   
-    const renderResetCreditControls = (account: CodexAccount) => {
-      if (isCodexApiKeyAccount(account)) return null;
+    const renderResetCreditControls = (account: CodexAccount, mode: 'controls' | 'expiry' = 'controls') => {
+      if (isCodexApiKeyAccount(account))
+        return null;
   
       const creditDetails = getResetCreditDetails(account);
       const availableCount = getResetCreditsAvailable(account);
-      const hasResetCreditData = availableCount != null || creditDetails.length > 0;
   
       const displayCount =
         availableCount ?? creditDetails.filter(isAvailableResetCredit).length;
       const isResetting = resettingResetCreditAccountId === account.id;
       const isDisabled = isResetting;
+      if (mode === 'expiry') {
+        return (
+          <div className="codex-account-reset-expiry-line">
+            {displayCount > 0 ? <CodexResetCreditExpiry key={account.id} accountId={account.id} quota={account.quota}
+              disabled={isDisabled} onClick={() => openResetCreditConfirmModal(account)} />
+              : <span className="reset-automation-hint">{t(availableCount === 0 ? 'codex.resetAutomation.noCredits' : 'codex.quota.resetCreditTimeUnknown')}</span>}
+          </div>
+        );
+      }
+      if (availableCount == null && creditDetails.length === 0) return null;
       const titleText =
         displayCount > 0
           ? buildResetCreditsTitle(account, displayCount)
@@ -1682,9 +1697,8 @@ export function useCodexAccountsOverviewController(context: Pick<ReturnType<type
             ) : (
               <RotateCw size={13} />
             )}
-            {hasResetCreditData
-              ? t("codex.quota.resetCredits", { count: displayCount })
-              : t("codex.quota.resetCreditDetailsTitle", "重置次数明细")}
+            {t("codex.quota.resetCredits", { count: displayCount })}
+            {!isCodexWebSessionAccount(account) && <CodexResetAutomationStatus accountId={account.id} />}
           </button>
         </div>
       );

@@ -1068,10 +1068,6 @@ pub async fn force_refresh_codex_tokens(account_id: String) -> Result<CodexAccou
 ///
 /// 该操作只影响账号卡片上的客户端观测状态，不会修改 Token、远端授权状态或
 /// API 服务可用性判断。
-#[tauri::command]
-pub async fn codex_clear_client_auth_observation(account_id: String) -> Result<bool, String> {
-    codex_account::clear_client_auth_observation(&account_id).await
-}
 
 /// 切换 Codex 账号（包含 token 刷新检查）
 /// 默认实例切换到非 OAuth 账号时，关闭它的混合模型路由并释放对应的实例网关。
@@ -1107,8 +1103,7 @@ async fn disable_default_model_routing_for_non_oauth_switch() {
     }
 }
 
-#[tauri::command]
-pub async fn switch_codex_account(
+async fn switch_codex_account_internal(
     app: AppHandle,
     account_id: String,
     auto_repair_mode: Option<codex_session_visibility::CodexSessionVisibilityAutoRepairMode>,
@@ -1161,7 +1156,6 @@ pub async fn switch_codex_account(
     let initial_token_generation = initial_account.token_generation;
     let user_config = config::get_user_config();
     let launch_after_switch = launch_after_switch.unwrap_or(user_config.codex_launch_on_switch);
-    // client_auth_status 仅记录官方客户端运行后的观测结果，不参与切号或启动拦截。
     // 真实 Token Authority 失败仍由 prepare/switch 流程返回结构化授权错误。
     if launch_after_switch {
         let default_settings = crate::modules::codex_instance::load_default_settings()?;
@@ -1497,16 +1491,9 @@ pub async fn switch_codex_account(
             {
                 Ok(_) => None,
                 Err(e) => {
-                    let app_path_missing = e.starts_with("APP_PATH_NOT_FOUND:");
                     let formatted_error =
                         codex_account::format_account_switch_error(&account_id, e);
                     logger::log_warn(&format!("Codex 启动失败: {}", formatted_error));
-                    if app_path_missing {
-                        let _ = app.emit(
-                            "app:path_missing",
-                            serde_json::json!({ "app": "codex", "retry": { "kind": "default" } }),
-                        );
-                    }
                     Some(formatted_error)
                 }
             };
@@ -1619,6 +1606,7 @@ async fn run_codex_post_refresh_checks(app: &AppHandle) {
             match Box::pin(switch_codex_account(
                 app.clone(),
                 target_id.clone(),
+                None,
                 None,
                 None,
                 None,
@@ -2014,47 +2002,6 @@ pub async fn get_codex_reset_credits(
     codex_quota::fetch_account_reset_credits(&account_id).await
 }
 
-fn validate_auto_reset_account(account_id: &str) -> Result<(), String> {
-    if account_id.trim().is_empty() || account_id.trim() != account_id {
-        return Err("无效的 Codex 账号 ID".to_string());
-    }
-    let account =
-        codex_account::load_account(account_id).ok_or_else(|| "Codex 账号不存在".to_string())?;
-    if !crate::modules::codex_auto_reset::supports_account(&account) {
-        return Err("该账号不支持 Banked Reset".to_string());
-    }
-    Ok(())
-}
-
-#[tauri::command]
-pub fn get_codex_auto_reset_settings(
-    account_id: String,
-) -> Result<crate::modules::codex_auto_reset::Settings, String> {
-    validate_auto_reset_account(&account_id)?;
-    Ok(config::get_user_config()
-        .codex_auto_reset
-        .for_account(&account_id))
-}
-
-#[tauri::command]
-pub fn set_codex_auto_reset_settings(
-    account_id: String,
-    enabled: Option<bool>,
-    threshold: Option<i32>,
-) -> Result<crate::modules::codex_auto_reset::Settings, String> {
-    validate_auto_reset_account(&account_id)?;
-    // Modify exactly one account under the existing config transaction. Never
-    // accept a frontend snapshot of the entire map: parallel editors may be stale.
-    let saved = config::patch_user_config(|current| {
-        current
-            .codex_auto_reset
-            .patch_account(&account_id, enabled, threshold)?;
-        Ok(())
-    })?;
-    codex_quota::notify_auto_reset_settings_changed();
-    Ok(saved.codex_auto_reset.for_account(&account_id))
-}
-
 #[tauri::command]
 pub async fn consume_codex_reset_credit(account_id: String) -> Result<(), String> {
     codex_quota::consume_reset_credit(&account_id).await
@@ -2368,6 +2315,7 @@ pub fn add_codex_account_with_api_key(
     api_vision_routing_model: Option<String>,
     account_name: Option<String>,
     api_model_context_windows: Option<std::collections::HashMap<String, i64>>,
+    api_auth_scheme: Option<String>,
 ) -> Result<CodexAccount, String> {
     let account = codex_account::upsert_api_key_account(
         api_key,
@@ -2384,6 +2332,7 @@ pub fn add_codex_account_with_api_key(
         api_vision_routing_model,
         account_name,
         api_model_context_windows,
+        api_auth_scheme.clone(),
     )?;
     codex_account::load_account(&account.id).ok_or_else(|| "账号保存后无法读取".to_string())
 }
@@ -2492,6 +2441,7 @@ pub async fn update_codex_api_key_credentials(
     api_vision_routing_model: Option<String>,
     account_name: Option<String>,
     api_model_context_windows: Option<std::collections::HashMap<String, i64>>,
+    api_auth_scheme: Option<String>,
 ) -> Result<CodexAccount, String> {
     codex_account::update_api_key_credentials(
         &account_id,
@@ -2509,6 +2459,7 @@ pub async fn update_codex_api_key_credentials(
         api_vision_routing_model,
         account_name,
         api_model_context_windows,
+        api_auth_scheme,
     ).await
 }
 
@@ -2526,6 +2477,7 @@ pub async fn sync_codex_api_key_provider_accounts(
     api_model_vision_support: Option<std::collections::HashMap<String, bool>>,
     api_vision_routing_model: Option<String>,
     api_model_context_windows: Option<std::collections::HashMap<String, i64>>,
+    api_auth_scheme: Option<String>,
 ) -> Result<usize, String> {
     codex_account::sync_api_key_provider_accounts(
             account_ids,
@@ -2540,6 +2492,7 @@ pub async fn sync_codex_api_key_provider_accounts(
             api_model_vision_support.unwrap_or_default(),
             api_vision_routing_model,
             api_model_context_windows,
+        api_auth_scheme,
     ).await
 }
 

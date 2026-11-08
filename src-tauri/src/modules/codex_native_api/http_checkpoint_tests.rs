@@ -306,6 +306,7 @@ impl Fixture {
         continuity_bridge::start(continuity_bridge::Config {
             identity_path: self.path(),
             token: CONTROL_TOKEN.into(),
+            session_identity_mapping_enabled: true,
             owners: HashMap::from([
                 ("a".into(), "owner-a".into()),
                 ("b".into(), "owner-b".into()),
@@ -553,6 +554,29 @@ async fn oauth_http_previous_expands_same_account_twice_without_rotating_identit
             third["output"].as_array().unwrap().clone()
         )
     );
+    fixture.finish().await;
+}
+
+#[tokio::test]
+async fn oauth_http_continuation_releases_prior_forced_tool_choice() {
+    let fixture = Fixture::new(true).await;
+    let mut first = initial();
+    first["tool_choice"] = json!({"type":"function","name":"lookup"});
+    *fixture.source.next_output.lock().unwrap() = Some(vec![json!({
+        "type":"function_call", "id":"fc_fixture_lookup", "call_id":"call_fixture_lookup",
+        "name":"lookup", "arguments":"{\"query\":\"test\"}", "status":"completed"
+    })]);
+    let first = fixture.complete(&first).await;
+    let mut next = delta(first["id"].as_str().unwrap(), "unused");
+    next["input"] = json!([{
+        "type":"function_call_output", "call_id":"call_fixture_lookup", "output":"fixture result"
+    }]);
+    fixture.complete(&next).await;
+    let sent = fixture.sent();
+    assert_eq!(sent[0].1["tool_choice"]["name"], "lookup");
+    assert_eq!(sent[1].1["tool_choice"], "auto");
+    assert_eq!(sent[1].1["tools"], sent[0].1["tools"]);
+    assert_eq!(sent[1].1["input"].as_array().unwrap().last().unwrap()["output"], "fixture result");
     fixture.finish().await;
 }
 

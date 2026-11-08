@@ -1047,3 +1047,25 @@ not a standalone upstream checkout: at this baseline, an all-package
 verifier therefore runs the complete affected `helps` package inside that
 nested module, then separately runs every package in the product's outer
 `cockpit-cliproxy` module and builds the actual sidecar entry point.
+
+## v1.3.80 duplicate-retry review (2026-11-08)
+
+Upstream `02498ace` removes the Go sidecar. This fork retains the matching Go
+engine and fixed v1.0 reference under the project maintenance contract, applying
+upstream's final pre-removal sidecar changes through `19f00699`.
+
+The comparison from the previous `5330f75a` baseline to `19f00699` found no
+change to `utls_client.go` or its setup/HTTP2 execution boundary. The call chain
+remains relay/provider routing → runtime service → conductor account/model
+selection → Codex executor → selected uTLS round tripper → exactly one
+`createConnectionWithRetry` → exactly one `h2Conn.RoundTrip` after setup.
+The changed conductor helpers preserve an actual upstream error when a later
+local continuity check fails; they do not add retries. `FinishNotSent` is used
+only after local identity binding fails before dispatch; uncertain transport
+failures retain ordinary `Finish`, and cancellation still takes precedence.
+
+Native's new cache-based HTTP/1 fallback and compressed-body compatibility path
+were reviewed separately in `native-connect-retry.md`. No second setup loop was
+introduced. The fixed helper, typed classifier, delays, body ownership, and
+post-send no-reentry boundary remain intact. This is a source review, not a test
+result; the exact merge commit must pass both cloud retry verifiers before handoff.

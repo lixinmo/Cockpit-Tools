@@ -1,3 +1,4 @@
+import { formatKiroImportError } from '../services/kiroImportErrors';
 import { useState, useEffect, useMemo, useCallback, Fragment } from 'react';
 import {
   Plus,
@@ -26,6 +27,7 @@ import {
   Lock,
   BookOpen,
 } from 'lucide-react';
+import { AccountLastUsed } from '../components/AccountLastUsed';
 import { useKiroAccountStore } from '../stores/useKiroAccountStore';
 import * as kiroService from '../services/kiroService';
 import { TagEditModal } from '../components/TagEditModal';
@@ -619,9 +621,11 @@ export function KiroAccountsPage() {
       const moreTagCount = Math.max(0, accountTags.length - visibleTags.length);
       const isSelected = selected.has(account.id);
       const isCurrent = currentAccountId === account.id;
-      const quotaError = account.quota_query_last_error?.trim();
+      const quotaError = account.quota_query_last_error?.trim()
+        ? formatKiroImportError(account.quota_query_last_error.trim(), t) : undefined;
       const hasQuotaData = hasKiroQuotaData(account);
-      const statusReason = presentation.accountStatusReason;
+      const statusReason = presentation.accountStatusReason
+        ? formatKiroImportError(presentation.accountStatusReason, t) : null;
       const isBanned = presentation.isBanned;
       const hasStatusError = presentation.hasStatusError;
       const bannedTitle = statusReason || t('accounts.status.forbidden_tooltip');
@@ -723,7 +727,7 @@ export function KiroAccountsPage() {
           </div>
 
           <div className="card-footer">
-            <span className="card-date">{formatDate(account.created_at)}</span>
+            <AccountLastUsed accountId={account.id} lastSwitchedAt={account.last_switched_at} createdAt={account.created_at} formatDate={formatDate} />
             <div className="card-actions">
               <button className="card-action-btn success" onClick={() => handleInjectToVSCode?.(account.id)} disabled={!!injecting || isBanned}
                 title={isBanned ? t('accounts.status.forbidden_msg') : t('kiro.injectToVSCode', '切换到 Kiro')}>
@@ -771,9 +775,11 @@ export function KiroAccountsPage() {
       const visibleTags = accountTags.slice(0, 3);
       const moreTagCount = Math.max(0, accountTags.length - visibleTags.length);
       const isCurrent = currentAccountId === account.id;
-      const quotaError = account.quota_query_last_error?.trim();
+      const quotaError = account.quota_query_last_error?.trim()
+        ? formatKiroImportError(account.quota_query_last_error.trim(), t) : undefined;
       const hasQuotaData = hasKiroQuotaData(account);
-      const statusReason = presentation.accountStatusReason;
+      const statusReason = presentation.accountStatusReason
+        ? formatKiroImportError(presentation.accountStatusReason, t) : null;
       const isBanned = presentation.isBanned;
       const hasStatusError = presentation.hasStatusError;
       const bannedTitle = statusReason || t('accounts.status.forbidden_tooltip');

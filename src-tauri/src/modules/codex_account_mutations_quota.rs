@@ -494,6 +494,7 @@ pub async fn update_api_key_credentials(
     api_vision_routing_model: Option<String>,
     account_name: Option<String>,
     api_model_context_windows: Option<HashMap<String, i64>>,
+    api_auth_scheme: Option<String>,
 ) -> Result<CodexAccount, String> {
     let (normalized_key, _) = validate_api_key_credentials(&api_key, api_base_url.as_deref())?;
     let new_id = build_api_key_account_id(&normalized_key);
@@ -527,6 +528,7 @@ pub async fn update_api_key_credentials(
             api_vision_routing_model,
             account_name,
             api_model_context_windows,
+            api_auth_scheme,
         )
     }).await.map_err(|error| format!("更新 API Key 任务失败: {}", error))??;
     if was_current {
@@ -555,6 +557,7 @@ fn update_api_key_credentials_in_store(
     api_vision_routing_model: Option<String>,
     account_name: Option<String>,
     api_model_context_windows: Option<HashMap<String, i64>>,
+    api_auth_scheme: Option<String>,
 ) -> Result<CodexAccount, String> {
     // Serialize overlapping old/new IDs without holding the global account lock
     // through profile or gateway reference migration. Different accounts remain parallel.
@@ -600,6 +603,7 @@ fn update_api_key_credentials_in_store(
         api_model_vision_support,
         api_vision_routing_model,
         api_model_context_windows,
+        api_auth_scheme.clone(),
     );
     if let Some(account_name) = normalize_optional_value(account_name) {
         account.account_name = Some(account_name);
@@ -641,6 +645,7 @@ pub async fn sync_api_key_provider_accounts(
     api_model_vision_support: std::collections::HashMap<String, bool>,
     api_vision_routing_model: Option<String>,
     api_model_context_windows: Option<std::collections::HashMap<String, i64>>,
+    api_auth_scheme: Option<String>,
 ) -> Result<usize, String> {
     let current_id = load_account_index().current_account_id;
     let updates_current = current_id.as_ref().is_some_and(|id| account_ids.contains(id));
@@ -720,6 +725,7 @@ fn sync_api_key_provider_accounts_in_store(
             api_model_vision_support.clone(),
             api_vision_routing_model.clone(),
             api_model_context_windows.clone(),
+            api_auth_scheme.clone(),
         );
         save_account(&account)?;
         updated_accounts.push(account);
@@ -1082,6 +1088,11 @@ fn pick_quota_alert_recommendation(
 }
 
 pub fn pick_auto_switch_target_if_needed() -> Result<Option<CodexAccount>, String> {
+    // 平台在「平台布局」中被禁用时不自动切号
+    if !crate::modules::tray_layout::is_platform_enabled("codex") {
+        return Ok(None);
+    }
+
     if CODEX_AUTO_SWITCH_IN_PROGRESS.swap(true, Ordering::SeqCst) {
         logger::log_info("[AutoSwitch][Codex] 自动切号进行中，跳过本次检查");
         return Ok(None);

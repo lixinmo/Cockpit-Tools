@@ -1191,6 +1191,7 @@ data: {"type":"response.completed","response":{"id":"resp_123","usage":{"input_t
             label: "Provider Gateway: DeepSeek".to_string(),
             provider_gateway: Some(CodexLocalAccessProviderGateway {
                 model_bindings: None,
+                auth_scheme: None,
                 base_url: "https://api.deepseek.com/v1".to_string(),
                 api_key: "sk-test".to_string(),
                 upstream_model: "deepseek-v4-pro".to_string(),
@@ -1303,7 +1304,7 @@ data: {"type":"response.completed","response":{"id":"resp_123","usage":{"input_t
         let request = ParsedRequest {
             method: "POST".to_string(),
             target: "/v1/chat/completions".to_string(),
-            headers: HashMap::new(),
+            headers: HashMap::from([(super::CODEX_RESPONSES_LITE_HEADER.into(), "true".into())]),
             body: br#"{
                 "model":"gpt-5.6-sol",
                 "messages":[{"role":"user","content":"hello"}],
@@ -1341,7 +1342,7 @@ data: {"type":"response.completed","response":{"id":"resp_123","usage":{"input_t
                         .filter_map(|tool| tool.get("type").and_then(Value::as_str))
                         .collect::<Vec<_>>()
                 }),
-            Some(vec!["function", "function", "custom", "tool_search"])
+            Some(vec!["function", "function", "custom", "tool_search", "namespace"])
         );
         assert!(mapped_body.get("tool_choice").is_none());
         assert!(mapped_body
@@ -1948,7 +1949,7 @@ data: {"type":"response.completed","response":{"id":"resp_123","usage":{"input_t
             target: "/v1/responses".to_string(),
             headers: HashMap::from([(
                 "x-openai-internal-codex-responses-lite".to_string(),
-                String::new(),
+                "true".to_string(),
             )]),
             body: br#"{
                 "model":"gpt-5.6-sol",
@@ -1984,7 +1985,7 @@ data: {"type":"response.completed","response":{"id":"resp_123","usage":{"input_t
                     .filter_map(|tool| tool.get("type").and_then(Value::as_str))
                     .collect::<Vec<_>>()
             }),
-            Some(vec!["function", "function", "custom", "tool_search"])
+            Some(vec!["function", "function", "custom", "tool_search", "namespace"])
         );
         assert!(parsed
             .get("tools")
@@ -2152,11 +2153,21 @@ data: {"type":"response.completed","response":{"id":"resp_123","usage":{"input_t
             Message::Text(payload.into()),
             Message::Binary(payload.as_bytes().to_vec().into()),
         ] {
+            assert_eq!(
+                filter_websocket_client_message(
+                    message.clone(),
+                    &account,
+                    CodexLocalAccessImageGenerationMode::Enabled,
+                    false,
+                )
+                .expect("standard WebSocket payload should pass through"),
+                message,
+            );
             let filtered = filter_websocket_client_message(
                 message,
                 &account,
                 CodexLocalAccessImageGenerationMode::Enabled,
-                false,
+                true,
             )
             .expect("Responses Lite WebSocket follow-up payload should filter");
             let parsed = match filtered {
@@ -2174,7 +2185,7 @@ data: {"type":"response.completed","response":{"id":"resp_123","usage":{"input_t
                             .filter_map(|tool| tool.get("type").and_then(Value::as_str))
                             .collect::<Vec<_>>()
                     }),
-                Some(vec!["function", "custom", "tool_search"])
+                Some(vec!["function", "custom", "tool_search", "namespace"])
             );
             assert!(parsed.pointer("/response/tool_choice").is_none());
         }
@@ -3241,6 +3252,7 @@ data: {"error":{"code":"server_error","type":"upstream","message":"stream aborte
         wire_api: &str,
     ) -> CodexModelProviderGatewayChatTestRequest {
         CodexModelProviderGatewayChatTestRequest {
+        auth_scheme: None,
             run_id: "run-1".to_string(),
             provider_id: "provider-1".to_string(),
             provider_name: "Provider".to_string(),
@@ -3295,6 +3307,7 @@ data: {"error":{"code":"server_error","type":"upstream","message":"stream aborte
             "gpt-6-sol",
             "gpt-6-luna",
             "gpt-6.1-sol",
+            "gpt-6.1-terra",
         ] {
             assert!(
                 models.iter().any(|model| model == model_id),
@@ -3310,6 +3323,7 @@ data: {"error":{"code":"server_error","type":"upstream","message":"stream aborte
             vec![
                 "gpt-6.1-sol",
                 "gpt-6-astra",
+                "gpt-6.1-terra",
                 "gpt-6-sol",
                 "gpt-6-luna",
                 "gpt-5.6-sol",

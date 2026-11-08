@@ -748,6 +748,8 @@ async fn native_provider_process_driver() -> Result<(), &'static str> {
         excluded_models: Vec::new(),
         token_limit: None,
         token_used: 0,
+        budget: Default::default(),
+        budget_usage: Default::default(),
         enabled: true,
         created_at: now_ms(),
         updated_at: now_ms(),

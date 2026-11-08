@@ -27,6 +27,11 @@ use super::{
 
 #[derive(Clone, Debug)]
 pub struct Options {
+    /// Preserve client protocol IDs when disabled; continuity checks still apply.
+    pub session_identity_mapping_enabled: bool,
+    /// Authenticated API keys may continue explicitly supplied response references.
+    /// This does not share identity namespaces, key permissions or usage accounting.
+    pub shared_continuation_references: bool,
     /// usize::MAX leaves conversation request sizes unrestricted by the gateway.
     pub max_body_bytes: usize,
     /// Per uploaded image file, rather than the sum of a multipart request.
@@ -48,6 +53,8 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Self {
+            session_identity_mapping_enabled: true,
+            shared_continuation_references: false,
             max_body_bytes: usize::MAX,
             max_upload_bytes: 64 * 1024 * 1024,
             max_response_bytes: usize::MAX,
@@ -66,6 +73,7 @@ pub(super) struct AppState {
     pub identity: Arc<IdentityStore>,
     pub options: Options,
     pub stop: StopSignal,
+    pub anthropic_search: Arc<super::anthropic_search_cache::Cache>,
     activity: Arc<Activity>,
     capacity: Arc<Semaphore>,
 }
@@ -103,6 +111,10 @@ impl AppState {
     }
 
     pub async fn authorize(&self, headers: &HeaderMap) -> Result<Caller, ServiceError> {
+        self.authorize_for(headers, false).await
+    }
+
+    pub(super) async fn authorize_for(&self, headers: &HeaderMap, management: bool) -> Result<Caller, ServiceError> {
         let bearer = headers
             .get(header::AUTHORIZATION)
             .and_then(|v| v.to_str().ok())
@@ -114,9 +126,10 @@ impl AppState {
                 ServiceError::new(401, "invalid_api_key", "A valid Bearer API key is required")
             })?;
         let mut stop = self.stop.clone();
+        let authorization = if management { self.host.authorize_management(bearer) } else { self.host.authorize(bearer) };
         tokio::select! {
             _ = stop.wait() => Err(stopping_error()),
-            result = tokio::time::timeout(self.options.request_timeout, self.host.authorize(bearer)) =>
+            result = tokio::time::timeout(self.options.request_timeout, authorization) =>
                 result.map_err(|_| ServiceError::new(504, "authorization_timeout", "API key validation timed out"))?,
         }
     }
@@ -137,12 +150,16 @@ impl AppState {
 pub struct Handle {
     pub addr: SocketAddr,
     host: Arc<dyn Host>,
+    identity: Arc<IdentityStore>,
     stop: watch::Sender<bool>,
     activity: Arc<Activity>,
     task: Option<JoinHandle<Result<(), std::io::Error>>>,
 }
 
 impl Handle {
+    pub fn set_session_identity_mapping_enabled(&self, enabled: bool) {
+        self.identity.set_session_identity_mapping_enabled(enabled);
+    }
     pub fn set_cooling_disabled(&self, disabled: bool) {
         self.host.set_cooling_disabled(disabled);
     }
@@ -238,9 +255,13 @@ pub async fn start(
         .map_err(|error| error.to_string())?;
     let addr = listener.local_addr().map_err(|error| error.to_string())?;
     let activity = Arc::new(Activity::default());
+    identity.set_session_identity_mapping_enabled(options.session_identity_mapping_enabled);
+    identity.set_shared_continuation_references(options.shared_continuation_references);
+    let identity = Arc::new(identity);
     let state = Arc::new(AppState {
+        anthropic_search: Default::default(),
         host: host.clone(),
-        identity: Arc::new(identity),
+        identity: identity.clone(),
         capacity: Arc::new(Semaphore::new(options.max_in_flight)),
         options,
         stop: StopSignal(receiver.clone()),
@@ -250,6 +271,11 @@ pub async fn start(
         .route("/v1/models", get(models))
         .route("/models", get(models))
         .route("/v1/cockpit/quota", get(super::diagnostics::management))
+        .route("/v1/cockpit/connection", get(super::diagnostics::management))
+        .route("/v1/cockpit/usage", get(super::diagnostics::management))
+        .route("/v1/cockpit/stats", get(super::diagnostics::management))
+        .route("/v1/cockpit/requests", get(super::diagnostics::management))
+        .route("/v1/cockpit/session", get(super::diagnostics::management))
         .route(
             "/v1/cockpit/diagnostics/config",
             post(super::diagnostics::management),
@@ -370,6 +396,7 @@ pub async fn start(
                 .max_body_bytes
                 .max(state.options.max_upload_bytes),
         ))
+        .layer(axum::middleware::from_fn_with_state(state.clone(), super::http_compression::response))
         .layer(axum::middleware::from_fn(cors))
         .with_state(state);
     let task = tokio::spawn(async move {
@@ -385,6 +412,7 @@ pub async fn start(
     Ok(Handle {
         addr,
         host,
+        identity,
         stop,
         activity,
         task: Some(task),
@@ -535,6 +563,16 @@ pub(super) fn outbound_headers(headers: &HeaderMap) -> HeaderMap {
         .collect()
 }
 
+pub(super) fn forward_remote_scope_headers(incoming:&HeaderMap,route:&super::contract::Route,outgoing:&mut HeaderMap) {
+    let Some(key)=route.headers.get(header::AUTHORIZATION).and_then(|h|h.to_str().ok()).and_then(|h|h.strip_prefix("Bearer ")) else {return;};
+    if !crate::modules::codex_remote_service::is_known(&route.base_url,key) {return;}
+    // Only explicit public correlation fields survive a recognized Cockpit hop.
+    // Routing/admin headers remain stripped by outbound_headers.
+    for name in ["x-cockpit-instance-id","x-codex-instance-id","x-client-instance-id","x-codex-installation-id"] {
+        if let Some(value)=incoming.get(name).filter(|v|v.as_bytes().len()<=128) {outgoing.insert(name,value.clone());}
+    }
+}
+
 pub(super) fn downstream_response(status: StatusCode, headers: &HeaderMap, body: Body) -> Response {
     let mut response = Response::new(body);
     *response.status_mut() = status;
@@ -614,12 +652,14 @@ mod shutdown_handoff_tests {
 
     #[tokio::test]
     async fn shutdown_timeout_keeps_handle_alive_until_old_work_stops() {
+        let temp = tempfile::tempdir().unwrap();
         let (stop, _) = watch::channel(false);
         let activity = Arc::new(Activity::default());
         activity.tasks.store(1, Ordering::SeqCst);
         let mut handle = Handle {
             addr: "127.0.0.1:0".parse().unwrap(),
             host: Arc::new(UnusedHost),
+            identity: Arc::new(IdentityStore::open(temp.path().join("identity.sqlite")).unwrap()),
             stop,
             activity: activity.clone(),
             task: Some(tokio::spawn(async { Ok(()) })),
@@ -640,6 +680,7 @@ mod shutdown_handoff_tests {
             let temp = tempfile::tempdir().unwrap();
             let (_, stopped) = watch::channel(false);
             let state = AppState {
+                anthropic_search: Default::default(),
                 host: Arc::new(UnusedHost),
                 identity: Arc::new(
                     IdentityStore::open(temp.path().join("identity.sqlite")).unwrap(),
@@ -675,6 +716,7 @@ mod shutdown_handoff_tests {
             let (stop, stopped) = watch::channel(false);
             let activity = Arc::new(Activity::default());
             let state = Arc::new(AppState {
+                anthropic_search: Default::default(),
                 host: Arc::new(UnusedHost),
                 identity: Arc::new(
                     IdentityStore::open(temp.path().join("identity.sqlite")).unwrap(),
@@ -693,6 +735,7 @@ mod shutdown_handoff_tests {
             });
             let (started, entered) = tokio::sync::oneshot::channel();
             let (release, released) = std::sync::mpsc::channel();
+            let identity = state.identity.clone();
             let waiter = tokio::spawn(async move {
                 super::super::blocking::run_tracked(&state, move || {
                     let _ = started.send(());
@@ -709,6 +752,7 @@ mod shutdown_handoff_tests {
             let mut handle = Handle {
                 addr: "127.0.0.1:0".parse().unwrap(),
                 host: Arc::new(UnusedHost),
+                identity,
                 stop,
                 activity: activity.clone(),
                 task: Some(tokio::spawn(async { Ok(()) })),

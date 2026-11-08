@@ -1,3 +1,4 @@
+import { CODEX_RESET_CREDIT_DETAILS_REQUEST, getPendingCodexResetCreditDetails, clearPendingCodexResetCreditDetails } from '../utils/codexResetCreditNavigation';
 import { prepareCodexServiceJoins } from "../utils/codexServiceJoin";
 import { chatGptPlanErrorKey, listChatGptPlanAccounts } from "../services/chatgptPlanService";
 import { implicitCodexServiceAccountIds } from "../utils/chatgptPlanOverview";
@@ -10,6 +11,7 @@ import { Download, Copy, Check, Eye, EyeOff, FileText, FolderOpen } from "lucide
 import { useCodexAccountStore } from "../stores/useCodexAccountStore";
 import { useCodexInstanceStore } from "../stores/useCodexInstanceStore";
 import * as codexService from "../services/codexService";
+import { codexResetCreditDetails } from "../services/codexResetCreditService";
 import * as codexInstanceService from "../services/codexInstanceService";
 import * as codexLocalAccessService from "../services/codexLocalAccessService";
 import { maskJsonPreviewContent } from "../components/ExportJsonModal";
@@ -379,7 +381,6 @@ export function useCodexAccountsBaseController() {
       title?: string;
       summary?: string;
       reauthorizeAccountId?: string;
-      clearClientAuthObservationAccountId?: string;
       message: string;
     } | null>(null);
     const [editingAccountNoteId, setEditingAccountNoteId] = useState<
@@ -2123,7 +2124,8 @@ export function useCodexAccountsBaseController() {
         setResetCreditConfirmSnapshot(null);
 
         try {
-          const snapshot = await codexService.getCodexResetCredits(accountId);
+          const count = useCodexAccountStore.getState().accounts.find(account => account.id === accountId)?.quota?.reset_credits_available ?? 0;
+          const snapshot = await codexResetCreditDetails.load(accountId, count, true);
           if (resetCreditConfirmRequestSeqRef.current !== requestSeq) return;
           setResetCreditConfirmSnapshot({
             available_count: snapshot.available_count,
@@ -2157,6 +2159,20 @@ export function useCodexAccountsBaseController() {
       [loadResetCreditConfirmSnapshot, setResetCreditConfirmError],
     );
 
+    useEffect(() => {
+      const openRequestedDetails = () => {
+        const id = getPendingCodexResetCreditDetails();
+        const account = id ? accounts.find(account => account.id === id) : undefined;
+        if (!account) return;
+        clearPendingCodexResetCreditDetails();
+        setActiveTab('overview');
+        openResetCreditConfirmModal(account);
+      };
+      openRequestedDetails();
+      window.addEventListener(CODEX_RESET_CREDIT_DETAILS_REQUEST, openRequestedDetails);
+      return () => window.removeEventListener(CODEX_RESET_CREDIT_DETAILS_REQUEST, openRequestedDetails);
+    }, [accounts, openResetCreditConfirmModal]);
+
     const closeResetCreditConfirmModal = useCallback(() => {
       if (resettingResetCreditAccountId) return;
       resetCreditConfirmRequestSeqRef.current += 1;
@@ -2185,10 +2201,11 @@ export function useCodexAccountsBaseController() {
 
       try {
         await codexService.consumeCodexResetCredit(account.id);
+        codexResetCreditDetails.invalidate(account.id);
         try {
           await refreshQuota(account.id);
           setMessage({
-            text: t("codex.quota.resetCreditConsumed", "已重置 5 小时额度"),
+            text: t("codex.quota.resetCreditConsumed", "已重置额度"),
           });
           setResetCreditConfirmAccountId(null);
         } catch (error) {

@@ -58,6 +58,7 @@ async fn handle(
     let headers = incoming.headers().clone();
     let request = parse_request(&state, incoming, operation).await?;
     tracker.authorized(&caller, request.model.as_deref().unwrap_or(""));
+    tracker.admit(&caller).await?;
     let mut policy = match super::super::retry::execution_policy(&state).await {
         Ok(policy) => policy.for_images(),
         Err(error) => {
@@ -144,7 +145,7 @@ async fn handle_prepared(
         owner_committed: false,
     };
     execution.record_route();
-    if execution.selected.route.chatgpt {
+    if execution.selected.route.chatgpt && execution.selected.main_model.is_some() {
         forward_oauth(execution).await
     } else {
         forward_native(execution).await
@@ -360,8 +361,8 @@ impl Execution {
         &mut self,
         oauth: bool,
     ) -> Result<(reqwest::Response, Option<Binding>), ServiceError> {
-        if !oauth {
-            // Go's independent Images API waits for generation with one
+        if !oauth && !self.selected.route.chatgpt {
+            // Go's independent API-key Images API waits for generation with one
             // five-minute context; the OAuth stream-open/idle knobs do not apply.
             let image_timeout = std::time::Duration::from_secs(300);
             self.budget.total_deadline = self.budget.total_deadline
@@ -396,9 +397,14 @@ impl Execution {
             previous_open_deadline = Some(self.budget.open_deadline);
             let mut headers = outbound_headers(&self.headers);
             headers.extend(self.selected.route.headers.clone());
+            super::super::server::forward_remote_scope_headers(&self.headers,&self.selected.route,&mut headers);
             headers.remove(header::CONTENT_LENGTH);
             headers.remove(header::CONTENT_ENCODING);
             headers.remove(header::CONTENT_TYPE);
+            if self.selected.route.chatgpt && !oauth {
+                headers.remove(header::USER_AGENT);
+                if let Some(ua) = self.selected.route.headers.get(header::USER_AGENT) { headers.insert(header::USER_AGENT, ua.clone()); }
+            }
             headers.insert(
                 header::ACCEPT,
                 HeaderValue::from_static("application/json, text/event-stream"),
@@ -441,11 +447,15 @@ impl Execution {
             } else {
                 (
                     self.request.operation.path(),
-                    self.request.native_json(&self.selected.image_model),
+                    if self.selected.route.chatgpt {
+                        self.request.codex_native_json(&self.selected.image_model)
+                    } else {
+                        self.request.native_json(&self.selected.image_model)
+                    },
                     None,
                 )
             };
-            if oauth {
+            if self.selected.route.chatgpt {
                 super::super::account_installation::apply(
                     &self.selected.route,
                     &mut headers,
@@ -462,7 +472,9 @@ impl Execution {
             );
             let mut outgoing = self.selected.route.client.post(url).headers(headers);
             if !oauth {
-                if let Some(parts) = self.request.native_parts(&self.selected.image_model) {
+                let parts = if self.selected.route.chatgpt { None }
+                    else { self.request.native_parts(&self.selected.image_model) };
+                if let Some(parts) = parts {
                     let mut form = reqwest::multipart::Form::new();
                     for part in parts {
                         let mut value = reqwest::multipart::Part::bytes(part.bytes);
@@ -495,6 +507,8 @@ impl Execution {
             let open_deadline = deadline.cap(self.budget.prepare_deadline());
             let outgoing = async {
                 let built = built?;
+                #[cfg(test)]
+                super::capture_live_geometry(&built)?;
                 if tokio::time::Instant::now() >= open_deadline {
                     return Err(ServiceError::new(504,"upstream_connect_timeout","Image upstream response headers timed out"));
                 }
@@ -502,6 +516,7 @@ impl Execution {
                 self.tracker.payload("upstream_request", "http", built.headers(), &payload.to_string());
                 self.tracker.upstream_headers(built.headers());
                 self.tracker.check_quota_before_send()?;
+                self.tracker.quota_request_started();
                 client.execute(built).await.map_err(|error| {
                     super::super::diagnostics::transport_failure(502,"upstream_unavailable","Unable to connect to the image upstream",&error)
                         .with_upstream_not_sent(error.is_connect() || error.is_builder())
@@ -577,6 +592,7 @@ impl Execution {
             };
             self.tracker.upstream_http_version(response.version());
             self.tracker.upstream_response_headers(response.headers());
+            response = super::super::http_compression::decode_response(response)?;
             self.tracker.quota_headers(response.headers());
             if oauth && response.status().is_success() {
                 // The shared probe stops at the first business event or its
@@ -621,6 +637,8 @@ impl Execution {
             let mut failure_message = None;
             let mut model_unavailable = false;
             let mut request_scoped = false;
+            let mut execution_observed = false;
+            let mut exhausted = None;
             if !response.status().is_success() {
                 let inspected = super::super::retry::inspect_status_error(
                     &self.state,
@@ -631,6 +649,7 @@ impl Execution {
                     super::super::grok_errors::applies(&self.selected.route),
                 )
                 .await?;
+                exhausted = inspected.10.as_ref().and_then(super::super::quota_exhaustion::code);
                 response = inspected.0;
                 credential_scope = inspected.1;
                 body_retry_after = inspected.3;
@@ -639,6 +658,7 @@ impl Execution {
                 failure_message = inspected.2;
                 model_unavailable = inspected.4;
                 request_scoped = inspected.5;
+                execution_observed = inspected.9;
                 self.tracker.capture_request_fault(request_scoped);
                 self.tracker.attempt_result(
                     response.status().as_u16(),
@@ -673,11 +693,21 @@ impl Execution {
                 (headers, body) => headers.or(body),
             };
             self.tracker.set_retry_after(retry_after);
-            if request_scoped {
+            if let Some(code) = exhausted {
+                super::super::quota_exhaustion::record(
+                    &self.state, &mut self.tracker, &self.selected.route, code, response.status().as_u16(), retry_after, deadline,
+                ).await?;
+            }
+            if self.selected.route.chatgpt && failure_message.as_deref()
+                .is_some_and(crate::modules::codex_device_restrictions::explicit_message) {
+                return Ok((response, binding));
+            }
+            if request_scoped || execution_observed {
                 self.tracker.set_retry_after(retry_after);
                 return Ok((response, binding));
             }
-            if oauth
+            if self.selected.route.chatgpt
+                && exhausted.is_none()
                 && response.status() == StatusCode::UNAUTHORIZED
                 && !refreshed
                 && !model_unavailable
@@ -726,6 +756,7 @@ impl Execution {
                 }
             }
             if matches!(response.status().as_u16(), 408 | 500 | 502 | 503 | 504)
+                && exhausted.is_none()
                 && !model_unavailable
                 && status_attempts < policy.status_retries
             {
@@ -745,20 +776,20 @@ impl Execution {
                 .await?;
                 continue;
             }
-            let mut failure_recorded = false;
-            let retryable_source = model_unavailable
-                || oauth && matches!(response.status().as_u16(), 401 | 402)
+            let mut failure_recorded = exhausted.is_some();
+            let retryable_source = exhausted.is_some() || model_unavailable
+                || self.selected.route.chatgpt && matches!(response.status().as_u16(), 401 | 402)
                 || matches!(
                     response.status().as_u16(),
                     403 | 408 | 429 | 500 | 502 | 503 | 504
                 );
             if retryable_source
-                && super::super::retry::credential_limit_allows(&policy, credential_attempts)
+                && (exhausted.is_some() || super::super::retry::credential_limit_allows(&policy, credential_attempts))
                 && self.can_switch_source()
                 && {
                     failure_recorded = true;
                     self.alternate_source(
-                        Some((
+                        exhausted.is_none().then_some((
                             if model_unavailable {
                                 404
                             } else {
@@ -781,7 +812,7 @@ impl Execution {
                 refreshed = false;
                 continue;
             }
-            if retryable_source && !round_attempted {
+            if exhausted.is_none() && retryable_source && !round_attempted {
                 if !failure_recorded {
                     let mut stop = self.state.stop.clone();
                     tokio::select! {
@@ -817,7 +848,7 @@ impl Execution {
     }
 
     async fn renew_transport_after_tls(&mut self, error: &ServiceError) -> Result<(), ServiceError> {
-        if error.transport_failure != Some(super::super::contract::TransportFailureKind::TlsDecrypt) {
+        if !matches!(error.transport_failure, Some(super::super::contract::TransportFailureKind::TlsDecrypt | super::super::contract::TransportFailureKind::TlsDecryptHttp2)) {
             return Ok(());
         }
         self.tracker.release_route();
@@ -946,7 +977,7 @@ impl Execution {
             force_refresh: false,
             image_generation_requested: true,
             image_input: false,
-            excluded_account_ids: vec![],
+            excluded_account_ids: self.tracker.quota_exhausted_accounts.iter().cloned().collect(),
             requires_permit: true,
             required_capabilities: Vec::new(),
             capability_fallback_from: None,
@@ -977,7 +1008,7 @@ impl Execution {
         self.selected.route.permit = None;
         super::super::retry::delay(&self.state, wait, policy.retry_max_delay, deadline).await?;
         let mut request = self.route_request.clone();
-        request.excluded_account_ids.clear();
+        request.excluded_account_ids.retain(|id| self.tracker.quota_exhausted_accounts.contains(id));
         let mut stop = self.state.stop.clone();
         let selected = tokio::select! {
             _=stop.wait()=>return Err(stopping_error()),

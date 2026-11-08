@@ -522,3 +522,21 @@ remained. Runtime data, shared toolchains, source, Git history/remotes and the
 verified current App were retained. Application builds and Rust test execution
 ran only in GitHub Actions; private configuration and conversations were not
 uploaded.
+
+## v1.3.80 shared Chat discovery integration (2026-11-08)
+
+Upstream now lowers client discovery in request preparation and restores it in
+`upstream.rs` for JSON and SSE (including the HTTP-backed WebSocket path). The
+fork adopts that implementation and removes its second discovery context from
+`ToolContext`, the extra Chat stream restoration, and the local lowering wrapper.
+There is one shared `chatgpt_plan_tools` lowering/restoration pipeline.
+
+Only missing validation remains in `chat_client_discovery.rs`: explicit client
+execution, paired call/result history, permitted choices, and rejection of hosted
+or programmatic tools even when carried in discovery output. Historical client
+calls still pass through the shared upstream adapter when current `tools=[]`
+intentionally disables new tools. Nested function-name collision handling and
+the narrowly scoped legacy empty reasoning placeholder compatibility remain.
+The earlier JSON/SSE/EOF/WS regression suite now exercises the shared adapter;
+its real loopback tests continue to check hosted-tool rejection before dispatch.
+Cloud compilation and test results must be recorded for the merge before handoff.

@@ -1,4 +1,6 @@
 //! Synthetic loopback coverage: rebuilding creates a new generation, never transfers state.
+#[path = "context_rebuild_local_quota_tests.rs"]
+mod local_quota_tests;
 use crate::modules::codex_native_api::{
     contract::*, identity::IdentityStore, start, Handle, Options,
 };
@@ -30,6 +32,7 @@ use tokio_tungstenite::tungstenite::{client::IntoClientRequest, Message};
 
 #[derive(Clone)]
 enum Step {
+    CipherReject { http: bool, prefix: Option<Value> },
     Complete(&'static str, Option<Value>),
     CompleteItems(&'static str, Vec<Value>),
     RawEvents(Vec<Value>),
@@ -52,18 +55,33 @@ struct Upstream {
 struct TestHost {
     base: String,
     enabled: AtomicBool,
+    distinct_callers: bool,
     oauth: AtomicBool,
     passthrough: AtomicBool,
     removed_a: AtomicBool,
+    capacity_recovery_checks: Mutex<Option<usize>>,
+    local_quota_preparation_denied: Mutex<Vec<String>>,
+    local_quota_send_denied: Mutex<Vec<String>>,
+    local_quota_send_checks: Mutex<Vec<String>>,
+    local_quota_allow_first_check: AtomicBool,
     selections: Mutex<Vec<RouteRequest>>,
     failures: Mutex<Vec<(String, u16)>>,
     reports: Mutex<Vec<RequestReport>>,
 }
 impl Host for TestHost {
-    fn authorize<'a>(&'a self, _: &'a str) -> BoxFuture<'a, Result<Caller, ServiceError>> {
-        Box::pin(async {
+    fn check_quota_before_send(&self, account: &str) -> Result<(), ServiceError> {
+        self.local_quota_send_checks.lock().unwrap().push(account.into());
+        if self.local_quota_send_denied.lock().unwrap().iter().any(|id| id == account)
+            && !self.local_quota_allow_first_check.swap(false, Ordering::SeqCst)
+        {
+            return Err(ServiceError::new(429, "quota_reserved", "Synthetic local quota reserve"));
+        }
+        Ok(())
+    }
+    fn authorize<'a>(&'a self, bearer: &'a str) -> BoxFuture<'a, Result<Caller, ServiceError>> {
+        Box::pin(async move {
             Ok(Caller {
-                id: "caller".into(),
+                id: if self.distinct_callers { bearer.into() } else { "caller".into() },
                 label: "synthetic".into(),
             })
         })
@@ -75,6 +93,19 @@ impl Host for TestHost {
     ) -> BoxFuture<'a, Result<Route, ServiceError>> {
         Box::pin(async move {
             self.selections.lock().unwrap().push(request.clone());
+            {
+                let mut recovery = self.capacity_recovery_checks.lock().unwrap();
+                if let Some(checks) = recovery.as_mut() {
+                    if *checks < 2 && request.excluded_account_ids.iter().any(|id| id == "a") {
+                        *checks += 1;
+                        return Err(ServiceError::new(503, "no_available_account", "Backup is still unavailable"));
+                    }
+                    if *checks == 2 && request.preferred_account_id.as_deref() == Some("a") {
+                        *checks += 1;
+                        return Err(ServiceError::new(429, "account_busy", "Original account is busy"));
+                    }
+                }
+            }
             let account = if let Some(preferred) = request.preferred_account_id.as_deref() {
                 if preferred == "a" && self.removed_a.load(Ordering::SeqCst) {
                     return Err(ServiceError::new(
@@ -109,6 +140,10 @@ impl Host for TestHost {
                         ServiceError::new(503, "no_available_account", "Synthetic pool exhausted")
                     })?
             };
+            if self.local_quota_preparation_denied.lock().unwrap().iter().any(|id| id == account) {
+                return Err(ServiceError::new(429, "quota_reserved", "Synthetic local preparation reserve")
+                    .with_local_rejected_account(account));
+            }
             Ok(Route {
                 continuity_account_id: None,
                 installation_profile: Some(installation_profile(account)),
@@ -147,8 +182,11 @@ impl Host for TestHost {
     }
     fn execution_policy(&self) -> BoxFuture<'_, Result<ExecutionPolicy, ServiceError>> {
         Box::pin(async {
+            let continuous = self.capacity_recovery_checks.lock().unwrap().is_some();
             Ok(ExecutionPolicy {
                 account_switch_rebuild: self.enabled.load(Ordering::SeqCst),
+                continuous_overload_retry: continuous,
+                websocket_heartbeat: if continuous { Duration::from_millis(100) } else { Duration::ZERO },
                 credential_retries: 0,
                 status_retries: 0,
                 send_retries: 0,
@@ -242,6 +280,7 @@ async fn upstream_http(
         .pop_front()
         .expect("Unexpected synthetic upstream attempt");
     match step {
+        Step::CipherReject { http, prefix } => encrypted_reasoning_tests::rejection(&request, http, prefix),
         Step::RawEvents(events) => sse(events),
         Step::HttpOverload => (StatusCode::SERVICE_UNAVAILABLE,Json(json!({"error":{"type":"server_error","code":"server_error","message":"Synthetic overloaded"}}))).into_response(),
         Step::HttpRateLimit => (StatusCode::TOO_MANY_REQUESTS,Json(json!({"error":{"type":"usage_limit_reached","code":"usage_limit_reached","message":"Synthetic quota exhausted"}}))).into_response(),
@@ -333,6 +372,9 @@ struct Fixture {
 }
 impl Fixture {
     async fn new(enabled: bool, a: Vec<Step>, b: Vec<Step>) -> Self {
+        Self::with_key_continuity(enabled, a, b, false).await
+    }
+    async fn with_key_continuity(enabled: bool, a: Vec<Step>, b: Vec<Step>, shared: bool) -> Self {
         let upstream = Arc::new(Upstream {
             steps: Mutex::new([a.into(), b.into()]),
             sent: Mutex::new(vec![]),
@@ -350,9 +392,15 @@ impl Fixture {
         let host = Arc::new(TestHost {
             base: format!("http://{address}"),
             enabled: AtomicBool::new(enabled),
+            distinct_callers: shared,
             oauth: AtomicBool::new(false),
             passthrough: AtomicBool::new(false),
             removed_a: AtomicBool::new(false),
+            capacity_recovery_checks: Mutex::new(None),
+            local_quota_preparation_denied: Mutex::new(vec![]),
+            local_quota_send_denied: Mutex::new(vec![]),
+            local_quota_send_checks: Mutex::new(vec![]),
+            local_quota_allow_first_check: AtomicBool::new(false),
             selections: Mutex::new(vec![]),
             failures: Mutex::new(vec![]),
             reports: Mutex::new(vec![]),
@@ -362,7 +410,7 @@ impl Fixture {
             "127.0.0.1:0".parse().unwrap(),
             host.clone(),
             root.path().join("identity.sqlite"),
-            Options::default(),
+            Options { shared_continuation_references: shared, ..Options::default() },
         )
         .await
         .unwrap();
@@ -899,6 +947,59 @@ async fn context_rebuild_only_replays_tool_history_after_call_and_result_are_pai
 }
 
 #[tokio::test]
+async fn context_rebuild_websocket_keeps_tool_turn_connected_until_backup_recovers() {
+    let call = json!({"type":"function_call","name":"lookup","call_id":"synthetic-lookup","arguments":"{}","status":"completed"});
+    let result = json!({"type":"function_call_output","call_id":"synthetic-lookup","output":"synthetic result"});
+    let fixture = Fixture::new(
+        true,
+        vec![Step::Complete("a-root", Some(call.clone())), Step::SseOverload],
+        vec![Step::Complete("b-recovered", None)],
+    ).await;
+    fixture.host.passthrough.store(true, Ordering::SeqCst);
+    *fixture.host.capacity_recovery_checks.lock().unwrap() = Some(0);
+    let mut socket = fixture.socket().await;
+    let user_message = message("user", "run lookup");
+    ws_send(&mut socket, body(vec![user_message.clone()], None, true)).await;
+    assert_eq!(ws_event(&mut socket, "response.completed").await["response"]["id"], "a-root");
+    ws_send(&mut socket, body(vec![result.clone()], Some("a-root"), true)).await;
+
+    let (response, heartbeats) = tokio::time::timeout(Duration::from_secs(5), async {
+        let mut heartbeats = 0;
+        loop {
+            match socket.next().await.unwrap().unwrap() {
+                Message::Ping(_) => {
+                    if fixture.sent().len() == 2 {
+                        heartbeats += 1;
+                    }
+                    socket.flush().await.unwrap();
+                }
+                Message::Text(text) => {
+                    let event: Value = serde_json::from_str(&text).unwrap();
+                    match event["type"].as_str() {
+                        Some("error" | "response.failed") => panic!("Unexpected WS error: {event}"),
+                        Some("response.completed") => break (event, heartbeats),
+                        _ => {}
+                    }
+                }
+                Message::Close(frame) => panic!("Client connection closed during recovery: {frame:?}"),
+                _ => {}
+            }
+        }
+    }).await.unwrap();
+    assert_eq!(response["response"]["id"], "b-recovered");
+    assert!(heartbeats >= 2, "Expected heartbeats while the original request waited");
+    assert_eq!(*fixture.host.capacity_recovery_checks.lock().unwrap(), Some(3));
+    let sent = fixture.sent();
+    assert_eq!(sent.iter().map(|item| item.account.as_str()).collect::<Vec<_>>(), ["a", "a", "b"]);
+    assert_fresh(&sent[1], &sent[2], json!([
+        user_message, message("assistant", "answer-a-root"), call, result
+    ]));
+    socket.close(None).await.unwrap();
+    drop(socket);
+    fixture.finish().await;
+}
+
+#[tokio::test]
 async fn context_rebuild_upstream_websocket_overload_rebuilds_then_reuses_b_generation() {
     let fixture = Fixture::new(
         true,
@@ -906,6 +1007,8 @@ async fn context_rebuild_upstream_websocket_overload_rebuilds_then_reuses_b_gene
         vec![
             Step::Complete("b-rebuilt", None),
             Step::Complete("b-next", None),
+            Step::SseOverload,
+            Step::SseOverload,
             Step::SseOverload,
         ],
     )
@@ -1006,16 +1109,19 @@ async fn context_rebuild_upstream_websocket_overload_rebuilds_then_reuses_b_gene
             .or_else(|| error.get("status_code"))
             .unwrap(),
         503,
-        "The open socket must honor disabling rebuild: {error}"
+        "Disabling rebuild still permits bounded same-owner capacity recovery: {error}"
     );
     let sent = fixture.sent();
     assert_eq!(
         sent.iter()
             .map(|request| request.account.as_str())
             .collect::<Vec<_>>(),
-        vec!["a", "a", "b", "b", "b"]
+        vec!["a", "a", "b", "b", "b", "b", "b"]
     );
-    assert_eq!(identity(&sent[3]), identity(&sent[4]));
+    for retry in &sent[4..] {
+        assert_eq!(identity(&sent[3]), identity(retry));
+        assert_eq!(sent[4].body, retry.body, "same-owner capacity retries retain the full original request");
+    }
     assert_eq!(fixture.active().unwrap(), b_active);
     socket.close(None).await.unwrap();
     drop(socket);
@@ -1036,3 +1142,12 @@ mod output_evidence_tests;
 
 #[path = "account_installation_http_tests.rs"]
 mod installation_tests;
+
+#[path = "partial_history_http_tests.rs"]
+mod partial_history_tests;
+
+#[path = "encrypted_reasoning_http_tests.rs"]
+mod encrypted_reasoning_tests;
+
+#[path = "key_continuity_http_tests.rs"]
+mod key_continuity_http_tests;

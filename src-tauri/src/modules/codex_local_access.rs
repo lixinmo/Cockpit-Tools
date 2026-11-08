@@ -8,6 +8,8 @@ mod credits_compat;
 pub(crate) mod credits_policy;
 #[path = "codex_local_access_credits_refresh.rs"]
 mod credits_refresh;
+include!("codex_local_access_budget.rs");
+include!("codex_local_access_budget_storage.rs");
 include!("codex_local_access_quota_reserve.rs");
 include!("codex_local_access_native_credits.rs");
 include!("codex_local_access_quota_cooldown.rs");
@@ -16,6 +18,7 @@ include!("codex_local_access_historical_pricing.rs");
 include!("codex_local_access_routing_pricing.rs");
 include!("codex_local_access_request_logs.rs");
 include!("codex_local_access_request_diagnostics.rs");
+include!("codex_local_access_overload.rs");
 include!("codex_local_access_request_diagnostics_poll.rs");
 include!("codex_local_access_profile_takeover.rs");
 include!("codex_local_access_takeover_maintenance.rs");
@@ -44,6 +47,11 @@ include!("codex_local_access_native_routes.rs");
 include!("codex_local_access_native_capability.rs");
 include!("codex_local_access_native_images.rs");
 include!("codex_local_access_native_diagnostics.rs");
+include!("codex_local_access_remote_protocol.rs");
+include!("codex_local_access_remote_catalog.rs");
+include!("codex_local_access_remote_analytics.rs");
+include!("codex_local_access_remote_analytics_query.rs");
+include!("codex_local_access_remote_session.rs");
 include!("codex_local_access_native_profiles.rs");
 include!("codex_local_access_service_tier_control.rs");
 include!("codex_local_access_provider_gateway.rs");
@@ -60,7 +68,7 @@ include!("codex_local_access_service_members.rs");
 include!("codex_local_access_official_members.rs");
 include!("codex_local_access_http.rs");
 // The retired in-process WebSocket gateway is retained only as a test oracle.
-// Production traffic is handled by the native engine or the optional CLIProxyAPI sidecar.
+// Production traffic is handled exclusively by the native Rust engine.
 #[cfg(test)]
 include!("codex_local_access_recovery.rs");
 
@@ -82,7 +90,7 @@ mod tests {
             display_name: "DeepSeek-V4.1-Flash".into(),
             template: Some(serde_json::json!({"multi_agent_version": null,
                 "supported_reasoning_levels": [{"effort": "max"}]})),
-            image_capable: true,
+            image_capable: Some(true),
         }];
         super::apply_profile_model_definition_overrides(&mut catalog, &definitions);
         assert_eq!(catalog["models"][0]["multi_agent_version"], "v2");

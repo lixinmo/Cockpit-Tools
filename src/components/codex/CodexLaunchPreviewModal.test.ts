@@ -5,13 +5,14 @@ import vm from "node:vm";
 import ts from "typescript";
 import { buildCodexModelRoutingValue, resolveRoutingCatalog } from "../../utils/codexModelRoutingValue.ts";
 import { deferred, settlePromises } from "../../../tests/helpers/reactHookHarness";
+import { isCodexLaunchCancelled } from '../../utils/codexLaunchCancellation';
 
 // Exercise the production callbacks with controlled IPC completion order. This
 // deliberately excludes rendering, native dialogs and real account/config data.
 const source = ts.createSourceFile("CodexLaunchPreviewModal.tsx", readFileSync(
   new URL("./CodexLaunchPreviewModal.tsx", import.meta.url), "utf8",
 ), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-const names = ["requestClose", "persistDraft", "handleExecute", "handleInstanceChange", "applyContextConfig", "openModelConfig", "closeModelConfig", "reloadContextConfig", "closeContextConfig"];
+const names = ["requestClose", "persistDraft", "handleExecute", "handleAuxiliaryAction", "handleInstanceChange", "applyContextConfig", "openModelConfig", "closeModelConfig", "reloadContextConfig", "closeContextConfig"];
 const callbacks: string[] = [];
 let configReadSetup = '';
 const closeButtons: (string | undefined)[] = [];
@@ -59,11 +60,14 @@ function harness(routing = false, overlay = "global-progress-overlay", providerA
   const saved = { model: "saved" };
   const savedInstance = { id: "synthetic", saved: true };
   const c: Record<string, any> = {
+    isCodexLaunchCancelled,
     configSession: { current: 1 }, configWritePending: { current: false },
     contextReloadRequest: { current: 0 }, contextReloadPending: { current: false },
     loading: false, contextConfigSnapshot: null,
     busy: false, checkingConfig: false, configReady: true, configBusy: false, contextConfigSaving: false,
-    loadedConfig: {}, loadedInstanceKey: null, configLoadInputs: { current: { selectedInstance: store.instances[0] } },
+    loadedConfig: {}, loadedInstanceKey: null, instanceConfigChanged: false, configLoadError: null, accounts: [],
+    normalizeCodexModelRoutingRoutes: (routes: any[]) => routes,
+    configLoadInputs: { current: { selectedInstance: store.instances[0] } },
     catalogEnabled: false, modelsError: null, models: [], defaultModelId: null,
     routingEnabled: false, routingEnabledForSave: false, routingDirty: routing,
     nextModelRouting: { enabled: false, routes: [] }, mixedRoutingBindAccountId: undefined,
@@ -88,7 +92,7 @@ function harness(routing = false, overlay = "global-progress-overlay", providerA
   };
   for (const name of ["setCheckingConfig", "setNotice", "setError", "setSaving", "setExecuting",
     "setChangingInstance", "setContextConfigError", "setContextConfigSaving", "setConfigLoadError",
-    "setLoadedInstanceKey", "setRoutingRoutes", "applyLoadedConfig", "setContextConfigSnapshot", "setContextConfigOpen",
+    "setLoadedInstanceKey", "setRoutingRoutes", "setModels", "applyLoadedConfig", "setContextConfigSnapshot", "setContextConfigOpen",
     "setContextConfigReloading", "setLoadedTarget", "setRoutingEnabled", "setLoading"]) {
     c[name] = () => { if (closed) lateUpdates.push(name); else events.push(name); };
   }
@@ -97,6 +101,63 @@ function harness(routing = false, overlay = "global-progress-overlay", providerA
     completeWrite(context: boolean) { write.resolve(routing && !context && !c.providerConfigAccountId ? { quickConfig: saved, instance: savedInstance } : saved); },
   };
 }
+
+test('CLI action saves the preview before opening the CLI dialog and closes the preview afterwards', async () => {
+  const h = harness();
+  let options: unknown;
+  h.c.onClose = () => h.events.push('preview-close');
+  const pending = h.c.handlers.handleAuxiliaryAction({ id: 'cli', onAction: (value: unknown) => {
+    options = value;
+    h.events.push('cli-open');
+  } });
+  assert.equal(h.events.includes('cli-open'), false);
+  h.read.resolve({}); await settlePromises();
+  assert.equal(h.events.includes('quick-write'), true);
+  assert.equal(h.events.includes('cli-open'), false);
+  h.completeWrite(false); await pending;
+  assert.equal(JSON.stringify(options), '{}');
+  assert.ok(h.events.indexOf('cli-open') > h.events.indexOf('quick-write'));
+  assert.ok(h.events.indexOf('preview-close') > h.events.indexOf('cli-open'));
+  assert.equal(h.events.includes('launch'), false, 'CLI must not invoke the desktop switch/start action');
+});
+
+test('CLI action failures stay inside the open preview and permit retry', async () => {
+  const h = harness(); h.c.dirty = false;
+  let error: string | null = 'old failure';
+  let closed = false;
+  let attempts = 0;
+  h.c.setError = (value: string | null) => { error = value; };
+  h.c.onClose = () => { closed = true; };
+  const action = { id: 'cli', onAction: () => {
+    assert.equal(error, null);
+    if (++attempts === 1) throw new Error('CLI preparation failed');
+  } };
+  await h.c.handlers.handleAuxiliaryAction(action);
+  assert.equal(error, 'CLI preparation failed');
+  assert.equal(closed, false);
+  await h.c.handlers.handleAuxiliaryAction(action);
+  assert.equal(attempts, 2);
+  assert.equal(error, null);
+  assert.equal(closed, true);
+});
+
+test('CLI action cannot bypass configuration loading or a failed save', async () => {
+  for (const blocked of ['loading', 'save-failure']) {
+    const h = harness();
+    let opened = false;
+    let closed = false;
+    h.c.onClose = () => { closed = true; };
+    h.c.configBusy = blocked === 'loading';
+    const pending = h.c.handlers.handleAuxiliaryAction({ id: 'cli', onAction: () => { opened = true; } });
+    if (blocked === 'save-failure') {
+      h.read.resolve({}); await settlePromises();
+      h.write.reject(new Error('disk full'));
+    }
+    await pending;
+    assert.equal(opened, false);
+    assert.equal(closed, false);
+  }
+});
 
 test('context conflict refuses a write and can reload even while configBusy', async () => {
   const h = harness();
@@ -410,3 +471,84 @@ for (const action of ["persistDraft", "applyContextConfig"] as const) {
     assert.equal(h.events.includes("applyLoadedConfig"), false);
   });
 }
+
+for (const mode of ['account', 'instance', 'apiService']) {
+  for (const conflict of ['quick-config', 'instance', 'previous-save']) {
+    test(`${mode} starts with current ${conflict} configuration without overwriting it`, async () => {
+      const h = harness();
+      const latest = { experimental_model_catalog_models: [], detected_model_context_window: 800000 };
+      let applied: unknown;
+      let error: unknown = null;
+      let key: unknown;
+      Object.assign(h.c, {
+        mode,
+        // Even an invalid stale draft must not prevent use of the current config.
+        catalogEnabled: true, modelsError: 'stale model error', models: [{}],
+        contextOverrideEnabled: true, contextWindowInput: 'invalid',
+        instanceConfigChanged: conflict === 'instance',
+        loadedInstanceKey: conflict === 'instance' ? 'outdated' : null,
+        configLoadError: conflict === 'previous-save' ? 'CODEX_LAUNCH_PREVIEW_CONFIG_CHANGED' : null,
+        codexLaunchPreviewQuickConfigKey: conflict === 'quick-config' ? JSON.stringify : () => 'same',
+        applyLoadedConfig: (value: unknown) => { applied = value; },
+        setConfigLoadError: (value: unknown) => { error = value; },
+        setLoadedInstanceKey: (value: unknown) => { key = value; },
+      });
+      const pending = h.c.handlers.handleExecute(mode !== 'instance');
+      assert.equal(h.events.includes('launch'), false);
+      h.read.resolve(latest); await pending;
+      assert.equal(h.events.includes('launch'), true);
+      assert.equal(h.events.some((event) => event.endsWith('-write')), false);
+      assert.equal(applied, latest);
+      assert.equal(key, 'synthetic');
+      assert.equal(error, null);
+      assert.deepEqual(h.cached, [latest]);
+      assert.equal(h.c.configWritePending.current, false);
+    });
+  }
+}
+
+test('a changed instance can restart without unsaved edits', async () => {
+  const h = harness();
+  Object.assign(h.c, { dirty: false, instanceConfigChanged: true, loadedInstanceKey: 'outdated' });
+  const pending = h.c.handlers.handleExecute(false);
+  h.read.resolve({}); await pending;
+  assert.equal(h.events.includes('launch'), true);
+  assert.equal(h.events.some((event) => event.endsWith('-write')), false);
+});
+
+test('explicit Save still preserves external changes and a subsequent start uses current config', async () => {
+  const h = harness();
+  let error: unknown = null;
+  h.c.codexLaunchPreviewQuickConfigKey = JSON.stringify;
+  h.c.setConfigLoadError = (value: unknown) => { error = h.c.configLoadError = value; };
+  const pending = h.c.handlers.persistDraft();
+  h.read.resolve({ changed: true });
+  assert.equal(await pending, false);
+  assert.equal(error, 'CODEX_LAUNCH_PREVIEW_CONFIG_CHANGED');
+  assert.equal(h.events.some((event) => event.endsWith('-write')), false);
+  await h.c.handlers.handleExecute(true);
+  assert.equal(h.events.includes('launch'), true);
+  assert.equal(error, null);
+  assert.equal(h.events.some((event) => event.endsWith('-write')), false);
+});
+
+test('closing during a current-config reload cancels the restart and preserves external config', async () => {
+  const h = harness();
+  h.c.instanceConfigChanged = true; h.c.loadedInstanceKey = 'outdated';
+  const pending = h.c.handlers.handleExecute(true);
+  h.c.handlers.requestClose();
+  h.read.resolve({}); await pending;
+  assert.equal(h.events.includes('launch'), false);
+  assert.equal(h.events.some((event) => event.endsWith('-write')), false);
+  assert.deepEqual(h.lateUpdates, []);
+});
+
+test('current-config read failure stays visible and does not dispatch a restart', async () => {
+  const h = harness();
+  h.c.instanceConfigChanged = true;
+  const pending = h.c.handlers.handleExecute(true);
+  h.read.reject(new Error('disk read failed')); await pending;
+  assert.equal(h.events.includes('launch'), false);
+  assert.equal(h.events.includes('setError'), true);
+  assert.equal(h.c.configWritePending.current, false);
+});

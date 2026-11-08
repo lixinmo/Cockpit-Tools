@@ -28,10 +28,18 @@ use super::{contract::*, start, Handle, Options};
 
 #[path = "http_parity_tests.rs"]
 mod http_parity_tests;
+#[path = "audit_protocol_tests.rs"]
+mod audit_protocol_tests;
 #[path = "request_size_tests.rs"]
 mod request_size_tests;
 #[path = "thinking_suffix_tests.rs"]
 mod thinking_suffix_tests;
+
+#[path = "legacy_forwarding_websocket_tests.rs"]
+mod legacy_forwarding_websocket_tests;
+
+#[path = "remote_gateway_tests.rs"]
+mod remote_gateway_tests;
 
 struct TestHost {
     base_url: String,
@@ -246,10 +254,10 @@ fn body(stream: bool) -> Value {
     json!({"model":"test-model","stream":stream,"input":[{"role":"user","content":"test"}],"unknown":{"preserve":true},"reasoning":{"effort":"high"}})
 }
 fn created() -> &'static str {
-    "event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"resp-a\"}}\n\n"
+    "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":0,\"response\":{\"id\":\"resp-a\",\"created_at\":123}}\n\n"
 }
 fn completed() -> &'static str {
-    "event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp-a\",\"status\":\"completed\",\"output\":[],\"unknown\":true,\"service_tier\":\"priority\",\"usage\":{\"input_tokens\":2,\"output_tokens\":3}}}\n\n"
+    "event: response.completed\ndata: {\"type\":\"response.completed\",\"sequence_number\":1,\"response\":{\"id\":\"resp-a\",\"created_at\":123,\"status\":\"completed\",\"output\":[],\"unknown\":true,\"service_tier\":\"priority\",\"usage\":{\"input_tokens\":2,\"output_tokens\":3}}}\n\n"
 }
 
 async fn ws_json(
@@ -263,6 +271,88 @@ async fn ws_json(
         .unwrap()
         .unwrap();
     serde_json::from_str(message.to_text().unwrap()).unwrap()
+}
+
+#[tokio::test]
+async fn responses_first_response_skips_transport_keepalives() {
+    const OUTPUT_DELAY: Duration = Duration::from_millis(400);
+    let app = Router::new().route(
+        "/v1/responses",
+        post(|axum::Json(request): axum::Json<Value>| async move {
+            let stream = request["stream"] == true;
+            let chunks = futures_util::stream::once(async {
+                Ok::<_, std::io::Error>(Bytes::from_static(
+                    b": keep-alive\n\ndata: {\"type\":\"codex.rate_limits\"}\n\n",
+                ))
+            })
+            .chain(futures_util::stream::once(async move {
+                tokio::time::sleep(OUTPUT_DELAY).await;
+                let response = if stream {
+                    format!("{}{}", created(), completed())
+                } else {
+                    "data: {\"id\":\"resp-a\",\"status\":\"completed\",\"output\":[]}\n\n".into()
+                };
+                Ok(Bytes::from(response))
+            }));
+            ([("content-type", "text/event-stream")], Body::from_stream(chunks))
+        })
+        .get(|upgrade: WebSocketUpgrade| async {
+            upgrade.on_upgrade(|mut socket| async move {
+                assert!(matches!(socket.recv().await, Some(Ok(Message::Text(_)))));
+                socket
+                    .send(Message::Text(r#"{"type":"keepalive"}"#.into()))
+                    .await
+                    .unwrap();
+                tokio::time::sleep(OUTPUT_DELAY).await;
+                for event in [created(), completed()] {
+                    let data = event.lines().find_map(|line| line.strip_prefix("data: ")).unwrap();
+                    socket.send(Message::Text(data.into())).await.unwrap();
+                }
+            })
+        }),
+    );
+    let (addr, upstream) = mock(app).await;
+    let (mut service, host, path) = native(addr, false, false, Options::default()).await;
+    for stream in [true, false] {
+        let response = client()
+            .post(format!("http://{}/v1/responses", service.addr))
+            .bearer_auth("local-test-key")
+            .json(&body(stream))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(response.text().await.unwrap().contains("resp-a"));
+    }
+
+    let mut request = format!("ws://{}/v1/responses", service.addr)
+        .into_client_request()
+        .unwrap();
+    request.headers_mut().insert(
+        "authorization",
+        HeaderValue::from_static("Bearer local-test-key"),
+    );
+    let (mut socket, _) = tokio_tungstenite::connect_async(request).await.unwrap();
+    let mut request = body(true);
+    request["type"] = json!("response.create");
+    socket.send(ClientMessage::Text(request.to_string().into())).await.unwrap();
+    loop {
+        let event = ws_json(&mut socket).await;
+        assert_ne!(event["type"], "error", "{event}");
+        if event["type"] == "response.completed" {
+            break;
+        }
+    }
+    let _ = socket.close(None).await;
+    service.shutdown(Duration::from_secs(2)).await.unwrap();
+
+    let diagnostics = host.diagnostics.lock().unwrap();
+    assert_eq!(diagnostics.len(), 3);
+    for context in diagnostics.iter() {
+        assert!(context.first_response_ms.unwrap() >= OUTPUT_DELAY.as_millis() as u64, "{context:?}");
+    }
+    upstream.abort();
+    std::fs::remove_dir_all(path).unwrap();
 }
 
 #[tokio::test]
@@ -1235,3 +1325,14 @@ async fn websocket_http_bridge_keeps_selected_model_policy_and_explicit_tier() {
     service.shutdown(Duration::from_secs(2)).await.unwrap();
     upstream.abort();
 }
+
+#[path = "protocol_compat_http_tests.rs"]
+mod protocol_compat_http_tests;
+
+#[path = "full_protocol_tests.rs"]
+mod full_protocol_tests;
+#[path = "steering_compression_tests.rs"]
+mod steering_compression_tests;
+
+#[path = "compression_upstream_tests.rs"]
+mod compression_upstream_tests;

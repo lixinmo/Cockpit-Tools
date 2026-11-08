@@ -1581,7 +1581,7 @@ struct ProfileModelDefinition {
     model_id: String,
     display_name: String,
     template: Option<Value>,
-    image_capable: bool,
+    image_capable: Option<bool>,
 }
 
 impl ProfileModelDefinition {
@@ -1590,7 +1590,7 @@ impl ProfileModelDefinition {
             model_id: model_id.trim().to_string(),
             display_name: display_name.trim().to_string(),
             template: None,
-            image_capable: false,
+            image_capable: None,
         }
     }
 
@@ -1602,14 +1602,14 @@ impl ProfileModelDefinition {
         image_capable: bool,
     ) -> Self {
         let mut definition = Self::plain(model_id, display_name);
-        definition.image_capable = image_capable;
-        definition.template = official_deepseek_template_for_model(accounts, &definition.model_id);
+        definition.image_capable = Some(image_capable);
+        definition.template = provider_template_for_model(accounts, &definition.model_id);
         definition
     }
 }
 
-/// 官方 DeepSeek 账号的模型模板（按账号的模型列表/别名解析），用于还原官方显示名与能力字段。
-fn official_deepseek_template_for_model(
+/// 供应商模型模板：保留 DeepSeek 官方元数据与 Anthropic 网关的协议能力。
+fn provider_template_for_model(
     accounts: &[CodexAccount],
     model_id: &str,
 ) -> Option<Value> {
@@ -1618,14 +1618,12 @@ fn official_deepseek_template_for_model(
         return None;
     }
     for account in accounts {
-        if !is_official_deepseek_account(account)
-            || !automatic_api_service_account_model_slots(account)
-                .iter()
-                .any(|(client, _)| client.eq_ignore_ascii_case(key))
-        {
+        let slots = automatic_api_service_account_model_slots(account);
+        let Some((_, upstream)) = slots.iter().find(|(client, _)| client.eq_ignore_ascii_case(key)) else {
             continue;
-        }
-        if let Some(template) = account_model_template(account, key) {
+        };
+        if let Some(template) = account_model_template(account, key)
+            .or_else(|| account_model_template(account, upstream)) {
             return Some(template);
         }
     }
@@ -1637,14 +1635,15 @@ fn write_local_access_profile_model_catalog(
     supports_websockets: bool,
     definitions: &[ProfileModelDefinition],
 ) -> Result<(), String> {
-    write_local_access_profile_client_models(
-        profile_dir,
-        supports_websockets,
-        build_local_access_profile_client_models(definitions),
-    )
+    let client_models=build_local_access_profile_catalog(definitions);
+    write_local_access_profile_client_models(profile_dir, supports_websockets, client_models)
 }
 
 fn build_local_access_profile_client_models(definitions: &[ProfileModelDefinition]) -> Value {
+    build_local_access_profile_catalog(definitions)
+}
+
+fn build_local_access_profile_catalog(definitions:&[ProfileModelDefinition])->Value {
     let pairs = definitions
         .iter()
         .map(|definition| (definition.model_id.clone(), definition.display_name.clone()))
@@ -1652,6 +1651,8 @@ fn build_local_access_profile_client_models(definitions: &[ProfileModelDefinitio
     let mut client_models =
         codex_protocol::build_codex_client_models_response_with_model_definitions(&pairs);
     apply_profile_model_definition_overrides(&mut client_models, definitions);
+    if profile_catalog_allows_reserve(&client_models) {codex_protocol::ensure_codex_reserve_fallback(&mut client_models);}
+    apply_profile_model_ordering(&mut client_models);
     client_models
 }
 
@@ -1664,7 +1665,7 @@ fn apply_profile_model_ordering(client_models: &mut Value) {
     else {
         return;
     };
-    let reserve_priority = LOCAL_GATEWAY_VISIBLE_GPT_MODELS.len() as i64;
+    let reserve_priority = local_gateway_visible_gpt_model_definitions().len() as i64;
     let account_priority_base = reserve_priority + 1;
     let mut account_index = 0_i64;
     for model in models.iter_mut() {
@@ -1677,7 +1678,7 @@ fn apply_profile_model_ordering(client_models: &mut Value) {
             .get("visibility")
             .and_then(Value::as_str)
             .is_some_and(|visibility| visibility.eq_ignore_ascii_case("hide"));
-        let priority = if let Some(index) = LOCAL_GATEWAY_VISIBLE_GPT_MODELS
+        let priority = if let Some(index) = local_gateway_visible_gpt_model_definitions()
             .iter()
             .position(|(model_id, _)| model_id.eq_ignore_ascii_case(&slug))
         {
@@ -1739,13 +1740,8 @@ fn apply_profile_model_definition_overrides(
         }
         // DeepSeek 官方模板可能含 null，不能覆盖最终的协作声明。
         codex_protocol::apply_deepseek_multi_agent_capability(model);
-        if definition.image_capable {
-            if let Some(object) = model.as_object_mut() {
-                // 与 DeepSeek 网关模式一致：请求里的图片会由网关自动转到识图模型，
-                // 因此这里声明为可发送图片，否则客户端会直接剥离图片。
-                object.insert("input_modalities".to_string(), json!(["text", "image"]));
-                object.insert("supports_image_detail_original".to_string(), json!(true));
-            }
+        if let Some(vision) = definition.image_capable {
+            apply_provider_catalog_image_input(model, vision);
         }
     }
 }
@@ -1822,6 +1818,12 @@ fn local_access_profile_model_definitions(
     api_key: &str,
     include_account_pool_models: bool,
 ) -> Result<Vec<ProfileModelDefinition>, String> {
+    let accounts=codex_account::list_accounts_checked().unwrap_or_default();
+    local_access_profile_model_definitions_with_accounts(profile_dir,collection,api_key,include_account_pool_models,&accounts)
+}
+
+fn local_access_profile_model_definitions_with_accounts(profile_dir:&Path,collection:&CodexLocalAccessCollection,
+    api_key:&str,include_account_pool_models:bool,accounts:&[CodexAccount])->Result<Vec<ProfileModelDefinition>,String> {
     let experimental_model_catalog_enabled =
         codex_account::read_quick_config_from_config_toml(profile_dir)?
             .experimental_model_catalog_enabled;
@@ -1831,7 +1833,7 @@ fn local_access_profile_model_definitions(
     // 生图账号」会让只加了 DeepSeek / Grok 的池也展示整套官方 GPT 模型。
     let pool_accounts: Vec<CodexAccount> = conversation_sidecar_account_ids(collection)
         .into_iter()
-        .filter_map(|account_id| codex_account::load_account(&account_id))
+        .filter_map(|account_id| accounts.iter().find(|account|account.id==account_id).cloned())
         .filter(|account| {
             is_local_access_eligible_account(account, collection.restrict_free_accounts)
         })
@@ -1881,7 +1883,7 @@ fn local_access_profile_model_definitions(
     // GPT 官方推荐集的显示名始终跟随官方客户端（带 `GPT-` 前缀），
     // 即使用户在「模型管理」里用了别的名字，API 服务 profile 也保持官方命名。
     for definition in definitions.iter_mut() {
-        if let Some((_, official_name)) = LOCAL_GATEWAY_VISIBLE_GPT_MODELS
+        if let Some((_, official_name)) = local_gateway_visible_gpt_model_definitions()
             .iter()
             .find(|(model_id, _)| model_id.eq_ignore_ascii_case(&definition.model_id))
         {
@@ -1900,17 +1902,20 @@ fn local_access_profile_model_definitions(
     let Some(resolved_key) = resolve_collection_api_key(collection, api_key) else {
         return Ok(definitions);
     };
-    let accounts = codex_account::list_accounts_checked().unwrap_or_default();
-    let mut seen = definitions
-        .iter()
-        .map(|definition| definition.model_id.to_ascii_lowercase())
-        .collect::<HashSet<_>>();
+    let mut by_id = definitions.iter().enumerate()
+        .map(|(index, definition)| (definition.model_id.to_ascii_lowercase(), index))
+        .collect::<HashMap<_, _>>();
     for (model_id, image_capable) in
-        automatic_api_service_profile_extra_models(collection, &resolved_key, &accounts)
+        automatic_api_service_profile_extra_models(collection, &resolved_key, accounts)
     {
-        if !seen.insert(model_id.to_ascii_lowercase()) {
+        let id = model_id.to_ascii_lowercase();
+        if let Some(&index) = by_id.get(&id) {
+            // A user-defined row controls presentation; capabilities still
+            // come from the account route for that exact client model.
+            definitions[index].image_capable = Some(image_capable);
             continue;
         }
+        by_id.insert(id, definitions.len());
         let display_name = codex_account::provider_model_display_name(&model_id);
         definitions.push(ProfileModelDefinition::with_account_model(
             &model_id,
@@ -2050,7 +2055,7 @@ fn profile_catalog_allows_reserve(client_models: &Value) -> bool {
             .map(str::trim)
             .is_some_and(|slug| {
                 slug.eq_ignore_ascii_case(CODEX_GPT_RESERVE_MODEL_ID)
-                    || LOCAL_GATEWAY_VISIBLE_GPT_MODELS
+                    || local_gateway_visible_gpt_model_definitions()
                         .iter()
                         .any(|(model_id, _)| model_id.eq_ignore_ascii_case(slug))
             })
@@ -2195,7 +2200,7 @@ async fn write_local_access_profile_takeover(
 ///
 /// 只做增量补充：已有档位与其顺序保持不变，仅在配置缺失时以客户端默认集合为底，
 /// 避免缩小用户已经开放的推理档位。
-fn ensure_profile_max_reasoning_effort(profile_dir: &Path) -> Result<(), String> {
+pub(crate) fn ensure_profile_max_reasoning_effort(profile_dir: &Path) -> Result<(), String> {
     const DESKTOP_TABLE: &str = "desktop";
     const EFFORT_KEY: &str = "enabled-reasoning-efforts";
     const MAX_EFFORT: &str = "max";
@@ -2538,6 +2543,8 @@ fn build_local_access_api_key(label: Option<&str>) -> CodexLocalAccessApiKey {
         excluded_models: Vec::new(),
         token_limit: None,
         token_used: 0,
+        budget: Default::default(),
+        budget_usage: Default::default(),
         enabled: true,
         created_at: now,
         updated_at: now,
@@ -2571,6 +2578,8 @@ fn normalize_collection_api_keys(collection: &mut CodexLocalAccessCollection) ->
             excluded_models: Vec::new(),
             token_limit: None,
             token_used: 0,
+            budget: Default::default(),
+            budget_usage: Default::default(),
             enabled: true,
             created_at: now,
             updated_at: now,

@@ -91,7 +91,7 @@ impl History {
             .and_then(Value::as_array)
             .ok_or_else(invalid_input)?;
         let mut previous = checkpoint.input.clone();
-        previous.extend(checkpoint.output.iter().cloned());
+        previous.extend(checkpoint.output.iter().map(super::super::replay_wire::upstream_item));
         body["input"] = Value::Array(extend_input(&previous, input));
         body.as_object_mut().unwrap().remove("previous_response_id");
         Ok((body, Some(checkpoint.owner.clone())))
@@ -118,6 +118,11 @@ impl History {
         let Some(input) = self.logical_input(body) else {
             return Ok(None);
         };
+        if !super::super::identity::rebuild::replay_items(&input)
+            || !super::super::identity::rebuild::paired_tools(&input)
+        {
+            return Ok(None);
+        }
         let mut full = body.clone();
         full["input"] = Value::Array(input);
         full.as_object_mut().unwrap().remove("previous_response_id");
@@ -154,7 +159,7 @@ impl History {
             .and_then(Value::as_array)
         {
             for item in input {
-                self.remember_call(item);
+                self.remember_call(item, false);
             }
         }
     }
@@ -201,7 +206,7 @@ impl History {
             .get("previous_response_id")
             .and_then(Value::as_str)
             .is_some()
-            && prepared.route.wire_api == super::super::contract::WireApi::Chat
+            && prepared.route.wire_api != super::super::contract::WireApi::Responses
         {
             let input = body
                 .get("input")
@@ -229,7 +234,7 @@ impl History {
         }
         let incoming = body.get("input")?.as_array()?;
         let mut previous = checkpoint.input.clone();
-        previous.extend(checkpoint.output.iter().cloned());
+        previous.extend(checkpoint.output.iter().map(super::super::replay_wire::upstream_item));
         Some(extend_input(&previous, incoming))
     }
 
@@ -261,7 +266,7 @@ impl History {
         }
         if event["type"] == "response.output_item.done" {
             if let Some(item) = event.get("item") {
-                self.remember_call(item);
+                self.remember_call(item, true);
                 let bytes = item.to_string().len();
                 let index = event
                     .get("output_index")
@@ -329,15 +334,6 @@ impl History {
                         .and_then(Value::as_str)
                         == Some(&checkpoint.id)
             });
-        let complete_for_rebuild = root_known
-            && !self.output_invalid_for_rebuild
-            && terminal_output.is_some_and(|output| {
-                output.iter().all(replayable_output)
-                    && self
-                        .output
-                        .iter()
-                        .all(|(index, item)| output.get(*index) == Some(item))
-            });
         let mut input = self
             .logical_input(&prepared.replay_body())
             .or_else(|| {
@@ -349,6 +345,17 @@ impl History {
             })
             .unwrap_or_default();
         input.retain(|item| item["type"] != "compaction_trigger");
+        let complete_for_rebuild = root_known
+            && super::super::identity::rebuild::replay_items(&input)
+            && super::super::identity::rebuild::paired_tools(&input)
+            && !self.output_invalid_for_rebuild
+            && terminal_output.is_some_and(|output| {
+                output.iter().all(replayable_output)
+                    && self
+                        .output
+                        .iter()
+                        .all(|(index, item)| output.get(*index) == Some(item))
+            });
         let mut output: Vec<Value> = terminal_output
             .into_iter()
             .flatten()
@@ -364,7 +371,7 @@ impl History {
                 .collect();
         }
         for item in &output {
-            self.remember_call(item);
+            self.remember_call(item, true);
         }
         // Retain one full current anchor. The auxiliary call cache has its own
         // LRU budget and must not truncate conversation or interruption state.
@@ -429,7 +436,7 @@ impl History {
         )
     }
 
-    fn remember_call(&mut self, item: &Value) {
+    fn remember_call(&mut self, item: &Value, upstream: bool) {
         if !super::super::output_items::complete_tool_call(item) {
             return;
         }
@@ -441,7 +448,7 @@ impl History {
             self.call_bytes = self.call_bytes.saturating_sub(old.to_string().len());
             self.order.retain(|old| old != id);
         }
-        self.calls.insert(id.into(), item.clone());
+        self.calls.insert(id.into(), if upstream { super::super::replay_wire::upstream_item(item) } else { item.clone() });
         self.order.push_back(id.into());
         self.call_bytes += bytes;
         // A single complete call may exceed the auxiliary budget; never discard
@@ -460,24 +467,46 @@ impl History {
     }
 
     fn repair_tools(&self, input: &[Value]) -> Result<Vec<Value>, ServiceError> {
+        // Ambiguous history belongs to the upstream. Do not choose a cached
+        // call or partly repair this payload before discovering a conflict.
+        let mut original_calls = BTreeMap::new();
+        for item in input {
+            if matches!(
+                item["type"].as_str(),
+                Some("function_call" | "custom_tool_call")
+            ) {
+                if let Some(id) = item["call_id"].as_str() {
+                    if original_calls
+                        .insert(id, item)
+                        .is_some_and(|previous| previous != item)
+                    {
+                        return Ok(input.to_vec());
+                    }
+                }
+            }
+        }
         // Index borrowed references once. Prefer complete current input/output
         // and checkpoint calls over the bounded auxiliary LRU, without copying
         // large arguments into an additional repair cache.
         let previous = self
             .checkpoint
             .iter()
-            .flat_map(|checkpoint| checkpoint.input.iter().chain(checkpoint.output.iter()));
+            .flat_map(|checkpoint| {
+                checkpoint.input.iter().map(|item| (item, false))
+                    .chain(checkpoint.output.iter().map(|item| (item, true)))
+            });
         let mut available = BTreeMap::new();
-        for item in self
+        for (item, upstream) in self
             .calls
             .values()
+            .map(|item| (item, false))
             .chain(previous)
-            .chain(self.output.values())
-            .chain(input.iter())
+            .chain(self.output.values().map(|item| (item, true)))
+            .chain(input.iter().map(|item| (item, false)))
         {
             if super::super::output_items::complete_tool_call(item) {
                 if let Some(id) = item["call_id"].as_str() {
-                    available.insert(id, item);
+                    available.insert(id, (item, upstream));
                 }
             }
         }
@@ -487,14 +516,7 @@ impl History {
             match item["type"].as_str() {
                 Some("function_call" | "custom_tool_call") => {
                     if let Some(id) = item["call_id"].as_str() {
-                        if let Some(previous) = seen.get(id) {
-                            if *previous != item {
-                                return Err(ServiceError::new(
-                                    409,
-                                    "conflicting_tool_call",
-                                    "The same tool call ID contains different calls",
-                                ));
-                            }
+                        if seen.contains_key(id) {
                             continue;
                         }
                         seen.insert(id, item);
@@ -503,8 +525,8 @@ impl History {
                 Some("function_call_output" | "custom_tool_call_output") => {
                     if let Some(id) = item["call_id"].as_str() {
                         if !seen.contains_key(id) {
-                            if let Some(call) = available.get(id) {
-                                result.push((*call).clone());
+                            if let Some((call, upstream)) = available.get(id) {
+                                result.push(if *upstream { super::super::replay_wire::upstream_item(call) } else { (*call).clone() });
                                 seen.insert(id, *call);
                             }
                         }
@@ -561,10 +583,10 @@ mod tests {
         assert!(next.get("previous_response_id").is_none());
     }
     #[test]
-    fn repair_uses_only_exact_cached_calls_and_rejects_conflicting_ids() {
+    fn repair_uses_only_exact_cached_calls_and_preserves_conflicting_ids() {
         let mut history = History::default();
         let call = json!({"type":"function_call","call_id":"exact","name":"tool","arguments":"{}"});
-        history.remember_call(&call);
+        history.remember_call(&call, false);
         let output = json!({"type":"function_call_output","call_id":"exact","output":"ok"});
         assert_eq!(
             history.repair_tools(&[output.clone()]).unwrap(),
@@ -579,9 +601,14 @@ mod tests {
                 .len(),
             1
         );
+        assert_eq!(
+            history.repair_tools(&[call.clone(), call.clone()]).unwrap(),
+            vec![call.clone()]
+        );
         let mut conflict = call.clone();
         conflict["arguments"] = json!("different");
-        assert!(history.repair_tools(&[call, conflict]).is_err());
+        let input = vec![call, conflict];
+        assert_eq!(history.repair_tools(&input).unwrap(), input);
     }
     include!("websocket_history_regression_tests.rs");
 }

@@ -158,6 +158,58 @@
     "providerClear": "Zrušit výběr"
   },
   "common": {
+    "profileRestoreBusy": "Obnovuje se přihlášení. Zkuste to za chvíli znovu.",
+    "profileRestoreInvalid": "Cesta ke snímku přihlášení je neplatná. Importujte účet znovu.",
+    "profileRestoreRecoveryFailed": "Obnovení přihlášení selhalo. Záloha byla zachována: {{detail}}",
+    "dataQueryBusy": "Data se zpracovávají. Zkuste to za chvíli znovu.",
+    "apiBudget": {
+      "keyScope": "Tento klíč",
+      "upgradeRequired": "Aktualizujte Cockpit Tools na počítači brány pro zobrazení statistik a historie požadavků.",
+      "gatewayName": "Brána Cockpit",
+      "accountingNote": "Zapsané platby se přepočtem cen nemění; odhady se mohou lišit. Rozpočty se obnovují podle UTC.",
+      "preparing": "Historické statistiky se připravují na pozadí. Zkuste to později.",
+      "settled": "Zapsané platby",
+      "unrecorded": "Bez záznamu",
+      "unmeteredShort": "Neměřeno",
+      "rangeLimit": "Vyberte platná data nejpozději do dneška, nejvýše 93 dní.",
+      "partialCharges": "U {{count}} požadavků chybí platba nebo měření. Statistiky plateb obsahují pouze zapsané částky.",
+      "retention": "Historie od {{time}}; zahrnuty jsou jen protokoly uchované bránou.",
+      "logFiltersNote": "Filtry ovlivňují jen podrobnosti níže. Statistiky a grafy používají zvolená data.",
+      "timeout": "Čas vypršel",
+      "textRequests": "Textové",
+      "imageEdits": "Úprava obrázků",
+      "budget": "Rozpočet využití",
+      "period": "Období",
+      "lifetime": "Jednorázově",
+      "daily": "Denně",
+      "weekly": "Týdně",
+      "monthly": "Měsíčně",
+      "dailyLimit": "Denní limit",
+      "concurrency": "Souběžné požadavky",
+      "dailyImages": "Žádosti o obrázky/den",
+      "invalid": "Zadejte kladné číslo v povoleném rozsahu.",
+      "hint": "Výpočet dle nastavených cen. Modely bez ceny nejsou dostupné. Obnova podle UTC bez převodu. Probíhající požadavky mohou limit překročit.",
+      "unmetered": "Požadavky bez údajů o využití či ceně nejsou zahrnuty do částky.",
+      "remote": "Vzdálený Cockpit",
+      "active": "Aktivní",
+      "disabled": "Vypnuto",
+      "service_disabled": "Služba zastavena",
+      "token_limit_reached": "Limit tokenů",
+      "budget_limit_reached": "Rozpočet vyčerpán",
+      "images": "Obrázky",
+      "consumed": "Využito",
+      "resetsAt": "Obnovení",
+      "offline": "Offline · uložená data"
+    },
+    "networkErrors": {
+      "upstream": "nadřazené službě",
+      "proxyConnection": "Připojení k {{target}} přes proxy „{{proxy}}“ selhalo. Může jít o problém proxy nebo sítě. Zkontrolujte proxy nebo zkuste jiný uzel.",
+      "proxyTimeout": "Vypršel čas připojení k {{target}} přes proxy „{{proxy}}“. Může jít o problém proxy nebo sítě. Zkontrolujte proxy nebo zkuste jiný uzel.",
+      "proxyAuth": "Ověření proxy „{{proxy}}“ selhalo. Zkontrolujte uživatelské jméno nebo heslo proxy.",
+      "localProxyUnavailable": "Nelze se připojit k místní proxy „{{proxy}}“. Zkontrolujte, zda služba proxy běží.",
+      "directConnection": "Připojení k {{target}} selhalo. Zkontrolujte síť a zkuste to znovu.",
+      "directTimeout": "Vypršel čas připojení k {{target}}. Zkontrolujte síť a zkuste to znovu."
+    },
     "codexUsage": {
       "title": "Kvóta a využití",
       "session": "Aktuální chat",
@@ -238,6 +290,7 @@
     "failureTime": "Čas selhání",
     "clearRecord": "Smazat záznam",
     "clearingRecord": "Mazání…",
+    "to": "do",
     "dragSortHint": "Přetažením úchytu vlevo změňte pořadí. Po uvolnění se automaticky uloží.",
     "dragSortFilteredHint": "Pro změnu pořadí vymažte vyhledávání.",
     "recycleBin": {
@@ -378,7 +431,11 @@
           "statusSkipped": "Přeskočeno",
           "statusPending": "Čeká na import"
         },
-        "invalidJson": "Neplatný JSON. Zkontrolujte soubor nebo vložený obsah."
+        "invalidJson": "Neplatný JSON. Zkontrolujte soubor nebo vložený obsah.",
+        "empty": "Importovaná data jsou prázdná.",
+        "sizeLimit": "Soubor nesmí překročit {{limit}} MiB.",
+        "countLimit": "Najednou lze importovat nejvýše {{count}} účtů.",
+        "itemFailed": "Položka {{index}}: {{error}}"
       },
       "externalImport": {
         "bundleInvalidJson": "Importní balíček není platný JSON",
@@ -489,6 +546,8 @@
         "title": "Přehled účtů"
       },
       "quota": {
+        "usageWithUnit": "Využití ({{unit}})",
+        "usage": "Využití",
         "noData": "Žádná data kvóty",
         "queryFailed": "Dotaz na kvótu selhal",
         "resetDone": "Resetováno",
@@ -582,6 +641,29 @@
         "missingTiming": "Nebyl zaznamenán platný čas výstupu.",
         "shortWindow": "Pozorované výstupní okno je kratší než 100 ms."
       }
+    },
+    "deviceRestriction": {
+      "title": "Omezení zařízení",
+      "badge": "Zařízení omezeno",
+      "paused": "Bylo zjištěno výslovné omezení zařízení. Automatické pokusy o tuto operaci jsou pozastaveny. Zkontrolujte záznam na stránce účtů.",
+      "note": "Jde o místní pozorování, nikoli o místa zařízení OpenAI. Smazání účtů nebo místních přihlašovacích údajů nezaručuje uvolnění limitu na serveru.",
+      "retryNote": "Povolení dalších pokusů neoznačí omezení za vyřešené. Další výslovné odmítnutí je znovu pozastaví.",
+      "desktop": "Přihlášení v aplikaci",
+      "quota": "Čtení kvóty",
+      "api": "Požadavky API",
+      "oauth": "Přihlášení OAuth",
+      "token": "Obnovení tokenu",
+      "recovered": "Operace obnovena",
+      "pausedLabel": "Pokusy pozastaveny",
+      "retryEnabled": "Pokusy povoleny",
+      "observed": "První: {{first}} · Poslední: {{last}} · Pozorování: {{count}}",
+      "check": "Znovu ověřit",
+      "allowRetry": "Povolit pokusy",
+      "help": "Oficiální nápověda",
+      "support": "Kontaktovat podporu",
+      "failed": "Operaci nelze dokončit. Poslední známý stav byl zachován. Zkuste to znovu.",
+      "loginAttempt": "Přihlášení bez určeného účtu",
+      "removed": "Odstraněný místní účet"
     }
   },
   "nav": {
@@ -608,6 +690,7 @@
     "traeCn": "Trae CN​",
     "traeSoloCn": "TRAE SOLO CN​",
     "codebuddyCn": "CodeBuddy CN​",
+    "minimaxcode": "MiniMax Code",
     "zed": "Platforma Zed",
     "expandSidebar": "Rozbalit postranní panel",
     "collapseSidebar": "Sbalit postranní panel",
@@ -675,7 +758,12 @@
     "setAsDefaultInGroup": "Nastavit jako výchozí platformu v této skupině",
     "removeFromGroup": "Odebrat ze skupiny",
     "sidebarSelectedUnlimited": "Vybráno ({count})",
-    "tipWithGroupsUnlimited": "Ruční seřazení vybraných platforem a skupin"
+    "tipWithGroupsUnlimited": "Ruční seřazení vybraných platforem a skupin",
+    "enabledToggle": "Zapnuto",
+    "groupEnabledHint": "Zapnout nebo vypnout všechny platformy ve skupině",
+    "disabledHint": "Vypnutí zastaví automatické úlohy a skryje nastavení platformy. Viditelnost položky se nastavuje zvlášť",
+    "enableAll": "Zapnout vše",
+    "disableAll": "Vypnout vše"
   },
   "privacy": {
     "hideSensitive": "Skrýt e-maily",
@@ -1158,6 +1246,12 @@
       "workbuddyAppPathPlaceholder": "Výchozí cesta",
       "workbuddyPathSelect": "Vybrat",
       "workbuddyPathReset": "Obnovit výchozí",
+      "minimaxCodeAppPath": "Spouštěcí cesta MiniMax Code",
+      "minimaxCodeAppPathDesc": "Pro výchozí cestu ponechte prázdné",
+      "minimaxCodeAppPathPlaceholder": "Výchozí cesta",
+      "minimaxCodePathSelect": "Vybrat",
+      "minimaxCodeAppPathPathSelect": "Vybrat",
+      "minimaxCodePathReset": "Obnovit výchozí",
       "openclawAuthOverwrite": "Při přepnutí Codexu přepsat přihlášení OpenClaw",
       "openclawAuthOverwriteDesc": "Pokud je vypnuto, přepne se pouze Codex a OpenClaw zůstane v aktuálním přihlášení",
       "ghcpOpencodeAuthOverwrite": "Při přepnutí GitHub Copilot přepsat přihlášení OpenCode",
@@ -1233,6 +1327,8 @@
       "qoderPathSelect": "Vybrat",
       "workbuddyAutoRefresh": "Automatické obnovení kvóty WorkBuddy",
       "workbuddyAutoRefreshDesc": "Frekvence automatického obnovení na pozadí",
+      "minimaxCodeAutoRefresh": "Automatické obnovení kvóty MiniMax Code",
+      "minimaxCodeAutoRefreshDesc": "Frekvence automatického obnovení na pozadí",
       "codexLocalAccessEntryVisible": "Zobrazit položku služby API",
       "codexLocalAccessEntryVisibleDesc": "Určuje pouze, zda se v přehledu Codex zobrazuje položka služby API. Místní službu API to nezastaví; můžete ji znovu zapnout zde nebo v rychlém nastavení.",
       "codexLocalAccessEnabled": "Zapnout službu API",
@@ -1320,13 +1416,15 @@
       "codexPreserveExternalBridge": "Zachovat externí most",
       "codexPreserveExternalBridgeDesc": "Při změně účtu OAuth zachová most Codex Web GPT ověřený místními záznamy integrace. Ve výchozím stavu vypnuto.",
       "codexEnhancements": {
-        "nativeFast": "Nativní volba Fast",
-        "nativeFastDesc": "Zapne nativní nabídku rychlosti klienta pro účty s API Key a zobrazí úrovně podporované modelem. Dostupnost a ceny závisí na poskytovateli API.",
         "quotaCompat": "Limity ve smíšeném režimu",
         "quotaCompatDesc": "Při skutečném přihlášení OAuth a externí trase API limit předplatného neblokuje místní zprávy API. Skutečná spotřeba a limity obrázků se nemění.",
-        "restartHint": "Ve výchozím stavu zapnuto. Po změnách restartujte dotčené instance Codex a nechte Cockpit Tools spuštěný. Nativní diktování se řídí možnostmi a nastavením klienta; Cockpit ho nepřebírá ani nevynucuje jeho zapnutí.",
-        "configFailed": "Nepodařilo se načíst nebo uložit nastavení: {{error}}"
-      }
+        "restartHint": "Nativní návrhy jsou ve výchozím stavu vypnuté. Po změnách restartujte dotčené instance Codex a nechte Cockpit Tools spuštěný. Nativní diktování se řídí možnostmi a nastavením klienta; Cockpit ho nepřebírá ani nevynucuje jeho zapnutí.",
+        "configFailed": "Nepodařilo se načíst nebo uložit nastavení: {{error}}",
+        "nativePredictions": "Nativní návrhy dalšího kroku (Tab)",
+        "nativePredictionsDesc": "Generuje návrhy další zprávy pomocí poskytovatele API a modelu aktuální konverzace. Spotřebovává další kredity API; po uložení restartujte Codex."
+      },
+      "timeDisplayMode": "Zobrazený čas",
+      "timeDisplayModeDesc": "Čas na kartách a v seznamu účtů. Výchozí je čas přepnutí účtu"
     },
     "network": {
       "apiTitle": "Antigravity Cockpit API​",
@@ -1629,6 +1727,42 @@
       "refreshed": "Usage obnoveno",
       "usage": "Využití",
       "tierOther": "Jiné"
+    },
+    "background": {
+      "title": "Pozadí",
+      "description": "Mění pouze pozadí aplikace. Karty účtů a ovládací prvky si zachovají vzhled.",
+      "presets": "Předvolby pozadí",
+      "default": "Výchozí",
+      "mist": "Mlha",
+      "forest": "Les",
+      "dusk": "Soumrak",
+      "sand": "Písek",
+      "custom": "Vlastní",
+      "chooseImage": "Vybrat obrázek",
+      "replaceImage": "Změnit obrázek",
+      "imageHint": "JPG, PNG nebo WebP, do 10 MB. Velké obrázky se zmenší místně.",
+      "preview": "Náhled",
+      "strength": "Intenzita",
+      "blur": "Rozostření",
+      "pixels": "{{count}} pixelů",
+      "position": "Poloha",
+      "center": "Střed",
+      "top": "Nahoře",
+      "bottom": "Dole",
+      "localHint": "Změny se projeví okamžitě. Obrázek a nastavení každého motivu se ukládají samostatně v tomto zařízení; obrázky se neodesílají. Obnovení výchozího nastavení vaše motivy zachová.",
+      "restore": "Obnovit",
+      "imageType": "Vyberte obrázek JPG, PNG nebo WebP.",
+      "imageSize": "Vyberte obrázek menší než 10 MB.",
+      "imageRead": "Obrázek nelze načíst. Zkuste jiný soubor.",
+      "storage": "Pozadí nelze načíst nebo uložit. Zkuste to znovu; původní pozadí zůstane zachováno.",
+      "saveFailed": "Změny jsou viditelné, ale nepodařilo se je uložit. Zkuste to znovu; dříve uložené motivy zůstávají zachovány.",
+      "builtInSkins": "Vestavěné motivy",
+      "mySkins": "Moje motivy",
+      "addSkin": "Přidat",
+      "rename": "Přejmenovat",
+      "skinName": "Název motivu",
+      "manageSkin": "Spravovat motiv: {{name}}",
+      "deleteSkinConfirm": "Smazat „{{name}}“? Smazání aktivního motivu obnoví výchozí pozadí."
     }
   },
   "appPath": {
@@ -1974,7 +2108,13 @@
     "tagUpdated": "Štítek byl aktualizován",
     "plan": {
       "personal": "Osobní"
-    }
+    },
+    "lastSwitchTime": "Přepnutí",
+    "neverSwitched": "Dosud nepřepnuto",
+    "refreshTime": "Obnovení",
+    "lastSwitchTimeFull": "Přepnutí: {{time}}",
+    "refreshTimeFull": "Obnovení: {{time}}",
+    "toggleTimeMode": "Zobrazit čas přepnutí nebo obnovení"
   },
   "overview": {
     "title": "Přehled účtů",
@@ -2338,6 +2478,74 @@
     "other_group": "Ostatní modely"
   },
   "codex": {
+    "resetAutomation": {
+      "nothingToReset": "Žádný interval kvóty nyní nevyžaduje obnovení.",
+      "unknownOutcome": "Výsledek obnovení nelze potvrdit. Zkuste to znovu.",
+      "applyAllHint": "Po zapnutí se při uložení pravidlo zkopíruje do všech účtů a nahradí vlastní i vypnutá nastavení.",
+      "applyAll": "Uložit pro všechny účty",
+      "accountHint": "Účty bez vlastního nastavení používají společné pravidlo. Uložení platí jen pro tento účet.",
+      "title": "Automatické použití karet",
+      "accountTab": "Tento účet",
+      "publicTab": "Společné pravidlo",
+      "inherit": "Použít společné pravidlo",
+      "custom": "Vlastní pravidlo",
+      "off": "Vypnuto",
+      "entryDefault": "Automatické nastavení",
+      "noCredits": "Žádné karty",
+      "publicHint": "Výchozí pravidlo pro účty bez vlastního nastavení. Vlastní a vypnutá nastavení zůstanou zachována.",
+      "before": "Před vypršením",
+      "expiry": "Použít před vypršením",
+      "minutes": "min",
+      "hours": "hod.",
+      "days": "dny",
+      "hostHint": "Funguje, když je Cockpit Tools otevřený. Kartu vybírá server.",
+      "invalidTime": "Zadejte kladnou dobu v celých sekundách.",
+      "invalidPercent": "Zadejte celé procento od 0 do 100.",
+      "loadFailed": "Pravidla nelze načíst: {{error}}",
+      "saveFailed": "Pravidla nelze uložit: {{error}}",
+      "conflict": "Pravidlo se změnilo jinde. Načtěte je znovu.",
+      "busy": "U tohoto účtu již probíhá reset.",
+      "storageError": "Pravidla resetu nelze přečíst nebo uložit.",
+      "timeout": "Čas vypršel. Uložené ID požadavku se použije znovu, aby se karta neodečetla dvakrát.",
+      "history": "Nedávná aktivita",
+      "reasonExpiry": "Blížící se vypršení",
+      "reasonQuota": "Nízká kvóta",
+      "reasonManual": "Ruční reset",
+      "reasonCheck": "Kontrola na pozadí",
+      "pending": "Čekání na výsledek",
+      "editPublic": "Upravit společné pravidlo",
+      "accountMissing": "Účet již neexistuje.",
+      "masterLabel": "Používat karty automaticky",
+      "ruleSource": "Zdroj pravidla",
+      "weeklyTrigger": "Týdenní limit",
+      "weeklyRemaining": "Týdenní zůstatek ≤",
+      "previewTitle": "Náhled podmínek",
+      "previewAny": "Karta se použije při splnění kterékoli zapnuté podmínky:",
+      "previewExpiry": "Karta vyprší nejpozději za {{value}} {{unit}}",
+      "previewWeekly": "Zbývá nejvýše {{percent}} % týdenního limitu",
+      "previewOff": "Automatické použití je vypnuté. Níže uvedená pravidla nejsou aktivní.",
+      "previewEmpty": "Není zapnutá žádná podmínka. Karty se nebudou používat automaticky.",
+      "cardOn": "Autom.",
+      "cardOff": "Vyp.",
+      "orSeparator": " nebo ",
+      "inheritHint": "Nastavení se řídí společným pravidlem. Upravte je tam nebo zvolte vlastní pravidlo."
+    },
+    "overload": {
+      "setting": "Opakovat při přetížení",
+      "settingHint": "Platí pro nové požadavky místní služby API Codex. Požadavky, které lze bezpečně opakovat, počkají na dostupnost modelu.",
+      "retrying": "Model je vytížený, opakuji pokus ({{count}})",
+      "count": "Přetížení: {{count}}",
+      "countHint": "Počítá pokusy u poskytovatele včetně automatických opakování. Historie se uchovává až 7 dní.",
+      "history": "Historie přetížení",
+      "empty": "V tomto období nebyly zjištěny chyby přetížení.",
+      "attempt": "Pokus {{number}}",
+      "sameAccount": "Obnoveno na stejném účtu",
+      "otherAccount": "Obnoveno po změně účtu",
+      "pending": "Čeká se na výsledek",
+      "cancelled": "Zrušeno",
+      "failed": "Požadavek selhal",
+      "countUnavailable": "Statistiky přetížení nejsou dostupné"
+    },
     "instance": {
       "errors": {
         "threadSyncWorkerFailed": "Úloha synchronizace relací selhala: {{error}}",
@@ -2364,6 +2572,14 @@
       "description": "Výchozí režim zachovává stávající směrování. Upřednostnění běžné kvóty povolí kredity až po vyčerpání běžné kvóty všech účtů Codex ve skupině aktuálního klíče API. Režim Pouze běžná kvóta kredity blokuje. Zakázání kreditů u konkrétního účtu má vždy přednost.",
       "boundary": "Snímky kvóty platí 5 minut. U omezených účtů s neznámou, zastaralou nebo obnovenou kvótou se kvóta před výběrem automaticky aktualizuje (nejvýše 9 sekund, souběžná čtení se slučují). Při neúspěšné aktualizaci se účet bezpečně pozastaví; podrobnosti najdete v diagnostice skupiny účtů. Probíhající požadavky nelze odvolat. Požadavek překračující hranici kvóty nebo souběžné použití jinými klienty může u poskytovatele přesto spotřebovat kredity; pevné limity útraty je nutné nastavit u poskytovatele.",
       "strictHint": "Režim Pouze běžná kvóta blokuje kredity u všech účtů. Přepínače jednotlivých účtů se zachovají pro ostatní pravidla."
+    },
+    "launchConfirmation": {
+      "title": "Spuštění nepotvrzeno",
+      "description": "Požadavek na spuštění byl odeslán, ale stav klienta není potvrzen. Může již být otevřený. Nespouštějte jej znovu.",
+      "check": "Ověřit stav",
+      "notRunning": "Cílová instance zatím nebyla nalezena. Zkuste kontrolu později, nebo před dalším spuštěním zavřete tento dialog.",
+      "checkFailed": "Stav spuštění nelze načíst. Zkuste kontrolu později.",
+      "maintenanceDeferred": "Část údržby není dokončena. Historie zůstala zachována; zkuste to později ve správě relací."
     },
     "launchErrors": {
       "sessionRestoreFailed": "Oprava relací selhala a obnova zálohy není dokončena. Spuštění bylo zastaveno; před dalším pokusem zkontrolujte protokoly a zálohy.",
@@ -2594,14 +2810,8 @@
       "unsupportedCountryRegion": "Aktuální síťová oblast nepodporuje obnovení autorizace Codexu. Autorizační služba OpenAI odmítla tento síťový výstup. Přepněte na podporovanou oblast a zkuste to znovu."
     },
     "switchAuth": {
-      "apiOnlyTitle": "Klient vyžaduje přihlášení",
       "reauthorizeTitle": "Autorizace Codex vypršela",
-      "apiOnlyDescription": "Aktuální klient přešel na přihlašovací stránku. Znovu jej autorizujte pro obnovení používání klienta; službu API lze zatím dál používat.",
-      "observationStatus": "Bylo zjištěno přesměrování na přihlašovací stránku",
-      "observationTime": "Poslední kontrola: {{time}}",
-      "loginRedirectTime": "Poslední přesměrování na přihlašovací stránku: {{time}}",
       "observationInstance": "Sledovaná instance: {{instance}}",
-      "launchTime": "Čas spuštění této instance: {{time}}",
       "reauthorizeDescription": "Přihlašovací údaje se nepodařilo obnovit a access_token už nelze použít pro službu API. Pokračujte novou autorizací.",
       "idTokenUnavailable": "Identita klienta vypršela a automatická obnova nevrátila platný id_token.",
       "reasonLabel": "Důvod",
@@ -2614,10 +2824,7 @@
       "startingInstanceAfterReauth": "Autorizace byla aktualizována. Instance se znovu spouští...",
       "startInstanceAfterReauthFailed": "Autorizace byla aktualizována, ale instance se nepodařilo spustit: {{error}}",
       "reauthorizedAndStartedInstance": "Znovu autorizováno a instance spuštěna",
-      "apiOnlyBadge": "Nutné přihlášení",
-      "clearClientAuth": "Vymazat upozornění",
-      "clearClientAuthSuccess": "Upozornění klienta vymazáno",
-      "clearClientAuthFailed": "Upozornění klienta se nepodařilo vymazat: {{error}}"
+      "apiTokenUsableDescription": "Některé přihlašovací údaje vyžadují nové ověření. Aktuální přístupový token lze nadále používat pro službu API."
     },
     "current": "Aktuální",
     "empty": {
@@ -2687,6 +2894,16 @@
       "savedPath": "Uložená cesta"
     },
     "localAccess": {
+      "gatewayEngineNative": "Rust nativní",
+      "gatewayEngineSidecar": "Go (stávající)",
+      "gatewayEngineHint": "Výchozím enginem je Rust. První aktualizace přepne na Rust; pozdější volby se zachovají. Přepnutí restartuje službu API a může přerušit aktivní požadavky; okna Codex zůstanou otevřená.",
+      "gatewayEngineSwitching": "Přepínání enginu…",
+      "gatewayEngineSwitchFailed": "Engine se nepodařilo přepnout: {{error}}",
+      "gatewayEngineReadbackFailed": "Aktuální engine nelze ověřit. Před dalším pokusem obnovte stav: {{error}}",
+      "gatewayEngineReadbackTimeout": "Vypršel čas pro obnovení stavu",
+      "gatewayEngineOperationBusy": "Probíhá jiná operace služby. Zkuste to za chvíli znovu.",
+      "gatewayEngineSwitchRestored": "Přepnutí selhalo. Předchozí engine byl obnoven.",
+      "gatewayEngineRestoreFailed": "Přepnutí ani obnovení předchozího enginu se nezdařilo. Před dalším pokusem zkontrolujte stav služby.",
       "title": "API služba",
       "accountCount": "{{count}} účtů",
       "baseUrl": "Adresa",
@@ -2933,7 +3150,6 @@
         "quotaReserveInvalid": "Zadejte celé číslo od 1 do 100.",
         "strictReserve": "Přísná ochrana",
         "strictReserveDesc": "Rezervovanou kvótu automaticky chrání bezpečnostní rezerva. Blízko limitu se povolí jeden požadavek na účet a po dokončení se ověří aktuální kvóta. Využití ostatních klientů není omezeno.",
-        "strictNativeOnly": "Přísná ochrana vyžaduje modul Rust. Před přepnutím na Go ji vypněte.",
         "safetyMargin": "Bezpečnostní rezerva",
         "safetyMarginUnit": "procentních bodů",
         "safetyMarginInvalid": "Zadejte celé číslo od 1 do 20.",
@@ -3016,17 +3232,7 @@
       "gatewayModeNewLabel": "API sluzba-Nova",
       "gatewayModeOldLabel": "API sluzba-Stara",
       "gatewayModeSaveSuccess": "Rezim brany API sluzby byl aktualizovan",
-      "gatewayEngineNative": "Rust nativní",
-      "gatewayEngineSidecar": "Go (stávající)",
-      "gatewayEngineHint": "Výchozím enginem je Rust. První aktualizace přepne na Rust; pozdější volby se zachovají. Přepnutí restartuje službu API a může přerušit aktivní požadavky; okna Codex zůstanou otevřená.",
-      "gatewayEngineSwitching": "Přepínání enginu…",
-      "gatewayEngineSwitchFailed": "Engine se nepodařilo přepnout: {{error}}",
-      "gatewayEngineReadbackFailed": "Aktuální engine nelze ověřit. Před dalším pokusem obnovte stav: {{error}}",
-      "gatewayEngineReadbackTimeout": "Vypršel čas pro obnovení stavu",
       "gatewayEngineRequestsBusy": "Požadavky stále probíhají. Zkuste to znovu po jejich dokončení.",
-      "gatewayEngineOperationBusy": "Probíhá jiná operace služby. Zkuste to za chvíli znovu.",
-      "gatewayEngineSwitchRestored": "Přepnutí selhalo. Předchozí engine byl obnoven.",
-      "gatewayEngineRestoreFailed": "Přepnutí ani obnovení předchozího enginu se nezdařilo. Před dalším pokusem zkontrolujte stav služby.",
       "gatewayEngineStopped": "Služba API byla zastavena. Před dalším pokusem ji restartujte.",
       "gatewayGuideTitle": "Zde lze prepnout branu",
       "gatewayGuideDesc": "Výchozí je nová brána. Při problémech s kompatibilitou nebo chybách klientských požadavků se zde můžete vrátit ke staré bráně.",
@@ -3118,7 +3324,7 @@
       "imageGenerationMainModel": {
         "label": "Hlavní model obrázků",
         "notice": "Při běžném používání hlavní model obrázků neměňte.",
-        "hint": "Slouží pouze k předávání požadavků oficiální službě, ne k výběru modelu pro tvorbu obrázků. Upravte jej jen při změně oficiálního hlavního modelu. Prázdné pole použije gpt-5.6-luna.",
+        "hint": "Pouze pro tvorbu obrázků v Responses, nikoli pro samostatné API obrázků. Prázdné pole: gpt-5.6-luna.",
         "invalid": "Zadejte ID modelu bez mezer, nejvýše 200 znaků."
       },
       "requestDetail": {
@@ -3184,7 +3390,7 @@
       "resetCreditDialogDesc": "Resetujte rychlostní limit a pokračujte bez přerušení. Dostupné resety: {{count}}.",
       "resetCreditDialogAction": "Resetovat využití",
       "resetCreditNoCredits": "Žádné dostupné resety",
-      "resetCreditConsumed": "5hodinová kvóta byla resetována",
+      "resetCreditConsumed": "Kvóta byla resetována",
       "resetCreditFailed": "Reset selhal: {{error}}",
       "resetCreditRefreshAfterConsumeFailed": "Reset byl odeslán, ale obnova kvóty selhala: {{error}}",
       "resetCreditsTitleWithExpiry": "Zbývající resety pro 5hodinové okno: {{count}}. Nejbližší expirace: {{time}}",
@@ -3193,7 +3399,7 @@
       "resetCreditStatusRedeemed": "Použito",
       "resetCreditStatusExpired": "Vypršelo",
       "resetCreditStatusUnknown": "Neznámé",
-      "resetCreditNextExpiry": "Nejbližší expirace: {{time}}",
+      "resetCreditNextExpiry": "Nejbližší vypršení resetu {{time}}",
       "resetCreditDetailsTitle": "Podrobnosti resetů",
       "resetCreditNoRecords": "Žádné záznamy resetů",
       "resetCreditRecordsLoadFailed": "Načtení záznamů resetů selhalo: {{error}}",
@@ -3209,7 +3415,12 @@
       "codeReview": "Kontrola kódu",
       "codeReviewShort": "Recenze",
       "monthlyCreditsHint": "Zbývající měsíční kredity",
-      "monthlyCreditsInline": "Kredity: {{value}}"
+      "monthlyCreditsInline": "Kredity: {{value}}",
+      "resetCreditExpiryHours": "{{hours}} h {{minutes}} min",
+      "resetCreditExpiryMinutes": "{{minutes}} min",
+      "resetCreditExpiryExpired": "Vypršelo · podrobnosti",
+      "resetCreditExpiryUrgent": "Brzy vyprší: {{time}} · {{duration}}",
+      "resetCreditExpiryNormal": "Vyprší {{time}} · {{duration}}"
     },
     "quotaError": {
       "badge": "Chyba kvóty",
@@ -3486,6 +3697,7 @@
         "expand": "Rozbalit",
         "collapse": "Sbalit",
         "repairVisibility": "Opravit viditelnost",
+        "repairIndex": "Opravit index chatů",
         "restoreSessions": "Obnovit relace",
         "exportSessions": "Exportovat relace",
         "importSessions": "Importovat relace",
@@ -3518,6 +3730,10 @@
         "clear": "Vymazat"
       },
       "messages": {
+        "deleteNotConfirmed": "Klient nepotvrdil odstranění. Místní čištění bylo zastaveno a zálohy byly zachovány: {{error}}",
+        "historyReadFailed": "Historii chatu nelze bezpečně přečíst: {{error}}",
+        "restoreIndexRetry": "Soubor chatu byl zachován, ale seznam chatů se nepodařilo aktualizovat. Originál zůstává v koši. Vyřešte problém a zkuste to znovu: {{error}}",
+        "importIndexRetry": "Soubory chatů byly importovány, ale seznam se nepodařilo aktualizovat. Soubory i importní balíček byly zachovány. Vyřešte problém a zkuste to znovu: {{error}}",
         "pickOne": "Vyberte prosím alespoň jednu relaci",
         "syncNeedTwo": "Pro synchronizaci relací jsou potřeba alespoň dvě instance",
         "pickRestoreOne": "Vyberte prosím alespoň jednu relaci k obnovení",
@@ -3592,9 +3808,9 @@
         "providerLoadFailed": "Načtení providerů selhalo: {{error}}",
         "modeTitle": "Režim opravy",
         "modeQuick": "Rychlá oprava",
-        "modeQuickDesc": "Normalizuje poskytovatele v oficiální databázi a indexech relací. Zachovává soubory rollout. Pro běžné změny účtu.",
+        "modeQuickDesc": "Opraví indexy a aktuální přiřazení v krátkém časovém limitu. Před zápisem dat projektů ukončete instanci.",
         "modeDeep": "Úplná oprava",
-        "modeDeepDesc": "Opravuje historické poskytovatele, katalogy, pracovní prostory a indexy podagentů. Zachovává soubory rollout. Nejprve ukončete cílovou instanci.",
+        "modeDeepDesc": "Zahrnuje rychlou opravu, obnovu projektů ze snímků a opravu indexů chatů. Nejprve ukončete cílovou instanci.",
         "scopeTitle": "Rozsah relací",
         "scopeAll": "Všechny relace",
         "scopeAllDesc": "Opraví {{count}} relací v aktuálním seznamu.",
@@ -3626,9 +3842,26 @@
         "previewFailedWithError": "Náhled opravy relací selhal: {{error}}",
         "confirmRepair": "Potvrdit opravu",
         "title": "Opravit historii",
-        "description": "Normalizuje poskytovatele v indexech SQLite, katalogu relací a pracovních prostorech. Původní soubory rollout zůstávají zachovány po bajtech; opraví se pouze časové údaje. Nejprve se vytvoří místní záloha.",
+        "description": "Rychlá oprava opravuje indexy viditelnosti a aktuální přiřazení projektů. Úplná používá i starší snímky a opravuje indexy chatů. Před zápisem se vytvoří místní záloha; obsah záznamů se zachová.",
         "stopInstanceHint": "Před úplnou opravou zcela ukončete vybranou instanci Codex App/ChatGPT. Změny můžete nejprve zobrazit v náhledu.",
-        "encryptedContentWarning": "Byla zjištěna historie zašifrovaná jiným poskytovatelem nebo účtem. Metadata lze převést, ale pokračování či komprimace těchto relací může selhat; vraťte se k původnímu poskytovateli/účtu nebo začněte novou relaci."
+        "encryptedContentWarning": "Byla zjištěna historie zašifrovaná jiným poskytovatelem nebo účtem. Metadata lze převést, ale pokračování či komprimace těchto relací může selhat; vraťte se k původnímu poskytovateli/účtu nebo začněte novou relaci.",
+        "modeHistory": "Úpravy/větvení",
+        "modeHistoryDesc": "Oprava úprav zpráv a větvení chatů, které selhávají kvůli neplatným indexům.",
+        "historyLiveHint": "Opravu lze provést za běhu klienta. Poté klienta restartujte a znovu otevřete chaty.",
+        "historyDescription": "Zkontroluje vybrané chaty a jejich zdrojovou historii a obnoví pouze neplatné indexy stránek. Zprávy, účty a nastavení Provider zůstanou beze změny. Oprava funguje za běhu klienta; poté jej restartujte pro načtení indexů.",
+        "historyPreview": "Nalezeno {{count}} chybných indexů historie, které lze obnovit. Záznamy chatů zůstanou beze změn.",
+        "historySuccess": "Obnoveno {{count}} neplatných indexů historie. Restartujte klienta a znovu otevřete chaty pro jejich sestavení. Zálohy byly zachovány.",
+        "historyNoChanges": "Nebyly nalezeny chybné indexy historie, které lze bezpečně obnovit.",
+        "historyFailed": "Oprava indexů historie nebyla dokončena: {{error}}",
+        "historyChanged": "Data chatu se během opravy změnila. Tato oprava nebyla použita. Zkuste to za chvíli znovu.",
+        "historyScan": "Kontrola indexů historie ({{current}}/{{total}})…",
+        "historyReset": "Zálohování a resetování chybných indexů…",
+        "projectsChanged": "Data projektů se změnila. Obnovte náhled a zkuste to znovu.",
+        "projectsFailed": "Obnovení místních projektů selhalo: {{error}}",
+        "projectsPreview": "Náhled: {{projects}} projektů, {{assignments}} přiřazení; přeskočeno {{skipped}} projektů a {{ambiguous}} nejednoznačných chatů.",
+        "projectsSuccess": "Obnoveno: {{projects}} projektů, {{assignments}} přiřazení; přeskočeno {{skipped}} projektů a {{ambiguous}} nejednoznačných chatů.",
+        "projectsPending": "Obnovení bylo přerušeno. Ukončete instanci a spusťte úplnou opravu pro obnovu nedokončených zápisů.",
+        "projectsDeferred": "Některá data byla odložena. Ukončete instanci a zopakujte rychlou opravu nebo použijte úplnou."
       },
       "importModal": {
         "title": "Import relací",
@@ -4028,7 +4261,7 @@
         "apiKeyUrlInvalid": "Použijte HTTP(S) adresu správy bez vložených přihlašovacích údajů; klíč API patří do pole klíče."
       },
       "saveSuccess": "Poskytovatel modelu byl uložen.",
-      "deleteBlocked": "Tento poskytovatel je propojen s {{count}} účty a nelze jej smazat.",
+      "confirmDeleteWithAccounts": "Smazat poskytovatele „{{name}}“ a jeho propojené účty ({{count}})?",
       "confirmDelete": "Smazat poskytovatele „{{name}}“?",
       "deleteFailed": "Nepodařilo se smazat poskytovatele: {{error}}",
       "deleteApiKeyFailed": "Nepodařilo se smazat API klíč: {{error}}",
@@ -4052,7 +4285,9 @@
         "chatCompletions": "Protokol Chat Completions",
         "deepseekResponsesHint": "Spusťte DeepSeek a zvolte bránu nebo oficiální přímé připojení, poté vyberte Flash nebo Pro. Brána zobrazuje modely v Codex; přímé připojení bránu přeskočí.",
         "deepseekChatHint": "DeepSeek Chat Completions používá pro staré cesty místní most brány. Zvolte Responses, pokud potřebujete oficiální chování nástrojů Codex.",
-        "deepseekThirdPartyHint": "Tato adresa není oficiální koncový bod DeepSeek, proto bude zpracována jako kompatibilní koncový bod třetí strany; do katalogu modelů zadejte skutečné identifikátory modelů z upstreamu, nikoli oficiální názvy."
+        "deepseekThirdPartyHint": "Tato adresa není oficiální koncový bod DeepSeek, proto bude zpracována jako kompatibilní koncový bod třetí strany; do katalogu modelů zadejte skutečné identifikátory modelů z upstreamu, nikoli oficiální názvy.",
+        "anthropic": "Protokol Anthropic",
+        "gatewayRequired": "Tento protokol vyžaduje místní bránu. Zde vyberte model pro spuštění."
       },
       "selectSavedProvider": "Uložení poskytovatelé",
       "selectSavedApiKey": "Uložené API klíče",
@@ -4156,7 +4391,7 @@
         "selectVisible": "Vybrat viditelné",
         "resultSelectedCount": "Vybráno {{count}}",
         "selectFailed": "Vybrat neúspěšné",
-        "deleteConfirm": "Smazat {{providerCount}} vybraných poskytovatelů? Zároveň se smaže {{accountCount}} přesně propojených účtů Codex API Key.",
+        "deleteConfirm": "Smazat vybrané poskytovatele ({{providerCount}}) a propojené účty ({{accountCount}})?",
         "deleteSuccess": "Smazáno {{providerCount}} poskytovatelů a {{accountCount}} propojených účtů.",
         "deleteFailed": "Nepodařilo se smazat vybrané položky: {{error}}",
         "protocolSummary": "{{protocol}} · {{mode}} · {{model}}",
@@ -4285,7 +4520,22 @@
       "importConfigPlaceholder": "Použijte „Kopírovat konfiguraci“ na kartě a vložte obsah sem",
       "importConfigAction": "Importovat konfiguraci",
       "importConfigFromClipboard": "Číst schránku",
-      "settingsRestartHint": "Nastavení poskytovatele byla aktualizována. Použijete je restartováním běžící instance Codex nebo služby API, která tohoto poskytovatele používá."
+      "settingsRestartHint": "Nastavení poskytovatele byla aktualizována. Použijete je restartováním běžící instance Codex nebo služby API, která tohoto poskytovatele používá.",
+      "anthropic": {
+        "auth": "Ověření",
+        "hint": "Připojte bránu Anthropic Messages. Načtěte modely nebo je zadejte ručně.",
+        "fetch": "Načíst modely",
+        "fetching": "Načítání…",
+        "fetchFailed": "Modely se nepodařilo načíst. Zkuste to znovu nebo zadejte jejich ID ručně.",
+        "import": "Importovat nastavení",
+        "importFailed": "Nebyla nalezena platná konfigurace Claude Code ani Desktop Gateway."
+      },
+      "editor": {
+        "modelScope": "Rozsah modelů",
+        "providerDefault": "Výchozí poskytovatele",
+        "sharedSettings": "Seznam modelů a jejich schopnosti platí pro zvolený rozsah. Protokol, ověřování a adresa jsou společná nastavení poskytovatele.",
+        "saveScope": "Uložení aktualizuje poskytovatele a propojené účty. Pokud je ovlivněn aktuální účet, aktualizuje se také místní konfigurace a přihlašovací údaje Codex. Klient se automaticky nespustí."
+      }
     },
     "quickSwitch": {
       "action": "Rychle přepnout poskytovatele",
@@ -4614,6 +4864,11 @@
       },
       "routing": {
         "optionsTitle": "Volby směrování",
+        "sessionIdentityMapping": "Mapování ID relace",
+        "sessionIdentityMappingEnableHint": "Zapnuté mapování při přepínání účtů používá samostatné hodnoty Session-Id a Thread-Id pro každý účet poskytovatele. To posiluje oddělení identifikátorů, ale může omezit opětovné využití mezipaměti mezi účty. V rámci stejného účtu se používají stávající mapování.",
+        "sessionIdentityMappingDisableHint": "Vypnuté mapování zachová původní hodnoty Session-Id a Thread-Id klienta. Různé účty poskytovatele mohou tyto identifikátory sdílet, což oslabuje jejich oddělení, ale může zvýšit opětovné využití mezipaměti mezi účty.",
+        "sessionIdentityMappingCacheNote": "Úspěšnost mezipaměti závisí také na pravidlech poskytovatele, rozsahu účtů a obsahu požadavků. Změna nastavení nezaručuje její zvýšení ani snížení.",
+        "sessionIdentityMappingSaveNote": "Po potvrzení uložte nastavení, aby se změna projevila.",
         "sessionAffinity": "Vazba relace",
         "sessionAffinityTtl": "Vypršení (sekundy)",
         "responsesWebsockets": "Responses přes WebSocket",
@@ -4634,6 +4889,8 @@
         "allKinds": "Všechny typy",
         "allStatuses": "Všechny stavy",
         "allGatewayModes": "Vsechny rezimy",
+        "sessionFilter": "Relace",
+        "sessionPlaceholder": "ID relace",
         "modelFilter": "Modely",
         "modelPlaceholder": "ID modelu",
         "accountFilter": "Účet",
@@ -5001,7 +5258,7 @@
       "boundProxyUnavailable": "Propojený účet nemá dostupnou proxy. Znovu ji vyberte.",
       "sourceUnavailable": "Zdroj proxy nebo uzel není dostupný. Znovu jej vyberte.",
       "operationTimeout": "Operace proxy překročila časový limit. Zkuste to znovu.",
-      "cardScopeHint": "Proxy této karty používá spuštěný desktopový klient Codex. Odchozí připojení modelových bran si ponechávají vlastní trasy.",
+      "cardScopeHint": "Proxy účtů API Key platí pro desktopové klienty i odchozí požadavky služby API. Proxy karty služby API platí jen pro desktopové klienty. Systémová proxy se nemění.",
       "display": {
         "title": "Zobrazení proxy",
         "compact": "Stručné",
@@ -5302,7 +5559,7 @@
       "modeDefaultHint": "Účet nepoužívá proxy a zachovává původní výchozí odchod.",
       "modeStaleHint": "Přiřazený zdroj nebo uzel už není dostupný. Vyberte jej znovu.",
       "management": "Správa proxy",
-      "managementHint": "Nastavte proxy pro karty účtů OAuth, API a služby API beze změny systémové proxy. Na kartách API platí pro spuštěného desktopového klienta; modelové brány si ponechávají vlastní trasy.",
+      "managementHint": "Proxy účtů API Key platí pro desktopové klienty i odchozí požadavky služby API. Proxy karty služby API platí jen pro desktopové klienty. Systémová proxy se nemění.",
       "emptyTitle": "Samostatné připojení pro váš účet",
       "emptyDescription": "Nejsou dostupné způsobilé karty účtů. Přidejte účet OAuth či API nebo zapněte kartu služby API a poté zde vyberte proxy.",
       "search": "Hledat účty",
@@ -5416,7 +5673,7 @@
         "subscriptionUrl": "URL předplatného",
         "nodeLinks": "Odkazy uzlů nebo konfigurace",
         "import": "Importovat",
-        "importNotice": "Adresy a přihlašovací údaje se šifrují místně. Požadavky na předplatné neobsahují Token účtů.",
+        "importNotice": "Snímky konfigurace a prostředků se ukládají šifrovaně a při spuštění se dešifrují v samostatné složce. Požadavky na předplatné a prostředky neobsahují tokeny účtu.",
         "intro": "Importujte a otestujte předplatná nebo uzly, pak je vyberte a přiřaďte v seznamu účtů.",
         "emptyTitle": "Přidejte první proxy",
         "emptyHint": "Podporuje předplatné, odkazy uzlů a HTTP / SOCKS5. Import i test lze provést bez účtu.",
@@ -5461,7 +5718,7 @@
         "unsupported": "Nepodporováno",
         "invalidInput": "Zadejte název a platnou URL, odkaz uzlu nebo konfiguraci proxy.",
         "downloadFailed": "Stažení předplatného selhalo. Zkontrolujte síť a nastavení proxy a zkuste to znovu.",
-        "downloadRedirect": "Stahování předplatného bylo zastaveno kvůli přesměrování na jiný původ nebo příliš mnoha přesměrováním.",
+        "downloadRedirect": "Přesměrování předplatného je neplatné nebo překračuje povolený limit.",
         "downloadDenied": "Server předplatného odmítl přístup (HTTP 401/403). Zkontrolujte odkaz a jeho platnost.",
         "downloadTls": "Navázání spojení TLS nebo ověření certifikátu předplatného selhalo. Zkontrolujte síť a nastavení proxy.",
         "timeout": "Vypršel časový limit. Před opakováním obnovte a ověřte výsledek.",
@@ -5479,6 +5736,7 @@
         "loadBalanceGroup": "Vyvažování zátěže",
         "reasonStrategy": "Tato strategie skupiny není podporována. Rozbalte ji a vyberte dostupný uzel.",
         "reasonOptions": "Obsahuje dosud nepodporovaný protokol nebo nastavení.",
+        "reasonProviderConfig": "Zdroj, filtr nebo transformace tohoto poskytovatele nejsou podporovány.",
         "reasonProvider": "Tato skupina vyžaduje externí poskytovatele uzlů, kteří nebyli načteni.",
         "reasonMembers": "Členové skupiny neprošli ověřením. Prohlédněte si jednotlivé důvody.",
         "reasonInvalid": "Požadovaná nastavení chybí nebo jsou neplatná.",
@@ -5500,6 +5758,14 @@
         "defaultProtocol": "Protokol při vynechání",
         "credentialFormat": "Formát přihlašování",
         "recognizing": "Rozpoznávání…",
+        "nativePreview": "Při importu Mihomo přímo zpracuje konfiguraci a načte prostředky. Náhled nepřistupuje k souborům ani síti.",
+        "resourceDirectory": "Složka prostředků",
+        "browseResources": "Vybrat složku",
+        "resourceDirectoryHint": "Pro místní soubory vyberte složku prostředků předplatného. Obsah se zkopíruje do soukromé pracovní složky a uloží jako šifrované snímky.",
+        "resourceDirectoryRequired": "Vyberte místní složku prostředků tohoto předplatného.",
+        "resourceMissing": "Místní prostředky nejsou dostupné. Zkontrolujte složku nebo import zopakujte.",
+        "rulesName": "Pravidla předplatného",
+        "pendingProviders": "Při importu se načtou vzdálené zdroje uzlů: {{count}}. Náhled je nestahuje.",
         "previewCount": "Platné {{valid}} · Ke kontrole {{invalid}} · Duplicity {{duplicates}}",
         "line": "Řádek {{line}}",
         "ambiguous": "Nejednoznačný formát. Zvolte formát údajů nebo použijte úplnou adresu proxy.",
@@ -5601,7 +5867,7 @@
         "assign": "Přiřadit proxy",
         "specific": "Vybrané účty",
         "shared": "Sdílená proxy",
-        "sharedHint": "Způsobilé karty bez vlastní proxy používají tuto proxy, včetně nových karet. Vlastní nastavení a volba Bez proxy mají přednost. Karty API ji používají pro desktopového klienta; modelové brány si ponechávají vlastní trasy.",
+        "sharedHint": "Účty bez vlastní proxy dědí tuto proxy, včetně nových účtů. Vlastní proxy a volba Bez proxy mají přednost. Účty API Key ji používají pro desktop i požadavky API; karta služby API jen pro desktop.",
         "apply": "Přiřadit"
       },
       "managerResources": {
@@ -5711,6 +5977,14 @@
       }
     },
     "requestDiagnostics": {
+      "requestSizeTitle": "Velikost požadavku",
+      "requestSizeHint": "Velikost dekomprimovaného JSON klienta; pole v bajtech kompaktního JSON. Zaznamenávají se pouze velikosti.",
+      "requestBytes": "Požadavek",
+      "historyBytes": "Historie",
+      "toolsBytes": "Nástroje",
+      "instructionsBytes": "Pokyny",
+      "overloadRetry": "Opakování při přetížení",
+      "overloadRecovery": "Doba obnovení",
       "recordPayloads": "Záznam těl požadavků",
       "recordPayloadsHint": "Ve výchozím stavu vypnuto. Omezené kopie klientských a odchozích požadavků se ukládají místně. Vypnutí zastaví nové záznamy; uložená těla lze smazat zvlášť.",
       "privacyHint": "Ověřovací pole jsou skryta, ale tajné údaje v rozhovoru mohou zůstat. Před kopírováním nebo sdílením je zkontrolujte.",
@@ -5720,7 +5994,7 @@
       "title": "Podrobnosti požadavku",
       "totalLatency": "Celkový čas",
       "firstResponse": "První odpověď",
-      "firstResponseHint": "Čas od začátku požadavku do prvního úseku odpovědi serveru, ne nutně do prvního vytvořeného tokenu.",
+      "firstResponseHint": "U nových streamovaných požadavků Responses se čas měří od zpracování těla požadavku bránou do první události odpovědi nadřazeného serveru. Zprávy keep-alive a oznámení o limitech se přeskakují.",
       "unavailable": "Diagnostika zatím není k dispozici. Obnovte později. Starší požadavky se nedoplňují.",
       "attempts": "Pokusy",
       "noAttempts": "Historie pokusů nebyla zaznamenána.",
@@ -5885,6 +6159,54 @@
       "label": "Synchronizace kvóty",
       "description": "Bez spuštění služby API. Aktivní místní účty se obnovují každých 5–30 sekund; změny souborů relací spustí další kontrolu. Čtou se jen aktuální metadata souborů, nikoli obsah konverzací. Vyloučení účtů, filtry tarifů a pravidla skupin zůstávají platné. Ve výchozím stavu vypnuto.",
       "error": "Nastavení se nepodařilo načíst nebo uložit. Zkuste to znovu."
+    },
+    "pathRecovery": {
+      "title": "Nastavit cestu ke Codexu",
+      "description": "Nebyla nalezena použitelná cesta ke klientovi Codex. Vyberte aplikaci nebo ji ručně spusťte a nechte vyhledat.",
+      "reload": "Načíst znovu",
+      "timeout": "Operace překročila časový limit. Zkuste to znovu; spuštění nebude automaticky pokračovat.",
+      "noCandidates": "Codex nebyl nalezen. Spusťte klienta ručně a opakujte hledání nebo vyberte jeho cestu.",
+      "pathRequired": "Vyberte nebo zadejte cestu ke klientovi Codex.",
+      "invalidPath": "Toto není platná cesta k desktopovému klientovi Codex. Vyberte aplikaci znovu.",
+      "candidates": "Nalezené aplikace",
+      "autoLaunchHint": "Vypněte tuto volbu, pokud chcete pouze přepínat účty bez spuštění desktopové aplikace. Ruční spuštění zůstane dostupné.",
+      "manualLaunchHint": "Vypnutí automatického spouštění nedokončí toto ruční spuštění. Pouhé uložení nastavení tento pokus zruší.",
+      "saveAndRetry": "Uložit a opakovat",
+      "saveWithoutLaunch": "Uložit a pokračovat",
+      "saveOnly": "Pouze uložit",
+      "validationBusy": "Kontrola předchozí cesty stále probíhá. Zkuste to za chvíli znovu."
+    },
+    "openaiUsage": {
+      "monthCost": "Výdaje za měsíc",
+      "scope": "Výdaje organizace; požadavky a tokeny pouze textových API. Statistiky v UTC.",
+      "loading": "Načítání využití OpenAI…",
+      "pending": "Čekání na využití OpenAI",
+      "permissionRequired": "Klíč nemá oprávnění číst využití organizace (api.usage.read).",
+      "permissionGuide": "Použijte klíč správce: Admin keys → Restricted → Usage API Scope → Read. Zpřístupní výdaje a využití, nikoli zbývající kredit.",
+      "openAdminKeys": "Vytvořit klíč správce",
+      "invalidKey": "Klíč pro dotazy je neplatný nebo vypršel. Zkontrolujte API klíč správce.",
+      "networkFailed": "Nelze se připojit ke statistikám OpenAI. Obnovte později.",
+      "queryFailed": "Načtení využití OpenAI selhalo. Zkuste to později.",
+      "organization": "Využití organizace",
+      "configure": "Nastavit dotazy",
+      "settings": "Nastavení dotazů",
+      "title": "Nastavit dotazy na využití",
+      "optional": "Dotazy na využití (volitelné)",
+      "queryKey": "API klíč správce",
+      "callKey": "API klíč modelu",
+      "notConfigured": "Přidejte klíč správce pro zobrazení výdajů a využití organizace.",
+      "purpose": "Použijte klíč správce ze stejné organizace jako klíč modelu. Slouží pouze k dotazům na využití a nenahrazuje klíč modelu.",
+      "saveVerify": "Uložit a ověřit",
+      "remove": "Odebrat nastavení",
+      "keyRequired": "Zadejte API klíč správce.",
+      "saveFailed": "Nastavení se nepodařilo uložit. Zkuste to znovu.",
+      "configChanged": "Účet nebo klíč pro dotazy se změnil. Otevřete nastavení znovu.",
+      "openFailed": "Stránku klíčů se nepodařilo otevřít. Zkuste to znovu.",
+      "costUnavailable": "Bez částky",
+      "costUnavailableHint": "Oficiální API nákladů nevrátilo částky za toto období. Požadavky a tokeny pocházejí ze samostatného API využití; chybějící částky neznamenají nulové výdaje."
+    },
+    "officialApi": {
+      "hint": "Účet s oficiálním API klíčem OpenAI, rozpoznaný podle skutečné adresy připojení."
     }
   },
   "githubCopilot": {
@@ -6151,6 +6473,10 @@
       "title": "Nastavení WorkBuddy",
       "appPath": "Cesta WorkBuddy"
     },
+    "minimaxCode": {
+      "title": "Nastavení MiniMax Code",
+      "appPath": "Cesta MiniMax Code"
+    },
     "zcode": {
       "title": "Nastavení ZCode",
       "appPath": "Cesta k ZCode"
@@ -6375,8 +6701,9 @@
       "desc": "Vložte svůj přístupový token Kiro nebo exportovaná data JSON."
     },
     "import": {
-      "localDesc": "Importujte data účtu Kiro z místního klienta Kiro nebo souboru JSON.",
-      "localClient": "Dovoz z místní Kiro"
+      "localDesc": "Import z místního klienta nebo JSON. Účty JSON se nejprve uloží a poté se na pozadí obnoví přihlašovací údaje a limity.",
+      "localClient": "Dovoz z místní Kiro",
+      "invalidCredentials": "Pole přihlašovacích údajů chybí nebo nejsou podporována. Účet znovu exportujte."
     },
     "injectToVSCode": "Přepněte na Kiro"
   },
@@ -6890,6 +7217,17 @@
       "resetUnknown": "Cas resetu neni znam",
       "statusUnknown": "Stav: neznamy",
       "statusNormal": "Stav: normalni",
+      "statusSynced": "Stav: sync",
+      "statusSyncedPending": "Stav: sync, zbytek nejasný",
+      "fastAvailable": "Rychlé: {{times}}",
+      "fastTimes": "{{count}}×",
+      "fastUnlimited": "Neomezeně",
+      "fastPerMonth": "Rychlé/měs: {{count}}",
+      "fastChannelPerMonth": "Express: {{count}}/měs",
+      "fastChannelStatus": "Rychlý kanál: {{status}}",
+      "freeRemainingUnknown": "Free zbývá: --",
+      "timesRemainingUnknown": "Zbývá: --",
+      "soloParallel": "Balíček: Solo ×{{count}}",
       "statusExhaustedFree": "Stav: vyuziti vycerpano, doporucujeme upgrade",
       "statusExhaustedPro": "Stav: vyuziti vycerpano, upgradujte nebo zapnete prubezne uctovani",
       "bonusUsed": "Bonus navic: +{{amount}}",
@@ -6902,17 +7240,8 @@
       "payAsYouGoEnabled": "Prubezne uctovani: zapnuto",
       "payAsYouGoEmpty": "Prubezne uctovani: --",
       "payAsYouGoLabel": "Pouziti na vyzadani",
-      "statusSynced": "Stav: sync",
-      "statusSyncedPending": "Stav: sync, zbytek nejasný",
-      "fastAvailable": "Rychlé: {{times}}",
-      "fastTimes": "{{count}}×",
-      "fastUnlimited": "Neomezeně",
-      "fastPerMonth": "Rychlé/měs: {{count}}",
-      "fastChannelPerMonth": "Express: {{count}}/měs",
-      "fastChannelStatus": "Rychlý kanál: {{status}}",
-      "freeRemainingUnknown": "Free zbývá: --",
-      "timesRemainingUnknown": "Zbývá: --",
-      "soloParallel": "Balíček: Solo ×{{count}}"
+      "creditsMember": "Členské kredity",
+      "creditsBonus": "Bonusové kredity"
     },
     "flowNotice": {
       "title": "Prirucka k uctu Trae (kliknutim rozbalit/sbalit)",
@@ -6928,6 +7257,18 @@
     "token": {
       "jsonOnlyDesc": "Vložte úplné JSON účtu Trae CN. Holý token není podporován.",
       "jsonOnlyPlaceholder": "Úplné Trae CN JSON..."
+    },
+    "checkin": {
+      "modalTitle": "Denní check-in",
+      "durationMs": "{{ms}} ms",
+      "durationSeconds": "{{seconds}} s",
+      "durationTitle": "Celková doba check-inu",
+      "logSuccess": "Úspěch ({{done}}/{{total}})",
+      "logPartial": "Částečný úspěch ({{done}}/{{total}})",
+      "logIncomplete": "Nedokončeno",
+      "detailSuccess": "Check-in proběhl",
+      "detailAlreadyClaimed": "Dnes již získáno",
+      "detailError": "Chyba check-inu"
     }
   },
   "codebuddyCn": {
@@ -6957,6 +7298,35 @@
     "syncToWorkbuddy": "Synchronizovat s WorkBuddy"
   },
   "workbuddy": {
+    "credits": {
+      "planBase": "Základní kredity tarifu",
+      "planBonus": "Bonusové kredity tarifu",
+      "benefit": "Odměny platformy",
+      "addon": "Zakoupené kredity",
+      "total": "Celkem zbývá kreditů",
+      "details": "Přehled kreditů",
+      "usedOf": "Využito {{used}}/{{total}}",
+      "remainingPercent": "Zbývá {{percent}} %",
+      "nearestExpiry": "Nejbližší konec {{time}}",
+      "nextRefresh": "Další obnova {{time}}",
+      "expiring": "Obsahuje brzy končící kredity",
+      "valid": "Platné",
+      "expired": "Vypršelé",
+      "expiresAt": "Vyprší {{time}}",
+      "expiryHours": "Vyprší do 24 h",
+      "expiryDays": "Vyprší do 3 dnů",
+      "empty": "Žádné záznamy",
+      "loadFailed": "Načtení se nezdařilo ({{error}})",
+      "overview": "Přehled",
+      "remaining": "Zbývá {{amount}}",
+      "loadMore": "Načíst další",
+      "usage": "Historie spotřeby",
+      "requestAndTime": "Požadavek a čas",
+      "creditUsed": "Využité kredity",
+      "model": "Model AI",
+      "recentUsage": "Posledních 5 záznamů",
+      "viewMore": "Zobrazit další"
+    },
     "title": "Správa účtů WorkBuddy",
     "noAccounts": "Žádné účty WorkBuddy",
     "addAccount": "Přidat účet WorkBuddy",
@@ -6964,7 +7334,7 @@
       "title": "Informace o správě účtů WorkBuddy (kliknutím rozbalíte/sbalíte)",
       "desc": "Přepnutí účtu zapisuje místní soubor přihlášení podle aktuální struktury oficiálního klienta WorkBuddy; místní import čte stejný soubor. Data se zpracovávají pouze lokálně.",
       "permission": "Rozsah oprávnění: čtení a zápis přihlašovacího souboru WorkBuddy (CodeBuddyExtension/Data/Public/auth/workbuddy-desktop.info) pro místní import a přepínání účtů; starší state.vscdb se již nečte ani neupravuje.",
-      "network": "Rozsah sítě: přihlášení OAuth a obnovení tokenu vyžadují síťové požadavky na WorkBuddy; dotazy na kvótu volají billing API. Místní přihlašovací soubory ani surové přihlašovací údaje se neodesílají."
+      "network": "Přihlášení OAuth a obnova tokenu vyžadují spojení se službou WorkBuddy. Dotazy na kredity a jejich podrobnosti používají token účtu. Přihlašovací soubory a systémové klíče zůstávají v zařízení."
     },
     "nickname": "Přezdívka",
     "enterprise": "Podnikový",
@@ -6981,8 +7351,8 @@
       "oauth": {
         "title": "Pouze přihlášení IDE",
         "item1": "Po dokončení OAuth v prohlížeči přidejte účet a použijte ho pro přepínání IDE.",
-        "item2": "Parametry dotazu kvóty se nenavážou automaticky.",
-        "item3": "Pokud potřebujete zobrazení kvóty, spusťte na kartě účtu ručně \"Dotázat kvótu\"."
+        "item2": "Po autorizaci se kredity načtou automaticky.",
+        "item3": "Karta zobrazuje přehled kreditů. V podrobnostech najdete jednotlivé záznamy a data platnosti."
       }
     },
     "oauthWebviewTab": "OAuth přes WebView",
@@ -7098,8 +7468,172 @@
       "startTime": "Počáteční čas",
       "endTime": "Koncový čas",
       "timeRangeHint": "Vybere denně náhodný čas v tomto rozsahu k dokončení přihlášení na pozadí.",
+      "errors": "Chyby",
+      "tabSettings": "Nastavení automatického přihlášení",
+      "tabHistory": "Historie automatického přihlášení",
+      "manualTest": "Testovací spuštění",
+      "clearLogs": "Vymazat",
+      "clearLogsFailed": "Vymazání záznamů o přihlášení se nezdařilo: {{message}}",
+      "historyLoading": "Načítání záznamů automatického přihlašování...",
+      "historyLoadFailed": "Načtení záznamů automatického přihlašování se nezdařilo: {{message}}",
+      "totalCredits": "{{credits}} kreditů",
+      "historyRangeHint": "Uchovávají se pouze záznamy automatického přihlášení za posledních 30 dní (celkem: {{count}})",
+      "noHistory": "Žádné záznamy automatického přihlášení za posledních 30 dní",
+      "saveFailed": "Uložení nastavení automatického přihlášení se nezdařilo: {{message}}",
+      "manualTestPartialFailure": "Přihlášení se pro některé účty nezdařilo. Podívejte se do záznamů; opakování proběhne později na pozadí.",
+      "manualTestAlreadyRunning": "Úloha automatického přihlášení již běží. Záznamy si projděte později.",
+      "manualTestFailed": "Testovací spuštění se nezdařilo: {{message}}",
       "timeRangeError": "Počáteční čas nesmí být pozdější než koncový čas"
     }
+  },
+  "minimaxCode": {
+    "title": "Správa účtů MiniMax Code",
+    "noAccounts": "Žádné účty MiniMax Code",
+    "addAccount": "Přidat účet MiniMax Code",
+    "flowNotice": {
+      "title": "Informace o správě účtů MiniMax Code (kliknutím rozbalíte/sbalíte)",
+      "desc": "Správa místního přihlášení a přepínání účtů MiniMax Code.",
+      "permission": "Čte a zapisuje oficiální přihlašovací soubory. Každá instance MiniMax Code používá vlastní datovou složku.",
+      "network": "Autorizace, účet, tarif a kredity se ověřují pouze přes oficiální API MiniMax. Místní přihlašovací soubory se neodesílají."
+    },
+    "nickname": "Přezdívka",
+    "enterprise": "Podnikový",
+    "usage": "Stav využití",
+    "creditsBalance": "Zůstatek kreditů",
+    "usageNormal": "Normální",
+    "usageAbnormal": "Abnormální",
+    "usageViewDetail": "Zobrazit podrobnosti",
+    "usageDetailTitle": "Podrobnosti stavu využití",
+    "oauthWaiting": "Čekání na autorizaci...",
+    "oauthDesc": "Klikněte na tlačítko níže a otevřete autorizační stránku MiniMax Code v prohlížeči.",
+    "oauthDescWebview": "Klikněte na tlačítko níže a otevřete autorizační stránku MiniMax Code ve vestavěném WebView.",
+    "oauthFeature": {
+      "oauth": {
+        "title": "Pouze přihlášení IDE",
+        "item1": "Po dokončení OAuth v prohlížeči přidejte účet a použijte ho pro přepínání IDE.",
+        "item2": "Zůstatek kreditů",
+        "item3": "Zakoupené kredity · Darované kredity"
+      }
+    },
+    "oauthWebviewTab": "OAuth přes WebView",
+    "oauthOpenWebview": "Otevřít ve WebView",
+    "oauthOpenWebviewIncognito": "Otevřít v anonymním WebView",
+    "oauthOpenWebviewFailed": "Nepodařilo se otevřít WebView: {{error}}",
+    "oauthOpenBrowserFallback": "Otevřít v prohlížeči (záloha)",
+    "oauthOpenBrowserFailed": "Nepodařilo se otevřít prohlížeč: {{error}}",
+    "oauthWebviewProgressHint": "V horní části WebView se zobrazuje vodorovná lišta kroků pro určení zaseknuté fáze.",
+    "oauthFlow": {
+      "prepare": "Připravit OAuth odkaz",
+      "authorize": "Otevřít autorizační odkaz a potvrdit",
+      "bind": "Dotazovat výsledek autorizace a navázat účet",
+      "retryPrepare": "Znovu vygenerovat OAuth odkaz",
+      "retryAuthorize": "Znovu vyžádat autorizační odkaz",
+      "retryBind": "Opakovat dotazování autorizace",
+      "error": "Chyba toku: {{error}}"
+    },
+    "tokenDesc": "Vložte přístupový token MiniMax Code:",
+    "jsonDesc": "Vyberte soubor JSON obsahující účty MiniMax Code:",
+    "import": {
+      "localDesc": "Importujte data účtu z místního klienta MiniMax Code nebo ze souboru JSON.",
+      "localClient": "Importovat z místního MiniMax Code"
+    },
+    "search": "Hledat účty MiniMax Code...",
+    "quotaQuery": {
+      "failedRefreshCompact": "Obnovení kvóty selhalo",
+      "sectionTitle": "Dotaz kvóty",
+      "empty": "Zatím nejsou navázané informace o dotazu kvóty",
+      "packageUnknown": "Neznámý balíček",
+      "quotaLabel": "Zbývající kvóta",
+      "updatedAt": "Poslední dotaz: {{time}}",
+      "cycleRange": "Cyklus: {{start}} - {{end}}",
+      "cycleUnknown": "Informace o cyklu nejsou dostupné",
+      "expireAt": "Vyprší: {{time}}",
+      "expireUnknown": "Vyprší: N/A",
+      "packageTitle": {
+        "base": "Základní balíček zkušeností",
+        "activity": "Balíček dárků z akcí"
+      }
+    },
+    "extraCredit": {
+      "title": "Kreditní balíček"
+    },
+    "oauthUrlInputPlaceholder": "Autorizační URL můžete zadat ručně",
+    "oauthInvalidUrl": "Neplatná autorizační URL. Zadejte úplnou URL.",
+    "oauthGotoWebview": "Přejít v otevřeném WebView na zadanou URL",
+    "oauthGotoWebviewSuccess": "WebView dostalo požadavek přejít na zadanou URL.",
+    "oauthGotoWebviewFailed": "Nepodařilo se navigovat WebView: {{error}}",
+    "oauthWebviewInlineUrlPlaceholder": "Zadejte URL pro navigaci v tomto WebView",
+    "oauthWebviewInlineGo": "Přejít",
+    "oauthSuccessClosePrompt": "Účet byl úspěšně přidán. Zavřít toto WebView nyní?\nZvolte \"Zavřít WebView\" pro okamžité zavření nebo \"Později\" pro ponechání otevřeného.",
+    "oauthSuccessCloseTitle": "Účet přidán",
+    "oauthSuccessCloseNowLabel": "Zavřít WebView",
+    "oauthSuccessCloseLaterLabel": "Později",
+    "oauthSuccessCloseNowStatus": "✅ Účet přidán. Zavírám okno...",
+    "oauthSuccessCloseLaterStatus": "✅ Účet přidán. Toto WebView zůstane otevřené.",
+    "oauthWebviewOverlay": {
+      "steps": {
+        "prepare": "1 Připravit OAuth odkaz",
+        "authorize": "2 Otevřít autorizační odkaz a potvrdit",
+        "bind": "3 Dotazovat výsledek autorizace a navázat účet",
+        "complete": "5 Dokončeno (zavřít ručně)"
+      },
+      "status": {
+        "loginConfirm": "Na této stránce dokončete přihlášení a autorizaci."
+      }
+    },
+    "instances": {
+      "unsupported": {
+        "descPlatform": "Více instancí MiniMax Code je podporováno pouze na macOS, Windows a Linuxu."
+      }
+    },
+    "quota": {
+      "usedOfTotal": "{{used}} / {{total}}​",
+      "noPlan": "Bez předplatného M Plan",
+      "purchased": "Zakoupené kredity",
+      "gifted": "Darované kredity"
+    },
+    "checkin": {
+      "title": "Denní check-in",
+      "modalTitle": "Denní check-in",
+      "status": "Stav check-inu",
+      "checkedIn": "Zaregistrováno",
+      "notCheckedIn": "Nezaregistrováno",
+      "button": "Přihlásit",
+      "button.loading": "Probíhá check-in...",
+      "done": "Hotovo",
+      "success": "Check-in úspěšný! Série {{days}} dní",
+      "failure": "Přihlášení selhalo: {{message}}",
+      "failure.network": "Chyba sítě, zkuste to prosím později",
+      "lastCheckin": "Poslední check-in: {{time}}",
+      "streak": "{{days}}denní série",
+      "reward": "Odměna: {{reward}}",
+      "refreshStatus": "Obnovit",
+      "checkAll": "Check-in všeho",
+      "noAccounts": "Žádné účty",
+      "querying": "Načítání...",
+      "streakDays": "{{days}} dní",
+      "streakRewardCountdown": "Do bonusové odměny zbývá {{days}} dní",
+      "streakRewardToday": "Bonusová odměna je dnes dostupná!",
+      "recentDates": "Nedávno: ",
+      "claimed": "Vyzvednuto",
+      "queryFailed": "Dotaz selhal",
+      "retry": "Znovu",
+      "inactive": "Nedostupné",
+      "inactiveHint": "Check-in není pro tento účet aktivní",
+      "autoCheckinSettings": "Nastavení automatického přihlášení",
+      "autoCheckinLabel": "Automatické přihlášení",
+      "autoCheckinOff": "Automatické přihlášení vypnuto",
+      "autoCheckinEnabledHint": "Automatické přihlášení povoleno: Náhodné přihlášení mezi {{start}} a {{end}}",
+      "autoCheckinDisabledHint": "Automatické přihlášení zakázáno",
+      "enableAutoCheckin": "Povolit automatické přihlášení",
+      "enableAutoCheckinDesc": "Provádí denně náhodné přihlášení v určeném časovém rozmezí",
+      "randomTimeRange": "Náhodný časový rozsah přihlášení",
+      "startTime": "Počáteční čas",
+      "endTime": "Koncový čas",
+      "timeRangeHint": "Vybere denně náhodný čas v tomto rozsahu k dokončení přihlášení na pozadí.",
+      "timeRangeError": "Počáteční čas nesmí být pozdější než koncový čas"
+    },
+    "placeholder": "Správa účtů MiniMax Code bude brzy k dispozici."
   },
   "zcode": {
     "search": "Hledat účty ZCode...",
@@ -7357,7 +7891,29 @@
     "continueMigrationScan": "Pokračovat ve skenu",
     "savePartialMigrationBatch": "Uložit část",
     "saveCompleteMigrationBatch": "Uložit vše",
-    "clearMigrationBatch": "Vymazat dávku"
+    "clearMigrationBatch": "Vymazat dávku",
+    "searchPlaceholder": "Hledat účty nebo typy",
+    "noSearchResults": "Žádné odpovídající účty ani typy",
+    "exportMigrationQr": "Exportovat migrační QR",
+    "exportBackup": "Exportovat zálohu",
+    "importBackup": "Importovat zálohu",
+    "batchDelete": "Smazat vybrané",
+    "exportBackupHint": "Exportovat zálohu všech uložených záznamů ve formátu JSON bez ohledu na hledání nebo výběr.",
+    "editAccountHint": "Použijte formát Typ:účet, například OpenAI:alice@example.com",
+    "migrationTitle": "Exportovat migrační QR kódy",
+    "migrationSelectedSummary": "Exportuje se {{count}} vybraných účtů.",
+    "migrationAllSummary": "Exportují se všechny uložené účty ({{count}}) bez ohledu na hledání.",
+    "migrationWarning": "Tyto QR kódy obsahují tajné klíče 2FA. Uchovávejte je v bezpečí.",
+    "migrationPage": "QR kód {{current}} z {{total}} · Počet účtů v tomto kódu: {{count}}",
+    "migrationPrevious": "Předchozí",
+    "migrationNext": "Další",
+    "migrationSaveImage": "Uložit QR kód",
+    "migrationImageAlt": "Migrační QR kód {{current}} z {{total}}",
+    "migrationInvalidRecord": "Některé záznamy obsahují neplatné tajné klíče. Před exportem migračních QR kódů je zkontrolujte.",
+    "migrationRecordTooLarge": "Účet obsahuje příliš mnoho informací pro migrační QR kód. Zkraťte název účtu a zkuste to znovu.",
+    "migrationUnsupportedParameters": "Migrační export nyní podporuje pouze šestimístné kódy SHA1 s intervalem 30 sekund; některé účty používají nepodporované parametry.",
+    "migrationQrFailed": "Migrační QR kódy se nepodařilo vytvořit. Zkuste to znovu.",
+    "exportFailed": "Export se nezdařil. Zkontrolujte umístění pro uložení a zkuste to znovu."
   },
   "logViewer": {
     "fileLabel": "Soubor logu",
@@ -7559,6 +8115,17 @@
       "family": "Skupina",
       "platform": "Aktuální systém",
       "unsupportedGroup": "Pro tuto skupinu zatím nejsou klienti s jedním kliknutím."
+    },
+    "campaign": {
+      "badge": "11.11",
+      "title": "Bonus 11,11 % k dobití",
+      "description": "Pro nové i stávající uživatele.",
+      "period": "Období akce: 1.–11. listopadu 2026 (UTC+8)",
+      "terms": "Podmínky najdete na stránce akce.",
+      "action": "Zobrazit akci",
+      "inactive": "Tato akce právě neprobíhá.",
+      "label": "Časově omezená akce 11.11",
+      "promotionDescription": "Oslavte 11.11 s oficiálním partnerem Cockpit pro zprostředkování API. Noví i stávající uživatelé získají během akce bonus 11,11 % k dobití. K dispozici jsou Claude, ChatGPT, Gemini a další přední modely."
     }
   },
   "grok": {
@@ -7957,7 +8524,7 @@
     "model": "Testovací model",
     "selectModel": "Vybrat model",
     "verifyHint": "Vybraný model slouží jen k testu připojení a neomezuje ostatní dostupné modely. Ověření odešle jeden krátký požadavek a spotřebuje malou část limitu předplatného.",
-    "serviceHint": "Přidání do aktuální skupiny nespustí službu API. Tato verze vyžaduje nativní jádro.",
+    "serviceHint": "Přidání účtu do aktuální skupiny nespustí službu API.",
     "verify": "Pouze test",
     "verifyAndJoin": "Otestovat a přidat",
     "remove": "Odebrat ze služby",
@@ -8017,8 +8584,6 @@
       "verify": "Požadavek modelu nebyl dokončen. Opakujte test.",
       "usage": "Využití tarifu nebo aplikace je omezené. Zkontrolujte využití v nastavení ChatGPT.",
       "usageUnavailable": "Oficiální služba nyní nemůže potvrdit využití. Zkuste to později; neznamená to vyčerpání limitu tarifu.",
-      "native": "Přístup k tarifu vyžaduje nativní jádro. Nejprve jej přepněte ve službě API.",
-      "nativeSwitch": "Před změnou jádra odeberte účty tarifu ze služby API.",
       "browser": "Nelze otevřít prohlížeč. Zkopírujte přihlašovací odkaz a otevřete jej ručně.",
       "configuration": "Registrace autorizace nesouhlasí. Zkuste se znovu přihlásit nebo tarif znovu připojte.",
       "notVerified": "Před přidáním do služby API ověřte tento tarif.",
@@ -8198,7 +8763,6 @@
     "title": "Záloha schopností",
     "hint": "Pokud účet nepodporuje požadovanou schopnost, zkouší záložní účty v tomto pořadí se stávajícím mapováním modelů.",
     "consent": "Přepnutí odešle tuto konverzaci záložnímu účtu a spotřebuje jeho limit nebo účtuje příslušné poplatky.",
-    "nativeOnly": "Toto jádro zálohu schopností neprovádí. Pro zapnutí přepněte na nativní jádro; uložené nastavení lze vypnout.",
     "backups": "Záložní účty",
     "addBackup": "Přidat zálohu",
     "backupEmpty": "Před zapnutím vyberte zálohy z aktuální skupiny služby API.",

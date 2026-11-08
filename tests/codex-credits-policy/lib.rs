@@ -10,6 +10,27 @@ pub mod models {
 // Data-only contract required by the production request-diagnostics model.
 // This harness deliberately imports no identity storage or account runtime.
 pub mod modules {
+    // Only these serializable fields are needed by the imported account model;
+    // diagnostics transport and request logging are outside this offline harness.
+    pub mod codex_native_api {
+        pub mod diagnostics {
+            #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+            #[serde(rename_all = "camelCase")]
+            pub struct RequestSize {
+                pub total_bytes: u64,
+                pub input_bytes: u64,
+                pub tools_bytes: u64,
+                pub instructions_bytes: u64,
+            }
+            #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+            #[serde(rename_all = "camelCase")]
+            pub struct OverloadRetry {
+                pub retry: u32,
+                pub wait_ms: u64,
+                pub recovery_ms: u64,
+            }
+        }
+    }
     pub mod codex_api_identity {
         #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
         #[serde(rename_all = "camelCase")]
@@ -153,7 +174,7 @@ mod tests {
         assert!(!collection.account_concurrency_default_migrated);
         assert_eq!(
             collection.image_generation_models,
-            ["gpt-image-2.5", "gpt-image-2"]
+            ["gpt-image-2.6", "gpt-image-2.5", "gpt-image-2", "gpt-image-2.6-sunburst", "gpt-image-2.6-flare"]
         );
         assert_eq!(
             collection.credits_policy,

@@ -10,6 +10,28 @@ pub async fn codex_local_access_get_state() -> Result<CodexLocalAccessState, Str
 }
 
 #[tauri::command]
+pub async fn codex_local_access_get_overload_status() -> Result<codex_local_access::LocalAccessOverloadStatus, String> {
+    codex_local_access::get_local_access_overload_status().await
+}
+
+#[tauri::command]
+pub async fn codex_local_access_update_overload_retry(enabled: bool) -> Result<bool, String> {
+    codex_local_access::update_local_access_overload_retry(enabled).await
+}
+
+#[tauri::command]
+pub async fn codex_local_access_query_overload_counts(start_at: i64, end_at: i64) -> Result<std::collections::HashMap<String, u64>, String> {
+    codex_local_access::query_local_access_overload_counts(start_at, end_at).await
+}
+
+#[tauri::command]
+pub async fn codex_local_access_query_overload_attempts(
+    account_id: String, start_at: i64, end_at: i64, before_timestamp: Option<i64>, before_id: Option<i64>,
+) -> Result<Vec<codex_local_access::LocalAccessOverloadAttempt>, String> {
+    codex_local_access::query_local_access_overload_attempts(account_id, start_at, end_at, before_timestamp, before_id).await
+}
+
+#[tauri::command]
 pub async fn codex_local_access_get_request_detail(
     request_id: String,
 ) -> Result<Option<crate::models::codex_local_access::CodexLocalAccessRequestDetail>, String> {
@@ -81,6 +103,7 @@ pub async fn codex_local_access_save_accounts(
         HashMap<String, CodexLocalAccessImageGenerationPolicy>,
     >,
     official_account_bindings: Option<HashMap<String, String>>,
+    session_identity_mapping_enabled: Option<bool>,
 ) -> Result<CodexLocalAccessState, String> {
     codex_local_access::save_local_access_accounts_with_official_bindings(
         account_ids,
@@ -91,6 +114,7 @@ pub async fn codex_local_access_save_accounts(
         session_affinity_ttl_ms,
         image_generation_account_policies,
         official_account_bindings,
+        session_identity_mapping_enabled,
     )
     .await
 }
@@ -155,8 +179,11 @@ pub async fn codex_local_access_query_request_logs(
     end_at: Option<i64>,
     model_query: Option<String>,
     account_query: Option<String>,
+    account_id: Option<String>,
+    api_key_id: Option<String>,
     api_key_query: Option<String>,
     instance_query: Option<String>,
+    session_query: Option<String>,
     gateway_mode: Option<CodexLocalAccessGatewayMode>,
     request_kind: Option<CodexLocalAccessRequestKind>,
     success: Option<bool>,
@@ -170,8 +197,11 @@ pub async fn codex_local_access_query_request_logs(
         end_at,
         model_query,
         account_query,
+        account_id,
+        api_key_id,
         api_key_query,
         instance_query,
+        session_query,
         gateway_mode,
         request_kind,
         success,
@@ -276,6 +306,7 @@ pub async fn codex_local_access_update_routing_options(
     max_concurrent_image_requests: u16,
     max_account_concurrency: u16,
     account_concurrency_wait_ms: u64,
+    session_identity_mapping_enabled: Option<bool>,
 ) -> Result<CodexLocalAccessState, String> {
     codex_local_access::update_local_access_routing_options(
         session_affinity,
@@ -288,6 +319,7 @@ pub async fn codex_local_access_update_routing_options(
         max_concurrent_image_requests,
         max_account_concurrency,
         account_concurrency_wait_ms,
+        session_identity_mapping_enabled,
     )
     .await
 }
@@ -318,6 +350,7 @@ pub async fn codex_local_access_update_upstream_proxy_config(
 ) -> Result<CodexLocalAccessState, String> {
     codex_local_access::update_local_access_upstream_proxy_config(upstream_proxy_url).await
 }
+
 
 #[tauri::command]
 pub async fn codex_local_access_update_gateway_mode(
@@ -407,8 +440,9 @@ pub async fn codex_local_access_update_api_key(
     token_limit: Option<u64>,
     account_ids: Option<Vec<String>>,
     inherit_account_pool: Option<bool>,
+    budget: Option<crate::models::codex_local_access::CodexApiKeyBudget>,
 ) -> Result<CodexLocalAccessState, String> {
-    codex_local_access::update_local_access_api_key(
+    codex_local_access::update_local_access_api_key_with_budget(
         api_key_id,
         label,
         enabled,
@@ -418,6 +452,7 @@ pub async fn codex_local_access_update_api_key(
         token_limit,
         account_ids,
         inherit_account_pool,
+        budget,
     )
     .await
 }
@@ -465,11 +500,11 @@ pub async fn codex_local_access_set_enabled(
     codex_local_access::set_local_access_enabled(enabled).await
 }
 
-#[tauri::command]
-pub async fn codex_local_access_activate(
+async fn codex_local_access_activate_internal(
     app: AppHandle,
     auto_repair_mode: Option<codex_session_visibility::CodexSessionVisibilityAutoRepairMode>,
     instance_id: Option<String>,
+    launch_after_switch: Option<bool>,
 ) -> Result<CodexLocalAccessState, String> {
     let flow_started = Instant::now();
     let target_instance_id = instance_id
@@ -586,7 +621,7 @@ pub async fn codex_local_access_activate(
 
     logger::log_info("API 服务启动模式下跳过 OpenCode / OpenClaw OAuth 同步");
 
-    if user_config.codex_launch_on_switch {
+    if launch_after_switch.unwrap_or(user_config.codex_launch_on_switch) {
         let launch_started = Instant::now();
         #[cfg(target_os = "macos")]
         if launch_target.is_default && process::is_codex_running() {
@@ -616,20 +651,7 @@ pub async fn codex_local_access_activate(
             Ok(_) => None,
             Err(e) => {
                 logger::log_warn(&format!("Codex 启动失败: {}", e));
-                if e.starts_with("APP_PATH_NOT_FOUND:") {
-                    let retry = if launch_target.is_default {
-                        serde_json::json!({ "kind": "default" })
-                    } else {
-                        serde_json::json!({
-                            "kind": "instance",
-                            "instanceId": target_instance_id,
-                        })
-                    };
-                    let _ = app.emit(
-                        "app:path_missing",
-                        serde_json::json!({ "app": "codex", "retry": retry }),
-                    );
-                }
+
                 Some(e)
             }
         };
@@ -649,7 +671,7 @@ pub async fn codex_local_access_activate(
             ));
         }
     } else {
-        logger::log_info("已关闭切换 Codex 时自动启动 Codex App");
+        logger::log_info("本次 API 服务切换不启动 Codex App");
     }
 
     let tray_started = Instant::now();
@@ -796,7 +818,7 @@ mod tests {
                 Some("chat_completions"),
                 "https://api.deepseek.com/v1",
             ),
-            "chat_completions"
+            "responses"
         );
         assert_eq!(
             normalize_model_provider_wire_api(Some("responses"), "https://api.deepseek.com/v1"),

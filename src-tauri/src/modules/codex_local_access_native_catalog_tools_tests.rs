@@ -30,6 +30,39 @@ fn entry(catalog: &Value, id: &str) -> Value {
 }
 
 #[test]
+fn anthropic_catalog_exposes_only_configured_claude_models_and_respects_key_scope() {
+    let mut collection = collection();
+    collection.account_ids = vec!["claude".into()];
+    let mut claude = account("claude", "anthropic");
+    claude.api_model_catalog = vec!["claude-sonnet-4-6".into(), "claude-opus-4-6".into()];
+    claude.api_auth_scheme = Some("bearer".into());
+    assert_eq!(
+        native_wire_api(&claude).unwrap(),
+        native_contract::WireApi::Anthropic
+    );
+    let catalog = native_catalog(&collection, None, &[claude.clone()]).unwrap();
+    let models = catalog["models"].as_array().unwrap();
+    assert_eq!(models.len(), 2);
+    assert!(models
+        .iter()
+        .all(|m| m["slug"].as_str().unwrap().starts_with("claude-")));
+    assert_eq!(
+        entry(&catalog, "claude-sonnet-4-6")["supports_search_tool"],
+        true
+    );
+    let gateway = provider_gateway_for_account(&claude).unwrap();
+    assert_eq!(gateway.wire_api.as_deref(), Some("anthropic"));
+    assert_eq!(gateway.auth_scheme.as_deref(), Some("bearer"));
+    let key: CodexLocalAccessApiKey = serde_json::from_value(json!({"id":"key","key":"fixture","label":"scope","inheritAccountPool":false,"accountIds":["unrelated"]})).unwrap();
+    let denied = native_catalog(&collection, Some(&key), &[claude]).unwrap();
+    assert!(!denied["models"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|m| m["slug"] == "claude-sonnet-4-6"));
+}
+
+#[test]
 fn native_catalog_registers_visible_model_agents_despite_legacy_disabled_setting() {
     let mut collection = collection();
     collection.multi_agent.optimize = false;
@@ -171,6 +204,7 @@ async fn native_profile_catalog_and_models_endpoint_share_identical_tool_capabil
         for account in &mut accounts {
             account.api_model_context_windows.insert("custom-agent".into(), 12345);
         }
+        accounts[0].api_model_vision_support.insert("custom-agent".into(), true);
         let directory =
             std::env::temp_dir().join(format!("cockpit-catalog-tools-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&directory).unwrap();
@@ -197,6 +231,8 @@ async fn native_profile_catalog_and_models_endpoint_share_identical_tool_capabil
             "multi_agent_version",
             "supports_search_tool",
             "use_responses_lite",
+            "input_modalities",
+            "supports_image_detail_original",
         ] {
             assert_eq!(
                 saved["models"][0][field],
@@ -245,7 +281,7 @@ fn native_chat_catalog_negotiates_identical_tools_for_raw_step5_and_known_shells
         .iter()
         .map(|entry| entry["slug"].clone())
         .collect::<Vec<_>>();
-    native_apply_profile_catalog_tool_capabilities(
+    native_apply_profile_catalog_capabilities(
         &mut profile,
         &collection,
         Some(&key),

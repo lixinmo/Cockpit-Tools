@@ -31,6 +31,7 @@ impl StopSignal {
 }
 
 pub(super) struct Activity {
+    pub request_sizes: super::request_metrics::SizeBuckets,
     pub count: AtomicUsize,
     pub tasks: AtomicUsize,
     pub accepting: AtomicBool,
@@ -40,6 +41,7 @@ pub(super) struct Activity {
 impl Default for Activity {
     fn default() -> Self {
         Self {
+            request_sizes: Default::default(),
             count: AtomicUsize::new(0),
             tasks: AtomicUsize::new(0),
             accepting: AtomicBool::new(true),
@@ -67,10 +69,22 @@ impl Drop for BlockingWorkGuard {
 }
 
 pub(super) struct RequestTracker {
+    pub overload: super::overload::Budget,
+    pub(super) quota_exhausted_accounts: std::collections::HashSet<String>,
+    quota_exhausted_attempt: Option<usize>,
+    pub field_compat: super::request_compat::Budget,
+    request_size: Option<super::diagnostics::RequestSize>,
+    pending_overload_retry: Option<super::diagnostics::OverloadRetry>,
+    overload_response_seen: bool,
+    overload_attempt_number: usize,
+    overload_seen: bool,
+    earlier_attempt_accounts: std::collections::HashSet<String>,
     activity: Arc<Activity>,
     host: Arc<dyn Host>,
     stop: StopSignal,
     started: Instant,
+    // Responses diagnostics begin after ingress. Request deadlines still use started.
+    response_started: Instant,
     busy: bool,
     report: Option<RequestReport>,
     pending_dispatch: Option<Box<PendingDispatch>>,
@@ -86,6 +100,7 @@ pub(super) struct RequestTracker {
     global_permit: Option<OwnedSemaphorePermit>,
     capacity: Option<Arc<tokio::sync::Semaphore>>,
     route_permit: Option<Arc<dyn Send + Sync>>,
+    caller_permit: Option<Arc<dyn Send + Sync>>,
     rebuild_abort: Option<Arc<AtomicBool>>,
     send_guard: Option<Arc<dyn UpstreamAdmissionGuard>>,
     quota_account: Option<String>,
@@ -183,11 +198,13 @@ impl RequestTracker {
         let capacity = permit.as_ref().map(|permit| permit.semaphore().clone());
         activity.count.fetch_add(1, Ordering::SeqCst);
         activity.tasks.fetch_add(1, Ordering::SeqCst);
+        let started = Instant::now();
         Self {
             activity,
             host,
             stop,
-            started: Instant::now(),
+            started,
+            response_started: started,
             busy: true,
             report: None,
             pending_dispatch: None,
@@ -198,11 +215,22 @@ impl RequestTracker {
             transport_identity: None,
             diagnostics: None,
             capture_payloads: false,
+            overload: Default::default(),
+            quota_exhausted_accounts: Default::default(),
+            quota_exhausted_attempt: None,
+            field_compat: Default::default(),
+            request_size: None,
+            pending_overload_retry: None,
+            overload_response_seen: false,
+            overload_attempt_number: 0,
+            overload_seen: false,
+            earlier_attempt_accounts: Default::default(),
             operation: "text",
             downstream: None,
             global_permit: permit,
             capacity,
             route_permit: None,
+            caller_permit: None,
             rebuild_abort: None,
             send_guard: None,
             quota_account: None,
@@ -238,6 +266,16 @@ impl RequestTracker {
         self.quota_account = None;
         self.transport_identity = None;
         self.capture_payloads = capture_payloads;
+        self.overload = Default::default();
+        self.quota_exhausted_accounts.clear();
+        self.quota_exhausted_attempt = None;
+        self.field_compat = Default::default();
+        self.request_size = None;
+        self.pending_overload_retry = None;
+        self.overload_response_seen = false;
+        self.overload_attempt_number = 0;
+        self.overload_seen = false;
+        self.earlier_attempt_accounts.clear();
         let identity = super::diagnostics::capture_header_identity(headers);
         self.diagnostics = Some(DiagnosticContext {
             request_id: uuid::Uuid::now_v7().to_string(),
@@ -323,6 +361,7 @@ impl RequestTracker {
         }
         if self.report.is_none() {
             self.report = Some(RequestReport {
+                transient_rate_limit: false,
                 official_access_fingerprint: None,
                 official_authorization_revision: None,
                 official_registration_id: None,
@@ -350,6 +389,14 @@ impl RequestTracker {
         }
     }
 
+    pub(super) async fn admit(&mut self, caller: &Caller) -> Result<(), ServiceError> {
+        if self.caller_permit.is_none() {
+            self.caller_permit = tokio::time::timeout(std::time::Duration::from_secs(5), self.host.caller_permit(caller))
+                .await.map_err(|_| ServiceError::new(504, "admission_timeout", "API key admission timed out"))??;
+        }
+        Ok(())
+    }
+
     pub(super) fn deadline(&self, timeout: Duration) -> super::deadline::Deadline {
         if timeout.is_zero() {
             super::deadline::Deadline::NONE
@@ -363,6 +410,14 @@ impl RequestTracker {
     pub(super) fn begin_attempt(&mut self, transport: &str) {
         if self.dispatch_open {
             return;
+        }
+        // Keep diagnostics bounded even when the opt-in recovery keeps running.
+        if let Some(context) = &mut self.diagnostics {
+            if self.overload.continuous() && context.attempts.len() >= 32 {
+                let removed = context.attempts.remove(0);
+                self.earlier_attempt_accounts.insert(removed.account_id);
+                context.truncated = true;
+            }
         }
         let mut checkpoint = Box::new(DispatchCheckpoint {
             report: self.report.clone(),
@@ -395,6 +450,7 @@ impl RequestTracker {
             }
         }
         self.quota_started = Instant::now();
+        self.overload_response_seen = false;
         self.dispatch_count += 1;
         self.dispatch_open = true;
         self.capture_request_fault(false);
@@ -412,6 +468,8 @@ impl RequestTracker {
                 model_id: report.upstream_model.clone(),
                 ..Default::default()
             });
+            attempt.request_size = self.request_size.clone();
+            if let Some(trace) = self.pending_overload_retry.take() { attempt.overload_retry = Some(trace); }
             checkpoint.retry = Some(Box::new(PendingDispatch {
                 report: report.clone(),
                 attempt: attempt.clone(),
@@ -421,7 +479,7 @@ impl RequestTracker {
                 proxy_route: self.diagnostics.as_ref().and_then(|context| context.proxy_route.clone()),
             }));
             if let Some(context) = &mut self.diagnostics {
-                attempt.sequence = context.attempts.len() as u32 + 1;
+                attempt.sequence = self.dispatch_count.min(u32::MAX as usize) as u32;
                 attempt.transport = transport.to_owned();
                 attempt.started_at_ms = chrono::Utc::now().timestamp_millis();
                 context.attempts.push(attempt);
@@ -434,18 +492,44 @@ impl RequestTracker {
         self.dispatch_count > 0
     }
 
+    pub(super) fn mark_quota_exhausted(&mut self, account: &str) -> bool {
+        if self.quota_exhausted_attempt == Some(self.dispatch_count) {
+            return false;
+        }
+        self.quota_exhausted_attempt = Some(self.dispatch_count);
+        self.quota_exhausted_accounts.insert(account.to_owned());
+        true
+    }
+
     pub(super) fn upstream_attempt_count(&self) -> usize {
         self.dispatch_count
     }
 
     pub(super) fn upstream_account_ids(&self) -> std::collections::HashSet<String> {
         self.diagnostics.as_ref().map(|context| context.attempts.iter()
-            .map(|attempt| attempt.account_id.clone()).collect()).unwrap_or_default()
+            .map(|attempt| attempt.account_id.clone()).chain(self.earlier_attempt_accounts.iter().cloned()).collect()).unwrap_or_default()
     }
 
     /// Use only when transport evidence proves no HTTP request reached upstream
     /// (e.g. reqwest's is_connect). A timeout/read failure is not such evidence.
     pub(super) fn discard_unsent_attempt(&mut self) -> bool {
+        self.rollback_dispatch_checkpoint()
+    }
+
+    /// The WebSocket upgrade succeeded, but the inference create frame was not
+    /// sent. Keep that distinction in tracing while rolling back inference
+    /// accounting so a replacement candidate receives its own dispatch record.
+    pub(super) fn discard_unstarted_websocket_attempt(&mut self) -> bool {
+        let rolled_back = self.rollback_dispatch_checkpoint();
+        if rolled_back {
+            tracing::info!(target: "codex_api",
+                "[NativeAPI][websocket] request_id={} transport_connected=true inference_not_sent=true",
+                self.diagnostic_request_id());
+        }
+        rolled_back
+    }
+
+    fn rollback_dispatch_checkpoint(&mut self) -> bool {
         if !self.dispatch_open {
             return false;
         }
@@ -520,6 +604,15 @@ impl RequestTracker {
         }
     }
 
+    fn quota_candidate(&self) -> Option<&str> {
+        // Routing stages a candidate without recording a send. Fence that exact
+        // candidate, including an official route whose quota account is None.
+        match &self.pending_dispatch {
+            Some(candidate) => candidate.quota_account.as_deref(),
+            None => self.quota_account.as_deref(),
+        }
+    }
+
     pub(super) fn check_quota_before_send(&self) -> Result<(), ServiceError> {
         let guard = match &self.pending_dispatch {
             Some(candidate) => candidate.send_guard.as_ref(),
@@ -528,18 +621,19 @@ impl RequestTracker {
         if let Some(guard) = guard {
             guard.check().map_err(|error| error.with_upstream_not_sent(true))?;
         }
-        // Routing stages a candidate without recording a send. Fence that exact
-        // candidate, including an official route whose quota account is None.
-        let account_id = match &self.pending_dispatch {
-            Some(candidate) => candidate.quota_account.as_deref(),
-            None => self.quota_account.as_deref(),
-        };
-        if let Some(account_id) = account_id {
+        if let Some(account_id) = self.quota_candidate() {
             self.host.check_quota_before_send(account_id)
                 .map_err(|error| error.with_upstream_not_sent(true))?;
-            self.host.quota_request_started(account_id);
         }
         Ok(())
+    }
+
+    /// Mark only when a business request is actually about to be sent. A
+    /// successful quota check or a WebSocket upgrade does not spend quota.
+    pub(super) fn quota_request_started(&self) {
+        if let Some(account_id) = self.quota_candidate() {
+            self.host.quota_request_started(account_id);
+        }
     }
 
     pub(super) fn quota_event(&self, event: &serde_json::Value) {
@@ -587,12 +681,56 @@ impl RequestTracker {
         }
     }
 
+    pub(super) fn start_response_clock(&mut self) {
+        self.response_started = Instant::now();
+    }
+
+    pub(super) fn first_response_event(&mut self, event: &serde_json::Value) {
+        let is_response = match event["type"].as_str().unwrap_or_default() {
+            "" => super::events::response_terminal_kind(event).is_some(),
+            "keepalive" | "codex.rate_limits" => false,
+            _ => true,
+        };
+        if is_response {
+            self.first_response();
+        }
+    }
+
     pub(super) fn first_response(&mut self) {
         if let Some(context) = &mut self.diagnostics {
+            if !self.overload_response_seen {
+                if let Some(trace) = context.attempts.last_mut().and_then(|attempt| attempt.overload_retry.as_mut()) {
+                    if let Some(start) = self.overload.started {
+                        trace.recovery_ms = start.elapsed().as_millis() as u64;
+                    }
+                }
+                self.overload_response_seen = true;
+            }
             context
                 .first_response_ms
-                .get_or_insert(self.started.elapsed().as_millis() as u64);
+                .get_or_insert(self.response_started.elapsed().as_millis() as u64);
         }
+    }
+
+    pub(super) fn diagnostic_request_id(&self) -> &str {
+        self.diagnostics.as_ref().map_or("", |context| context.request_id.as_str())
+    }
+
+    pub(super) fn request_size(&mut self, size: super::diagnostics::RequestSize) {
+        self.request_size = Some(size);
+    }
+
+    pub(super) fn upstream_request_bytes(&mut self, bytes: usize) {
+        if let Some(attempt) = self.diagnostics.as_mut().and_then(|context| context.attempts.last_mut()) {
+            attempt.upstream_request_bytes = Some(bytes as u64);
+        }
+    }
+
+    pub(super) fn overload_retry(&mut self, wait: Duration, elapsed: Duration) {
+        self.pending_overload_retry = Some(super::diagnostics::OverloadRetry {
+            retry: self.overload.retries, wait_ms: wait.as_millis() as u64,
+            recovery_ms: elapsed.as_millis() as u64,
+        });
     }
 
     pub(super) fn attempt_result(&mut self, status: u16, success: bool, error: Option<&str>) {
@@ -620,20 +758,49 @@ impl RequestTracker {
         }
     }
 
+    pub(super) fn observe_overload(&mut self) {
+        if self.dispatch_count == 0 || self.overload_attempt_number == self.dispatch_count {
+            return;
+        }
+        if let Some(context) = &self.diagnostics {
+            if let Some(attempt) = context.attempts.last() {
+                self.host.overload_attempt(&context.request_id, attempt);
+                self.overload_attempt_number = self.dispatch_count;
+                self.overload_seen = true;
+            }
+        }
+    }
+
+    fn finish_overload(&mut self, status: u16, success: bool) {
+        self.overload.recovered();
+        if self.overload_seen {
+            self.overload_seen = false;
+            let outcome = if success { "recovered" } else if status == 499 { "cancelled" } else { "failed" };
+            self.host.overload_outcome(self.diagnostic_request_id(), outcome,
+                self.report.as_ref().map(|report| report.account_id.as_str()));
+        }
+    }
+
     pub(super) fn attempt_error(&mut self, error: &ServiceError) {
+        if !error.upstream_not_sent && super::overload::failure(error) {
+            self.observe_overload();
+        }
         if !self.dispatch_open {
             return;
         }
         let open_attempt = self.diagnostics.as_ref().and_then(|context| context.attempts.last())
             .is_some_and(|attempt| attempt.status.is_none());
+        self.capture_transient_rate_limit(error.transient_rate_limit);
         if let Some(details) = error.response_error.as_ref() {
             self.capture_official_authorization_error(error.status, details);
         }
-        let retired = if error.transport_failure == Some(super::contract::TransportFailureKind::TlsDecrypt) {
-            self.transport_identity.as_deref().map(|identity| self.host.invalidate_transport(identity))
-        } else {
-            None
-        };
+        let retired = self.transport_identity.as_deref().and_then(|identity| {
+            match error.transport_failure {
+                Some(super::contract::TransportFailureKind::TlsDecryptHttp2) => Some(self.host.invalidate_http2_transport(identity)),
+                Some(super::contract::TransportFailureKind::TlsDecrypt) => Some(self.host.invalidate_transport(identity)),
+                None => None,
+            }
+        });
         self.capture_request_fault(error.code == super::upstream_errors::REQUEST_SCOPED);
         self.capture_response_error(Some(&error.message), error.credential_scope);
         self.attempt_result(error.status, false, Some(error.code));
@@ -661,7 +828,7 @@ impl RequestTracker {
 
     pub(super) fn capture_response_error(&mut self, message: Option<&str>, credential_scope: bool) {
         if let Some(report) = &mut self.report {
-            report.credential_scope |= credential_scope;
+            report.credential_scope |= credential_scope && !report.transient_rate_limit;
             if let Some(message) = message.filter(|message| !message.is_empty()) {
                 report.error_message = Some(super::diagnostics::sanitize_error_text(message));
             }
@@ -673,6 +840,10 @@ impl RequestTracker {
         }
     }
 
+    pub(super) fn capture_transient_rate_limit(&mut self, transient: bool) {
+        if let Some(report) = &mut self.report { report.transient_rate_limit |= transient; if transient { report.credential_scope = false; } }
+    }
+
     pub(super) fn capture_request_fault(&mut self, request_scoped: bool) {
         if let Some(context) = &mut self.diagnostics {
             context.upstream_request_scoped = request_scoped;
@@ -680,6 +851,8 @@ impl RequestTracker {
     }
 
     pub(super) fn capture_upstream_error(&mut self, status: u16, value: &serde_json::Value) {
+        if super::overload::event(value) { self.observe_overload(); }
+        self.capture_transient_rate_limit(super::transient_rate_limit::applies(value));
         self.capture_official_authorization_error(status, value);
         let (message, scope) = super::diagnostics::upstream_error_metadata_status(status, value);
         self.capture_response_error(message.as_deref(), scope);
@@ -706,7 +879,7 @@ impl RequestTracker {
         let mut context = self.diagnostics.take()?;
         context.output_generation_ms = context
             .first_response_ms
-            .map(|first| (self.started.elapsed().as_millis() as u64).saturating_sub(first));
+            .map(|first| (self.response_started.elapsed().as_millis() as u64).saturating_sub(first));
         if !success && context.failure_phase.is_none() {
             context.failure_phase = Some(
                 if context.attempts.is_empty() {
@@ -747,6 +920,7 @@ impl RequestTracker {
             return Err(stopping_error());
         }
         self.started = Instant::now();
+        self.response_started = self.started;
         Ok(())
     }
 
@@ -768,6 +942,7 @@ impl RequestTracker {
     pub(super) fn routed(&mut self, caller: &Caller, route: &Route, model: &str) {
         self.route_permit = route.permit.clone();
         let attempt = DiagnosticAttempt {
+            transport_http1_fallback: route.proxy_route.as_ref().and_then(|v| v.get("transportHttp1Fallback")).and_then(serde_json::Value::as_bool),
             authorization_route: Some(if route.chatgpt_plan { "official" } else { "local_gateway" }.into()),
             authorization_fallback: (!route.chatgpt_plan).then(|| route.official_fallback_failure.as_ref()
                 .map(|failure| super::official_fallback::trace(&route.account_id, failure))).flatten(),
@@ -777,6 +952,7 @@ impl RequestTracker {
             ..Default::default()
         };
         let report = RequestReport {
+            transient_rate_limit: false,
             official_authorization_revision: route.official_authorization_revision.clone(),
             official_registration_id: route.official_registration_id.clone(),
             official_fallback_registration_id: route.official_fallback_registration_id.clone(),
@@ -846,10 +1022,9 @@ impl RequestTracker {
                 .get("service_tier")
                 .and_then(serde_json::Value::as_str)
                 .map(str::to_string);
-            report.reasoning_effort = body
-                .pointer("/reasoning/effort")
-                .and_then(serde_json::Value::as_str)
-                .map(str::to_string);
+            report.reasoning_effort = super::chatgpt_plan_request::latest_configuration_effort(body)
+                .or_else(|| body.pointer("/reasoning/effort").and_then(serde_json::Value::as_str))
+                .map(str::to_ascii_lowercase);
         }
     }
 
@@ -915,6 +1090,7 @@ impl RequestTracker {
         usage: Option<serde_json::Value>,
         error: Option<String>,
     ) {
+        self.finish_overload(status, success);
         // A later candidate may fail locally after a real upstream rejection.
         // Persist that real response under its original account, not the
         // unsent candidate or its preparation/cancellation error.
@@ -955,6 +1131,7 @@ impl RequestTracker {
         } else {
             self.persist(None, diagnostics, downstream).await;
         }
+        self.caller_permit = None;
     }
 
     fn persistence_task(
@@ -971,8 +1148,11 @@ impl RequestTracker {
         let activity = self.activity.clone();
         let stop = self.stop.clone();
         let started = self.started;
+        let response_started = self.response_started;
+        let caller_permit = self.caller_permit.clone();
         activity.tasks.fetch_add(1, Ordering::SeqCst);
         Some(runtime.spawn(async move {
+            let _caller_permit = caller_permit;
             let _guard = PersistenceGuard(activity);
             settle_downstream(
                 &mut report,
@@ -980,9 +1160,13 @@ impl RequestTracker {
                 downstream,
                 stop,
                 started,
+                response_started,
                 DOWNSTREAM_OUTCOME_TIMEOUT,
             )
             .await;
+            if let (Some(context), Some(report)) = (&diagnostics, &report) {
+                _guard.0.request_sizes.record(context, report.success, report.status);
+            }
             let record = async {
                 if let Some(report) = report {
                     if tokio::time::timeout(Duration::from_secs(5), host.record(report))
@@ -1047,6 +1231,7 @@ impl RequestTracker {
 
 impl Drop for RequestTracker {
     fn drop(&mut self) {
+        self.finish_overload(if self.stop.stopped() { 503 } else { 499 }, false);
         if let Some(abort) = self.rebuild_abort.take() {
             abort.store(true, Ordering::Release);
         }
@@ -1083,6 +1268,7 @@ async fn settle_downstream(
     downstream: Option<oneshot::Receiver<DownstreamOutcome>>,
     mut stop: StopSignal,
     started: Instant,
+    response_started: Instant,
     max_wait: Duration,
 ) {
     let (Some(report), Some(receiver)) = (report.as_mut(), downstream) else {
@@ -1131,10 +1317,12 @@ async fn settle_downstream(
             context.failure_phase = Some("downstream".into());
         }
     }
-    report.elapsed = started.elapsed();
+    let finished = Instant::now();
+    report.elapsed = finished.duration_since(started);
     if let Some(context) = diagnostics.as_mut() {
+        let elapsed = finished.duration_since(response_started).as_millis() as u64;
         context.output_generation_ms = context.first_response_ms.map(|first| {
-            (report.elapsed.as_millis().min(u128::from(u64::MAX)) as u64).saturating_sub(first)
+            elapsed.saturating_sub(first)
         });
     }
     report.diagnostics = diagnostics.clone();

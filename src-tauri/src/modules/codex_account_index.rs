@@ -321,6 +321,21 @@ pub fn load_account_index() -> CodexAccountIndex {
     }
 }
 
+/// Save reset settings against the authoritative index while account membership is stable.
+/// Do not repair/scan/decrypt account details while holding the mutation lock.
+pub(crate) fn with_reset_automation_account_ids<T>(
+    write: impl FnOnce(&[String]) -> Result<T, String>,
+) -> Result<T, String> {
+    let storage_error = || super::codex_reset_automation::message("storageError");
+    let _guard = CODEX_ACCOUNT_MUTATION_LOCK.lock().map_err(|_| storage_error())?;
+    let bytes = fs::read(get_accounts_storage_path())
+        .map_err(|error| format!("{}: {error}", storage_error()))?;
+    let index: CodexAccountIndex = serde_json::from_slice(&bytes)
+        .map_err(|error| format!("{}: {error}", storage_error()))?;
+    let ids = index.accounts.into_iter().map(|account| account.id).collect::<Vec<_>>();
+    write(&ids)
+}
+
 fn load_account_index_checked() -> Result<CodexAccountIndex, String> {
     let path = get_accounts_storage_path();
     if !path.exists() {
@@ -1051,9 +1066,8 @@ fn save_account_unchecked(account: &CodexAccount) -> Result<(), String> {
         return Err("API_SERVICE_RUNTIME_ACCOUNT_READ_ONLY".into());
     }
     let path = get_accounts_dir().join(format!("{}.json", &account.id));
-    let content = crate::modules::secure_account_storage::serialize_account_file("codex",
+    crate::modules::secure_account_storage::write_account_preserving_switch_time(&path, "codex",
         &crate::modules::codex_account_proxy::storage_value(account)?)?;
-    write_string_atomic(&path, &content).map_err(|e| format!("写入账号详情失败: {}", e))?;
     Ok(())
 }
 

@@ -1,5 +1,58 @@
 use super::*;
 
+// Exercise the upstream shared lowering/restoration around the ordinary Chat
+// adapter. Production no longer has a second discovery context inside ToolContext.
+type DiscoveryContext = (ToolContext, super::super::chatgpt_plan_tools::Context);
+
+fn prepare_context(body: &Value) -> Result<(Value, DiscoveryContext), ServiceError> {
+    validate_client_tools(body)?;
+    let mut lowered = body.clone();
+    let discovery = super::super::chatgpt_plan_tools::prepare(&mut lowered)?;
+    let context = ToolContext::from_responses(&lowered);
+    Ok((lowered, (context, discovery)))
+}
+
+fn to_chat(body: &Value) -> Result<Value, ServiceError> {
+    let (lowered, _) = prepare_context(body)?;
+    super::responses_to_chat(&lowered)
+}
+
+fn restore_response(value: &Value, model: &str, context: &DiscoveryContext) -> Result<Value, ServiceError> {
+    let response = super::chat_to_response_with_context(value, model, &context.0)?;
+    super::super::chatgpt_plan_tools::restore_event(&mut context.1.clone(), response)?
+        .pop().ok_or_else(|| upstream_error("No restored response"))
+}
+
+struct DiscoveryStream {
+    adapter: ResponsesStreamAdapter,
+    discovery: super::super::chatgpt_plan_tools::Context,
+}
+impl DiscoveryStream {
+    fn with_context(model: String, context: DiscoveryContext) -> Self {
+        Self { adapter: ResponsesStreamAdapter::with_context(model, context.0), discovery: context.1 }
+    }
+    fn restore(&mut self, events: Vec<Value>) -> Result<Vec<Value>, ServiceError> {
+        let mut restored = Vec::new();
+        for event in events {
+            restored.extend(super::super::chatgpt_plan_tools::restore_event(&mut self.discovery, event)?);
+        }
+        Ok(restored)
+    }
+    fn push(&mut self, value: &Value) -> Result<Vec<Value>, ServiceError> {
+        let events = self.adapter.push(value)?;
+        self.restore(events)
+    }
+    fn finish(&mut self) -> Result<Vec<Value>, ServiceError> {
+        let events = self.adapter.finish()?;
+        self.restore(events)
+    }
+    fn finish_done(&mut self) -> Result<Vec<Value>, ServiceError> {
+        let events = self.adapter.finish_done()?;
+        self.restore(events)
+    }
+}
+
+
 fn search() -> Value {
     json!({"type":"tool_search","execution":"client","parameters":{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}})
 }
@@ -9,7 +62,7 @@ fn request(tools: Value, input: Value) -> Value {
 }
 
 fn wire(body: &Value) -> String {
-    responses_to_chat(body).unwrap()["tools"]
+    to_chat(body).unwrap()["tools"]
         .as_array()
         .unwrap()
         .iter()
@@ -44,8 +97,8 @@ fn chat_client_discovery_json_roundtrip_preserves_scope_custom_and_namespaces() 
         json!([]),
     );
     let original = body.clone();
-    let (_, context) = ToolContext::prepare_responses(&body).unwrap();
-    let upstream = responses_to_chat(&body).unwrap();
+    let (_, context) = prepare_context(&body).unwrap();
+    let upstream = to_chat(&body).unwrap();
     assert_eq!(body, original);
     assert!(upstream["tools"]
         .as_array()
@@ -60,7 +113,7 @@ fn chat_client_discovery_json_roundtrip_preserves_scope_custom_and_namespaces() 
         .find(|tool| tool["function"]["name"] == private)
         .unwrap();
     assert_eq!(found["function"]["parameters"], search()["parameters"]);
-    let response = chat_to_response_with_context(
+    let response = restore_response(
         &completion(&private, "{\"query\":\"查找\"}"),
         "fixture",
         &context,
@@ -71,7 +124,7 @@ fn chat_client_discovery_json_roundtrip_preserves_scope_custom_and_namespaces() 
     assert_eq!(response["output"][0]["arguments"], json!({"query":"查找"}));
     assert_eq!(response["output"][0]["call_id"], "search-call");
     assert!(!response.to_string().contains(&private));
-    let patched = chat_to_response_with_context(
+    let patched = restore_response(
         &completion(
             "files__patch",
             "{\"input\":\"*** Begin Patch\\n*** End Patch\"}",
@@ -104,7 +157,7 @@ fn chat_client_discovery_schema_precedence_and_explicit_empty_tools_survive_hist
         (json!([search(), current]), "current"),
     ] {
         let body = request(declarations, input.clone());
-        let chat = responses_to_chat(&body).unwrap();
+        let chat = to_chat(&body).unwrap();
         let found = chat["tools"]
             .as_array()
             .unwrap()
@@ -115,7 +168,7 @@ fn chat_client_discovery_schema_precedence_and_explicit_empty_tools_survive_hist
         assert_eq!(chat["messages"][0]["tool_calls"][0]["id"], "search-call");
         assert_eq!(chat["messages"][1]["tool_call_id"], "search-call");
     }
-    let disabled = responses_to_chat(&request(json!([]), input)).unwrap();
+    let disabled = to_chat(&request(json!([]), input)).unwrap();
     assert!(disabled.get("tools").is_none());
     assert_eq!(disabled["messages"].as_array().unwrap().len(), 4);
 }
@@ -130,14 +183,14 @@ fn chat_client_discovery_only_explicit_client_tools_and_paired_history_are_admit
         json!({"type":"file_search"}),
         json!({"type":"function","name":"f","allowed_callers":["programmatic"]}),
     ] {
-        assert!(responses_to_chat(&request(json!([tool.clone()]), json!([]))).is_err());
+        assert!(to_chat(&request(json!([tool.clone()]), json!([]))).is_err());
         assert!(
-            responses_to_chat(&request(json!([search()]), history(json!([tool.clone()])))).is_err()
+            to_chat(&request(json!([search()]), history(json!([tool.clone()])))).is_err()
         );
         let mut input = history(json!([]));
         input[1].as_object_mut().unwrap().remove("tools");
         input[1]["output"] = json!(json!({"tools":[tool]}).to_string());
-        assert!(responses_to_chat(&request(json!([search()]), input)).is_err());
+        assert!(to_chat(&request(json!([search()]), input)).is_err());
     }
     for input in [
         json!([{"type":"tool_search_output","execution":"client","call_id":"orphan","tools":[]}]),
@@ -145,10 +198,10 @@ fn chat_client_discovery_only_explicit_client_tools_and_paired_history_are_admit
         json!([{"type":"tool_search_call","execution":"client","call_id":"same","arguments":{}},{"type":"tool_search_call","execution":"client","call_id":"same","arguments":{}},{"type":"tool_search_output","call_id":"same","tools":[]}]),
         json!([{"type":"tool_search_call","execution":"server","call_id":"server","arguments":{}},{"type":"tool_search_output","call_id":"server","tools":[]}]),
     ] {
-        assert!(responses_to_chat(&request(json!([search()]), input)).is_err());
+        assert!(to_chat(&request(json!([search()]), input)).is_err());
     }
     let ambiguous = json!({"input":[{"type":"tool_search_call","call_id":"ambiguous","arguments":{}},{"type":"tool_search_output","call_id":"ambiguous","tools":[]}]});
-    assert!(responses_to_chat(&ambiguous).is_err());
+    assert!(to_chat(&ambiguous).is_err());
 }
 
 #[test]
@@ -159,18 +212,18 @@ fn chat_client_discovery_choice_requires_the_explicit_current_declaration() {
     ] {
         let mut body = request(tools, history(json!([])));
         body["tool_choice"] = json!({"type":"tool_search"});
-        assert!(responses_to_chat(&body).is_err());
+        assert!(to_chat(&body).is_err());
     }
     let mut body = request(json!([search()]), json!([]));
     body["tool_choice"] =
         json!({"type":"allowed_tools","mode":"required","tools":[{"type":"tool_search"}]});
-    let chat = responses_to_chat(&body).unwrap();
+    let chat = to_chat(&body).unwrap();
     assert_eq!(
         chat["tool_choice"]["allowed_tools"]["tools"][0]["function"]["name"],
         wire(&body)
     );
     body["tool_choice"] = json!({"type":"tool_search","execution":"server"});
-    assert!(responses_to_chat(&body).is_err());
+    assert!(to_chat(&body).is_err());
 }
 
 #[test]
@@ -179,8 +232,8 @@ fn chat_client_discovery_private_names_do_not_shadow_functions_or_other_requests
         json!([search(), {"type":"function","name":"cockpit_client_tool_search","parameters":{"type":"object"}}]),
         json!([]),
     );
-    let (_, context) = ToolContext::prepare_responses(&body).unwrap();
-    let chat = responses_to_chat(&body).unwrap();
+    let (_, context) = prepare_context(&body).unwrap();
+    let chat = to_chat(&body).unwrap();
     let hidden = chat["tools"]
         .as_array()
         .unwrap()
@@ -191,16 +244,16 @@ fn chat_client_discovery_private_names_do_not_shadow_functions_or_other_requests
                 .filter(|name| name.starts_with("cockpit_client_tool_search_"))
         })
         .unwrap();
-    let response = chat_to_response_with_context(
+    let response = restore_response(
         &completion("cockpit_client_tool_search", "{}"),
         "fixture",
         &context,
     )
     .unwrap();
     assert_eq!(response["output"][0]["type"], "function_call");
-    let (_, isolated) = ToolContext::prepare_responses(&request(json!([]), json!([]))).unwrap();
+    let (_, isolated) = prepare_context(&request(json!([]), json!([]))).unwrap();
     let response =
-        chat_to_response_with_context(&completion(hidden, "{}"), "fixture", &isolated).unwrap();
+        restore_response(&completion(hidden, "{}"), "fixture", &isolated).unwrap();
     assert_eq!(response["output"][0]["type"], "function_call");
 }
 
@@ -214,7 +267,7 @@ fn chat_client_discovery_nested_function_shape_preserves_names_and_collision_fen
         ]}]),
         json!([]),
     );
-    let chat = responses_to_chat(&body).unwrap();
+    let chat = to_chat(&body).unwrap();
     let tools = chat["tools"].as_array().unwrap();
     assert_eq!(tools.len(), 4);
     let names = tools
@@ -224,8 +277,8 @@ fn chat_client_discovery_nested_function_shape_preserves_names_and_collision_fen
     assert!(names.contains(&"cockpit_client_tool_search"));
     assert!(names.contains(&"cockpit_client_tool_search_1"));
     assert!(names.contains(&"files__read") && names.contains(&"files__write"));
-    let (_, context) = ToolContext::prepare_responses(&body).unwrap();
-    let response = chat_to_response_with_context(
+    let (_, context) = prepare_context(&body).unwrap();
+    let response = restore_response(
         &completion("cockpit_client_tool_search", "{}"),
         "fixture",
         &context,
@@ -235,7 +288,7 @@ fn chat_client_discovery_nested_function_shape_preserves_names_and_collision_fen
     let mut ordinary_only = body;
     ordinary_only["tools"].as_array_mut().unwrap().remove(0);
     assert_eq!(
-        responses_to_chat(&ordinary_only).unwrap()["tools"]
+        to_chat(&ordinary_only).unwrap()["tools"]
             .as_array()
             .unwrap()
             .len(),
@@ -248,8 +301,8 @@ fn chat_client_discovery_sse_restores_unicode_and_terminal_once_for_eof_and_done
     let body = request(json!([search()]), json!([]));
     let hidden = wire(&body);
     for done in [false, true] {
-        let (_, context) = ToolContext::prepare_responses(&body).unwrap();
-        let mut adapter = ResponsesStreamAdapter::with_context("fixture".into(), context);
+        let (_, context) = prepare_context(&body).unwrap();
+        let mut adapter = DiscoveryStream::with_context("fixture".into(), context);
         let mut events = adapter.push(&json!({"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"search-call","type":"function","function":{"name":hidden,"arguments":"{\"query\":\"查"}}]},"finish_reason":null}]})).unwrap();
         events.extend(adapter.push(&json!({"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"找工具\"}"}}]},"finish_reason":"tool_calls"}]})).unwrap());
         events.extend(adapter.push(&json!({"choices":[],"usage":{"prompt_tokens":2,"completion_tokens":3,"total_tokens":5}})).unwrap());
@@ -283,14 +336,14 @@ fn chat_client_discovery_invalid_search_arguments_never_seal_a_success() {
     let body = request(json!([search()]), json!([]));
     let hidden = wire(&body);
     for arguments in ["[]", "null", "1", "{\"query\":"] {
-        let (_, context) = ToolContext::prepare_responses(&body).unwrap();
-        assert!(chat_to_response_with_context(
+        let (_, context) = prepare_context(&body).unwrap();
+        assert!(restore_response(
             &completion(&hidden, arguments),
             "fixture",
             &context
         )
         .is_err());
-        let mut adapter = ResponsesStreamAdapter::with_context("fixture".into(), context);
+        let mut adapter = DiscoveryStream::with_context("fixture".into(), context);
         let events = adapter.push(&json!({"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"search-call","type":"function","function":{"name":hidden,"arguments":arguments}}]},"finish_reason":"tool_calls"}]})).unwrap();
         assert!(events
             .iter()

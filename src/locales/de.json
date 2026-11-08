@@ -158,6 +158,58 @@
     "providerClear": "Auswahl leeren"
   },
   "common": {
+    "profileRestoreBusy": "Der Anmeldestatus wird wiederhergestellt. Bitte später erneut versuchen.",
+    "profileRestoreInvalid": "Der Pfad zum Anmeldeschnappschuss ist ungültig. Importieren Sie das Konto erneut.",
+    "profileRestoreRecoveryFailed": "Die Anmeldung konnte nicht wiederhergestellt werden. Die Sicherung wurde behalten: {{detail}}",
+    "dataQueryBusy": "Daten werden verarbeitet. Bitte versuchen Sie es gleich erneut.",
+    "apiBudget": {
+      "keyScope": "Dieser Key",
+      "upgradeRequired": "Aktualisieren Sie Cockpit Tools auf dem Gateway-Rechner, um Statistiken und Anfragen anzuzeigen.",
+      "gatewayName": "Cockpit-Gateway",
+      "accountingNote": "Erfasste Kosten bleiben bei Preisneuberechnungen unverändert; Schätzwerte können abweichen. Budgets werden nach UTC zurückgesetzt.",
+      "preparing": "Historische Statistiken werden im Hintergrund vorbereitet. Bitte später erneut versuchen.",
+      "settled": "Erfasste Kosten",
+      "unrecorded": "Nicht erfasst",
+      "unmeteredShort": "Nicht gemessen",
+      "rangeLimit": "Gültige Daten bis heute wählen, höchstens 93 Tage.",
+      "partialCharges": "Bei {{count}} Anfragen fehlen Kosten oder Messwerte. Kostenstatistiken enthalten nur erfasste Beträge.",
+      "retention": "Verlauf ab {{time}}; nur im Gateway gespeicherte Protokolle werden berücksichtigt.",
+      "logFiltersNote": "Filter gelten nur für die Details unten. Statistiken und Diagramme verwenden den gewählten Zeitraum.",
+      "timeout": "Zeitüberschreitung",
+      "textRequests": "Textanfragen",
+      "imageEdits": "Bildbearbeitung",
+      "budget": "Nutzungsbudget",
+      "period": "Zeitraum",
+      "lifetime": "Einmalig",
+      "daily": "Täglich",
+      "weekly": "Wöchentlich",
+      "monthly": "Monatlich",
+      "dailyLimit": "Tageslimit",
+      "concurrency": "Parallele Anfragen",
+      "dailyImages": "Bildanfragen/Tag",
+      "invalid": "Eine positive Zahl im zulässigen Bereich eingeben.",
+      "hint": "Abrechnung zu konfigurierten Preisen. Modelle ohne Preis sind nicht verfügbar. Rücksetzung nach UTC ohne Übertrag. Laufende Anfragen können das Limit überschreiten.",
+      "unmetered": "Anfragen ohne Nutzungs- oder Preisdaten sind nicht im Betrag enthalten.",
+      "remote": "Cockpit-Ferndienst",
+      "active": "Aktiv",
+      "disabled": "Deaktiviert",
+      "service_disabled": "Dienst gestoppt",
+      "token_limit_reached": "Tokenlimit erreicht",
+      "budget_limit_reached": "Budget erschöpft",
+      "images": "Bilder",
+      "consumed": "Verbraucht",
+      "resetsAt": "Rücksetzung",
+      "offline": "Offline · zwischengespeichert"
+    },
+    "networkErrors": {
+      "upstream": "dem vorgeschalteten Dienst",
+      "proxyConnection": "Verbindung zu {{target}} über Proxy „{{proxy}}“ fehlgeschlagen. Mögliche Proxy- oder Netzwerkstörung. Proxy prüfen oder einen anderen Knoten versuchen.",
+      "proxyTimeout": "Zeitüberschreitung bei der Verbindung zu {{target}} über Proxy „{{proxy}}“. Mögliche Proxy- oder Netzwerkstörung. Proxy prüfen oder einen anderen Knoten versuchen.",
+      "proxyAuth": "Authentifizierung am Proxy „{{proxy}}“ fehlgeschlagen. Proxy-Benutzername oder Passwort prüfen.",
+      "localProxyUnavailable": "Keine Verbindung zum lokalen Proxy „{{proxy}}“. Prüfen, ob der Proxy-Dienst läuft.",
+      "directConnection": "Verbindung zu {{target}} fehlgeschlagen. Netzwerk prüfen und erneut versuchen.",
+      "directTimeout": "Zeitüberschreitung bei der Verbindung zu {{target}}. Netzwerk prüfen und erneut versuchen."
+    },
     "codexUsage": {
       "title": "Kontingent & Nutzung",
       "session": "Aktueller Chat",
@@ -238,6 +290,7 @@
     "failureTime": "Fehlerzeit",
     "clearRecord": "Eintrag löschen",
     "clearingRecord": "Löschen…",
+    "to": "bis",
     "dragSortHint": "Zum Sortieren am linken Griff ziehen. Beim Loslassen wird automatisch gespeichert.",
     "dragSortFilteredHint": "Zum Sortieren die Suche leeren.",
     "recycleBin": {
@@ -383,7 +436,11 @@
           "statusSkipped": "Übersprungen",
           "statusPending": "Wartet auf Import"
         },
-        "invalidJson": "Ungültiges JSON. Prüfen Sie die Datei oder den eingefügten Inhalt."
+        "invalidJson": "Ungültiges JSON. Prüfen Sie die Datei oder den eingefügten Inhalt.",
+        "empty": "Die Importdaten sind leer.",
+        "sizeLimit": "Importdateien dürfen {{limit}} MiB nicht überschreiten.",
+        "countLimit": "Pro Import sind höchstens {{count}} Konten erlaubt.",
+        "itemFailed": "Eintrag {{index}}: {{error}}"
       },
       "externalImport": {
         "bundleInvalidJson": "Das Importpaket ist kein gültiges JSON",
@@ -494,6 +551,8 @@
         "title": "Kontoübersicht"
       },
       "quota": {
+        "usageWithUnit": "Nutzung ({{unit}})",
+        "usage": "Nutzung",
         "noData": "Keine Kontingentdaten",
         "queryFailed": "Kontingentabfrage fehlgeschlagen",
         "resetDone": "Zurückgesetzt",
@@ -582,6 +641,29 @@
         "missingTiming": "Keine gültige Ausgabezeit aufgezeichnet.",
         "shortWindow": "Beobachtetes Ausgabefenster kürzer als 100 ms."
       }
+    },
+    "deviceRestriction": {
+      "title": "Gerätelimits",
+      "badge": "Gerätelimit erkannt",
+      "paused": "Ein eindeutiges Gerätelimit wurde erkannt. Automatische Versuche für diesen Vorgang sind pausiert. Prüfen Sie den lokalen Eintrag auf der Kontoseite.",
+      "note": "Dies sind lokale Beobachtungen, keine OpenAI-Geräteplätze. Das Löschen von Konten oder lokalen Zugangsdaten garantiert keine Freigabe des serverseitigen Gerätelimits.",
+      "retryNote": "Wiederholungen werden zugelassen, ohne das Limit als aufgehoben zu markieren. Eine erneute eindeutige Ablehnung pausiert sie wieder.",
+      "desktop": "Desktop-Anmeldung",
+      "quota": "Kontingentabfrage",
+      "api": "API-Anfragen",
+      "oauth": "OAuth-Anmeldung",
+      "token": "Token-Erneuerung",
+      "recovered": "Vorgang wieder möglich",
+      "pausedLabel": "Versuche pausiert",
+      "retryEnabled": "Wiederholungen erlaubt",
+      "observed": "Zuerst: {{first}} · Zuletzt: {{last}} · {{count}} Beobachtungen",
+      "check": "Erneut prüfen",
+      "allowRetry": "Erneut zulassen",
+      "help": "Offizielle Hilfe",
+      "support": "Support kontaktieren",
+      "failed": "Vorgang fehlgeschlagen. Der letzte bekannte Zustand bleibt erhalten. Bitte erneut versuchen.",
+      "loginAttempt": "Anmeldung ohne Kontozuordnung",
+      "removed": "Entferntes lokales Konto"
     }
   },
   "nav": {
@@ -608,6 +690,7 @@
     "traeCn": "Trae CN​",
     "traeSoloCn": "TRAE SOLO CN​",
     "codebuddyCn": "CodeBuddy CN​",
+    "minimaxcode": "MiniMax Code",
     "zed": "Zed-Plattform",
     "expandSidebar": "Seitenleiste erweitern",
     "collapseSidebar": "Seitenleiste einklappen",
@@ -675,7 +758,12 @@
     "setAsDefaultInGroup": "Als Standardplattform in dieser Gruppe festlegen",
     "removeFromGroup": "Aus Gruppe entfernen",
     "sidebarSelectedUnlimited": "Ausgewählt ({count})",
-    "tipWithGroupsUnlimited": "Ausgewählte Plattformen und Gruppen manuell sortieren"
+    "tipWithGroupsUnlimited": "Ausgewählte Plattformen und Gruppen manuell sortieren",
+    "enabledToggle": "Aktiviert",
+    "groupEnabledHint": "Alle Plattformen dieser Gruppe gemeinsam aktivieren oder deaktivieren",
+    "disabledHint": "Deaktivieren stoppt automatische Vorgänge und blendet die Plattformeinstellungen aus. Die Sichtbarkeit des Eintrags wird separat gesteuert",
+    "enableAll": "Alle aktivieren",
+    "disableAll": "Alle deaktivieren"
   },
   "privacy": {
     "hideSensitive": "E-Mails ausblenden",
@@ -1162,6 +1250,12 @@
       "workbuddyAppPathPlaceholder": "Standardpfad",
       "workbuddyPathSelect": "Auswählen",
       "workbuddyPathReset": "Auf Standard zurücksetzen",
+      "minimaxCodeAppPath": "MiniMax Code-Startpfad",
+      "minimaxCodeAppPathDesc": "Leer lassen, um den Standardpfad zu verwenden",
+      "minimaxCodeAppPathPlaceholder": "Standardpfad",
+      "minimaxCodePathSelect": "Auswählen",
+      "minimaxCodeAppPathPathSelect": "Auswählen",
+      "minimaxCodePathReset": "Auf Standard zurücksetzen",
       "openclawAuthOverwrite": "OpenClaw-Anmeldung beim Wechsel von Codex überschreiben",
       "openclawAuthOverwriteDesc": "Wenn deaktiviert, wird nur Codex gewechselt und OpenClaw behält den aktuellen Anmeldestatus",
       "ghcpOpencodeAuthOverwrite": "OpenCode-Anmeldung beim Wechsel von GitHub Copilot überschreiben",
@@ -1233,6 +1327,8 @@
       "qoderPathSelect": "Auswählen",
       "workbuddyAutoRefresh": "WorkBuddy Auto-Aktualisierung",
       "workbuddyAutoRefreshDesc": "Häufigkeit der automatischen Aktualisierung im Hintergrund",
+      "minimaxCodeAutoRefresh": "MiniMax Code Auto-Aktualisierung",
+      "minimaxCodeAutoRefreshDesc": "Häufigkeit der automatischen Aktualisierung im Hintergrund",
       "codexLocalAccessEntryVisible": "API-Service-Eintrag anzeigen",
       "codexLocalAccessEntryVisibleDesc": "Steuert nur, ob der API-Service-Eintrag in der Codex-Übersicht angezeigt wird. Der lokale API-Service wird dadurch nicht gestoppt; du kannst ihn hier oder in den Schnelleinstellungen wieder einblenden.",
       "codexLocalAccessEnabled": "API-Service aktivieren",
@@ -1320,13 +1416,15 @@
       "codexPreserveExternalBridge": "Externe Brücke behalten",
       "codexPreserveExternalBridgeDesc": "Beim OAuth-Kontowechsel eine durch lokale Integrationsdaten geprüfte Codex Web GPT-Brücke behalten. Standardmäßig aus.",
       "codexEnhancements": {
-        "nativeFast": "Nativer Fast-Schalter",
-        "nativeFastDesc": "Aktiviert das native Geschwindigkeitsmenü des Clients für API-Key-Konten mit den vom Modell unterstützten Stufen. Verfügbarkeit und Preise hängen vom API-Anbieter ab.",
         "quotaCompat": "Kontingente im Mischbetrieb",
         "quotaCompatDesc": "Bei echter OAuth-Anmeldung mit externer API-Route verhindert dies, dass das Abokontingent lokale API-Nachrichten blockiert. Tatsächlicher Verbrauch und Bildkontingente bleiben unverändert.",
-        "restartHint": "Standardmäßig eingeschaltet. Nach Änderungen jede betroffene Codex-Instanz neu starten und Cockpit Tools geöffnet lassen. Natives Diktieren richtet sich nach den Funktionen und Einstellungen des Clients; Cockpit übernimmt es nicht und erzwingt keine Aktivierung.",
-        "configFailed": "Einstellungen konnten nicht geladen oder gespeichert werden: {{error}}"
-      }
+        "restartHint": "Native Vorhersagen sind standardmäßig ausgeschaltet. Nach Änderungen jede betroffene Codex-Instanz neu starten und Cockpit Tools geöffnet lassen. Natives Diktieren richtet sich nach den Funktionen und Einstellungen des Clients; Cockpit übernimmt es nicht und erzwingt keine Aktivierung.",
+        "configFailed": "Einstellungen konnten nicht geladen oder gespeichert werden: {{error}}",
+        "nativePredictions": "Native Vorhersagen für den nächsten Schritt (Tab)",
+        "nativePredictionsDesc": "Erstellt Vorschläge für die nächste Nachricht mit dem API-Anbieter und Modell des aktuellen Chats. Verbraucht zusätzliche API-Credits; Codex nach dem Speichern neu starten."
+      },
+      "timeDisplayMode": "Zeitanzeige",
+      "timeDisplayModeDesc": "Zeitangabe auf Kontokarten und in Listen. Standard ist der Kontowechsel"
     },
     "network": {
       "apiTitle": "Antigravity-Cockpit-API",
@@ -1629,6 +1727,42 @@
       "refreshed": "Nutzung aktualisiert",
       "usage": "Nutzung",
       "tierOther": "Andere"
+    },
+    "background": {
+      "title": "Hintergrund",
+      "description": "Ändert nur den App-Hintergrund. Kontokarten und Bedienelemente behalten ihr Aussehen.",
+      "presets": "Hintergrundvorlagen",
+      "default": "Standard",
+      "mist": "Nebel",
+      "forest": "Wald",
+      "dusk": "Dämmerung",
+      "sand": "Sand",
+      "custom": "Eigenes",
+      "chooseImage": "Bild wählen",
+      "replaceImage": "Bild ersetzen",
+      "imageHint": "JPG, PNG oder WebP, bis 10 MB. Große Bilder werden lokal verkleinert.",
+      "preview": "Vorschau",
+      "strength": "Stärke",
+      "blur": "Unschärfe",
+      "pixels": "{{count}} Pixel",
+      "position": "Bildposition",
+      "center": "Mitte",
+      "top": "Oben",
+      "bottom": "Unten",
+      "localHint": "Änderungen gelten sofort. Bild und Einstellungen jedes Designs werden separat auf diesem Gerät gespeichert; Bilder werden nicht hochgeladen. Beim Zurücksetzen bleiben Ihre Designs erhalten.",
+      "restore": "Zurücksetzen",
+      "imageType": "Bitte ein JPG-, PNG- oder WebP-Bild wählen.",
+      "imageSize": "Bitte ein Bild unter 10 MB wählen.",
+      "imageRead": "Bild nicht lesbar. Bitte eine andere Datei versuchen.",
+      "storage": "Hintergrund konnte nicht geladen oder gespeichert werden. Erneut versuchen; der bisherige Hintergrund bleibt erhalten.",
+      "saveFailed": "Änderungen sind sichtbar, konnten aber nicht gespeichert werden. Bitte erneut versuchen; zuvor gespeicherte Designs bleiben erhalten.",
+      "builtInSkins": "Integrierte Designs",
+      "mySkins": "Meine Designs",
+      "addSkin": "Hinzufügen",
+      "rename": "Umbenennen",
+      "skinName": "Designname",
+      "manageSkin": "Design verwalten: {{name}}",
+      "deleteSkinConfirm": "„{{name}}“ löschen? Beim Löschen des aktiven Designs wird der Standardhintergrund wiederhergestellt."
     }
   },
   "appPath": {
@@ -1974,7 +2108,13 @@
     "tagUpdated": "Tag aktualisiert",
     "plan": {
       "personal": "Persönlich"
-    }
+    },
+    "lastSwitchTime": "Kontowechsel",
+    "neverSwitched": "Noch nie gewechselt",
+    "refreshTime": "Aktualisierung",
+    "lastSwitchTimeFull": "Kontowechsel: {{time}}",
+    "refreshTimeFull": "Aktualisierung: {{time}}",
+    "toggleTimeMode": "Wechsel- oder Aktualisierungszeit anzeigen"
   },
   "overview": {
     "title": "Kontoübersicht",
@@ -2338,6 +2478,74 @@
     "other_group": "Andere Modelle"
   },
   "codex": {
+    "resetAutomation": {
+      "nothingToReset": "Derzeit muss kein Kontingentzeitraum zurückgesetzt werden.",
+      "unknownOutcome": "Das Ergebnis konnte nicht bestätigt werden. Bitte erneut versuchen.",
+      "applyAllHint": "Wenn aktiviert, überträgt Speichern diese Regel auf alle Konten und ersetzt eigene sowie deaktivierte Einstellungen.",
+      "applyAll": "Für alle Konten speichern",
+      "accountHint": "Konten ohne eigene Einstellungen nutzen die gemeinsame Regel. Speichern gilt nur für dieses Konto.",
+      "title": "Resetkarten automatisch nutzen",
+      "accountTab": "Dieses Konto",
+      "publicTab": "Gemeinsame Regel",
+      "inherit": "Gemeinsame Regel nutzen",
+      "custom": "Eigene Regel",
+      "off": "Aus",
+      "entryDefault": "Automatik",
+      "noCredits": "Keine Resetkarten",
+      "publicHint": "Standard für Konten ohne eigene Einstellungen. Eigene und deaktivierte Einstellungen bleiben erhalten.",
+      "before": "Vor Ablauf",
+      "expiry": "Vor Ablauf nutzen",
+      "minutes": "Min.",
+      "hours": "Std.",
+      "days": "Tage",
+      "hostHint": "Läuft, solange Cockpit Tools geöffnet ist. Der Server wählt die Karte aus.",
+      "invalidTime": "Eine positive Dauer in ganzen Sekunden eingeben.",
+      "invalidPercent": "Einen ganzzahligen Prozentsatz von 0 bis 100 eingeben.",
+      "loadFailed": "Regeln konnten nicht geladen werden: {{error}}",
+      "saveFailed": "Regeln konnten nicht gespeichert werden: {{error}}",
+      "conflict": "Die Regel wurde andernorts geändert. Bitte neu laden.",
+      "busy": "Für dieses Konto läuft bereits ein Reset.",
+      "storageError": "Resetregeln konnten nicht gelesen oder gespeichert werden.",
+      "timeout": "Zeitüberschreitung. Die gespeicherte Anfrage-ID wird gegen doppelte Kartennutzung erneut verwendet.",
+      "history": "Letzte Aktionen",
+      "reasonExpiry": "Vor Ablauf",
+      "reasonQuota": "Wenig Kontingent",
+      "reasonManual": "Manueller Reset",
+      "reasonCheck": "Hintergrundprüfung",
+      "pending": "Ergebnis ausstehend",
+      "editPublic": "Gemeinsame Regel bearbeiten",
+      "accountMissing": "Das Konto existiert nicht mehr.",
+      "masterLabel": "Reset-Karten automatisch nutzen",
+      "ruleSource": "Regelquelle",
+      "weeklyTrigger": "Wöchentliches Kontingent",
+      "weeklyRemaining": "Wöchentlich übrig ≤",
+      "previewTitle": "Regelvorschau",
+      "previewAny": "Eine Reset-Karte wird genutzt, sobald eine aktivierte Bedingung erfüllt ist:",
+      "previewExpiry": "Karte läuft in höchstens {{value}} {{unit}} ab",
+      "previewWeekly": "Wöchentliches Restkontingent höchstens {{percent}} %",
+      "previewOff": "Automatische Nutzung ist aus. Die folgenden Regeln sind inaktiv.",
+      "previewEmpty": "Keine Auslösebedingung aktiviert. Karten werden nicht automatisch genutzt.",
+      "cardOn": "Autom.",
+      "cardOff": "Aus",
+      "orSeparator": " oder ",
+      "inheritHint": "Diese Einstellungen folgen der gemeinsamen Regel. Bearbeite diese oder wähle eine eigene Regel."
+    },
+    "overload": {
+      "setting": "Bei Auslastung weiter versuchen",
+      "settingHint": "Gilt für neue Anfragen am lokalen Codex-API-Dienst. Sicher wiederholbare Anfragen warten auf freie Modellkapazität.",
+      "retrying": "Modell ausgelastet, erneuter Versuch ({{count}})",
+      "count": "Ausgelastet: {{count}}",
+      "countHint": "Zählt Versuche beim Anbieter, auch automatische Wiederholungen. Verlauf bis zu 7 Tage.",
+      "history": "Auslastungsverlauf",
+      "empty": "Keine Auslastungsfehler in diesem Zeitraum.",
+      "attempt": "Versuch {{number}}",
+      "sameAccount": "Gleiches Konto erfolgreich",
+      "otherAccount": "Nach Kontowechsel erfolgreich",
+      "pending": "Ergebnis offen",
+      "cancelled": "Abgebrochen",
+      "failed": "Anfrage fehlgeschlagen",
+      "countUnavailable": "Auslastungszahlen nicht verfügbar"
+    },
     "instance": {
       "errors": {
         "threadSyncWorkerFailed": "Sitzungssynchronisation fehlgeschlagen: {{error}}",
@@ -2364,6 +2572,14 @@
       "description": "Der Standardmodus behält das bestehende Routing bei. Bei Bevorzugung des regulären Kontingents sind Credits erst erlaubt, wenn alle Codex-Konten im Pool des aktuellen API-Schlüssels ihr reguläres Kontingent aufgebraucht haben. Nur reguläres Kontingent sperrt Credits. Ein deaktivierter Credits-Schalter eines Kontos hat immer Vorrang.",
       "boundary": "Kontingent-Snapshots sind 5 Minuten gültig. Bei eingeschränkten Konten mit unbekanntem, veraltetem oder zurückgesetztem Kontingent wird dieses vor der Auswahl automatisch aktualisiert (höchstens 9 Sekunden; gleichzeitige Abfragen werden zusammengefasst). Schlägt die Aktualisierung fehl, wird das Konto sicher pausiert; Details stehen in der Kontopool-Diagnose. Laufende Anfragen lassen sich nicht zurücknehmen. Eine Anfrage, die eine Kontingentgrenze überschreitet, oder die gleichzeitige Nutzung durch andere Clients kann beim Anbieter dennoch Credits verbrauchen; verbindliche Ausgabenlimits müssen beim Anbieter eingestellt werden.",
       "strictHint": "Der Modus Nur reguläres Kontingent sperrt Credits für alle Konten. Die Kontoschalter bleiben für andere Richtlinien gespeichert."
+    },
+    "launchConfirmation": {
+      "title": "Start unbestätigt",
+      "description": "Der Start wurde angefordert, der Clientstatus ist aber noch unbestätigt. Das Fenster ist möglicherweise bereits offen. Bitte nicht erneut starten.",
+      "check": "Status prüfen",
+      "notRunning": "Die Zielinstanz wurde noch nicht erkannt. Prüfen Sie später erneut oder schließen Sie diesen Dialog vor einem neuen Startversuch.",
+      "checkFailed": "Der Betriebsstatus konnte nicht gelesen werden. Bitte später erneut prüfen.",
+      "maintenanceDeferred": "Ein Teil der Sitzungswartung ist noch offen. Der Verlauf bleibt erhalten; später in der Sitzungsverwaltung erneut versuchen."
     },
     "launchErrors": {
       "sessionRestoreFailed": "Die Sitzungsreparatur ist fehlgeschlagen, die Sicherung wurde nicht vollständig wiederhergestellt. Start angehalten; vor einem erneuten Versuch Protokolle und Sicherungen prüfen.",
@@ -2594,14 +2810,8 @@
       "unsupportedCountryRegion": "Die aktuelle Netzwerkregion unterstützt das Erneuern der Codex-Autorisierung nicht. Der OpenAI-Autorisierungsdienst hat diesen Netzwerkausgang abgelehnt. Wechseln Sie in eine unterstützte Region und versuchen Sie es erneut."
     },
     "switchAuth": {
-      "apiOnlyTitle": "Client-Anmeldung erforderlich",
       "reauthorizeTitle": "Codex-Autorisierung abgelaufen",
-      "apiOnlyDescription": "Der aktuelle Client wurde zur Anmeldeseite weitergeleitet. Autorisieren Sie ihn erneut, um die Client-Nutzung wiederherzustellen; der API-Dienst kann vorerst weiter verwendet werden.",
-      "observationStatus": "Weiterleitung zur Anmeldeseite erkannt",
-      "observationTime": "Letzte Prüfung: {{time}}",
-      "loginRedirectTime": "Letzte Weiterleitung zur Anmeldeseite: {{time}}",
       "observationInstance": "Beobachtete Instanz: {{instance}}",
-      "launchTime": "Startzeit dieser Instanz: {{time}}",
       "reauthorizeDescription": "Die Anmeldedaten konnten nicht erneuert werden und der access_token ist für den API-Dienst nicht mehr verfügbar. Autorisieren Sie das Konto erneut.",
       "idTokenUnavailable": "Die Client-Identität ist abgelaufen und die automatische Erneuerung lieferte keinen gültigen id_token.",
       "reasonLabel": "Grund",
@@ -2614,10 +2824,7 @@
       "startingInstanceAfterReauth": "Autorisierung aktualisiert. Instanz wird neu gestartet...",
       "startInstanceAfterReauthFailed": "Autorisierung aktualisiert, aber die Instanz konnte nicht gestartet werden: {{error}}",
       "reauthorizedAndStartedInstance": "Neu autorisiert und Instanz gestartet",
-      "apiOnlyBadge": "Anmeldung nötig",
-      "clearClientAuth": "Warnung löschen",
-      "clearClientAuthSuccess": "Client-Warnung gelöscht",
-      "clearClientAuthFailed": "Client-Warnung konnte nicht gelöscht werden: {{error}}"
+      "apiTokenUsableDescription": "Einige Anmeldedaten müssen erneut autorisiert werden. Das aktuelle Zugriffstoken kann weiterhin für den API-Dienst verwendet werden."
     },
     "current": "Aktuell",
     "empty": {
@@ -2687,6 +2894,16 @@
       "savedPath": "Gespeicherter Pfad"
     },
     "localAccess": {
+      "gatewayEngineNative": "Rust nativ",
+      "gatewayEngineSidecar": "Go (bisher)",
+      "gatewayEngineHint": "Rust ist der Standard. Beim ersten Upgrade wird zu Rust gewechselt; spätere Einstellungen bleiben erhalten. Ein Wechsel startet den API-Dienst neu und kann laufende Anfragen unterbrechen; Codex-Fenster bleiben geöffnet.",
+      "gatewayEngineSwitching": "Engine wird gewechselt…",
+      "gatewayEngineSwitchFailed": "Engine-Wechsel fehlgeschlagen: {{error}}",
+      "gatewayEngineReadbackFailed": "Aktuelle Engine unbestätigt. Vor einem neuen Versuch aktualisieren: {{error}}",
+      "gatewayEngineReadbackTimeout": "Zeitüberschreitung beim Statusabruf",
+      "gatewayEngineOperationBusy": "Ein anderer Dienstvorgang läuft. In Kürze erneut versuchen.",
+      "gatewayEngineSwitchRestored": "Wechsel fehlgeschlagen. Die vorherige Engine wurde wiederhergestellt.",
+      "gatewayEngineRestoreFailed": "Wechsel und Wiederherstellung fehlgeschlagen. Vor einem neuen Versuch den Dienststatus prüfen.",
       "title": "API-Dienst",
       "accountCount": "{{count}} Konten",
       "baseUrl": "Adresse",
@@ -2933,7 +3150,6 @@
         "quotaReserveInvalid": "Geben Sie eine ganze Zahl von 1 bis 100 ein.",
         "strictReserve": "Strenger Schutz",
         "strictReserveDesc": "Reserviertes Kontingent wird automatisch mit einem Sicherheitspuffer geschützt. Nahe der Grenze ist pro Konto eine Anfrage erlaubt; danach wird das aktuelle Kontingent bestätigt. Die Nutzung anderer Clients bleibt unberührt.",
-        "strictNativeOnly": "Strenger Schutz erfordert die Rust-Engine. Vor dem Wechsel zu Go bitte ausschalten.",
         "safetyMargin": "Sicherheitspuffer",
         "safetyMarginUnit": "Prozentpunkte",
         "safetyMarginInvalid": "Ganze Zahl von 1 bis 20 eingeben.",
@@ -3016,17 +3232,7 @@
       "gatewayModeNewLabel": "API-Dienst-Neu",
       "gatewayModeOldLabel": "API-Dienst-Alt",
       "gatewayModeSaveSuccess": "Gateway-Modus des API-Dienstes aktualisiert",
-      "gatewayEngineNative": "Rust nativ",
-      "gatewayEngineSidecar": "Go (bisher)",
-      "gatewayEngineHint": "Rust ist der Standard. Beim ersten Upgrade wird zu Rust gewechselt; spätere Einstellungen bleiben erhalten. Ein Wechsel startet den API-Dienst neu und kann laufende Anfragen unterbrechen; Codex-Fenster bleiben geöffnet.",
-      "gatewayEngineSwitching": "Engine wird gewechselt…",
-      "gatewayEngineSwitchFailed": "Engine-Wechsel fehlgeschlagen: {{error}}",
-      "gatewayEngineReadbackFailed": "Aktuelle Engine unbestätigt. Vor einem neuen Versuch aktualisieren: {{error}}",
-      "gatewayEngineReadbackTimeout": "Zeitüberschreitung beim Statusabruf",
       "gatewayEngineRequestsBusy": "Es laufen noch Anfragen. Nach Abschluss erneut versuchen.",
-      "gatewayEngineOperationBusy": "Ein anderer Dienstvorgang läuft. In Kürze erneut versuchen.",
-      "gatewayEngineSwitchRestored": "Wechsel fehlgeschlagen. Die vorherige Engine wurde wiederhergestellt.",
-      "gatewayEngineRestoreFailed": "Wechsel und Wiederherstellung fehlgeschlagen. Vor einem neuen Versuch den Dienststatus prüfen.",
       "gatewayEngineStopped": "Der API-Dienst wurde beendet. Vor einem neuen Versuch neu starten.",
       "gatewayGuideTitle": "Gateway hier wechseln",
       "gatewayGuideDesc": "Standard ist das neue Gateway. Bei Kompatibilitätsproblemen oder Client-Anfragefehlern kannst du hier auf das alte Gateway wechseln.",
@@ -3118,7 +3324,7 @@
       "imageGenerationMainModel": {
         "label": "Bild-Hauptmodell",
         "notice": "Das Bild-Hauptmodell im normalen Betrieb nicht ändern.",
-        "hint": "Dient nur der Weiterleitung an den offiziellen Bilddienst, nicht der Auswahl des Bildmodells. Nur bei einer Änderung des offiziellen Hauptmodells manuell anpassen. Leer lassen für gpt-5.6-luna.",
+        "hint": "Nur für die integrierte Bilderzeugung in Responses, nicht für die eigenständige Bilder-API. Leer: gpt-5.6-luna.",
         "invalid": "Modell-ID ohne Leerzeichen eingeben, höchstens 200 Zeichen."
       },
       "requestDetail": {
@@ -3184,7 +3390,7 @@
       "resetCreditDialogDesc": "Setze das Rate-Limit zurück, um ohne Unterbrechung weiterzuarbeiten. Verfügbare Resets: {{count}}.",
       "resetCreditDialogAction": "Nutzung zurücksetzen",
       "resetCreditNoCredits": "Keine Resets verfügbar",
-      "resetCreditConsumed": "5-Stunden-Kontingent zurückgesetzt",
+      "resetCreditConsumed": "Kontingent zurückgesetzt",
       "resetCreditFailed": "Zurücksetzen fehlgeschlagen: {{error}}",
       "resetCreditRefreshAfterConsumeFailed": "Reset gesendet, aber Kontingentaktualisierung fehlgeschlagen: {{error}}",
       "resetCreditsTitleWithExpiry": "Verbleibende Rücksetzungen für das 5-Stunden-Fenster: {{count}}. Nächster Ablauf: {{time}}",
@@ -3193,7 +3399,7 @@
       "resetCreditStatusRedeemed": "Genutzt",
       "resetCreditStatusExpired": "Abgelaufen",
       "resetCreditStatusUnknown": "Unbekannt",
-      "resetCreditNextExpiry": "Nächster Ablauf: {{time}}",
+      "resetCreditNextExpiry": "Nächster Reset-Ablauf {{time}}",
       "resetCreditDetailsTitle": "Rücksetzdetails",
       "resetCreditNoRecords": "Keine Reset-Einträge",
       "resetCreditRecordsLoadFailed": "Reset-Einträge konnten nicht geladen werden: {{error}}",
@@ -3209,7 +3415,12 @@
       "codeReview": "Codeprüfung",
       "codeReviewShort": "Prüfung",
       "monthlyCreditsHint": "Verbleibende monatliche Credits",
-      "monthlyCreditsInline": "Credits: {{value}}"
+      "monthlyCreditsInline": "Credits: {{value}}",
+      "resetCreditExpiryHours": "{{hours}} Std. {{minutes}} Min.",
+      "resetCreditExpiryMinutes": "{{minutes}} Min.",
+      "resetCreditExpiryExpired": "Abgelaufen · Details",
+      "resetCreditExpiryUrgent": "Läuft bald ab: {{time}} · {{duration}}",
+      "resetCreditExpiryNormal": "Läuft ab: {{time}} · {{duration}}"
     },
     "quotaError": {
       "badge": "Kontingentfehler",
@@ -3486,6 +3697,7 @@
         "expand": "Erweitern",
         "collapse": "Einklappen",
         "repairVisibility": "Sichtbarkeit reparieren",
+        "repairIndex": "Chatindex reparieren",
         "restoreSessions": "Sitzungen wiederherstellen",
         "exportSessions": "Sitzungen exportieren",
         "importSessions": "Sitzungen importieren",
@@ -3518,6 +3730,10 @@
         "clear": "Leeren"
       },
       "messages": {
+        "deleteNotConfirmed": "Der Client hat die Löschung nicht bestätigt. Die lokale Bereinigung wurde gestoppt und Sicherungen wurden beibehalten: {{error}}",
+        "historyReadFailed": "Der Chatverlauf kann nicht sicher gelesen werden: {{error}}",
+        "restoreIndexRetry": "Die Chatdatei wurde beibehalten, aber die Chatliste konnte nicht aktualisiert werden. Das Original bleibt im Papierkorb. Beheben Sie das Problem und versuchen Sie es erneut: {{error}}",
+        "importIndexRetry": "Die Chatdateien wurden importiert, aber die Chatliste konnte nicht aktualisiert werden. Dateien und Importpaket bleiben erhalten. Beheben Sie das Problem und versuchen Sie es erneut: {{error}}",
         "pickOne": "Bitte wähle mindestens eine Sitzung aus",
         "syncNeedTwo": "Mindestens zwei Instanzen sind erforderlich, um Sitzungen zu synchronisieren",
         "pickRestoreOne": "Bitte wählen Sie mindestens eine Sitzung zur Wiederherstellung aus",
@@ -3592,9 +3808,9 @@
         "providerLoadFailed": "Provider-Kandidaten konnten nicht geladen werden: {{error}}",
         "modeTitle": "Reparaturmodus",
         "modeQuick": "Schnellreparatur",
-        "modeQuickDesc": "Normalisiert Anbieter in der offiziellen State-DB und den Sitzungsindizes. Rollout-Dateien bleiben erhalten. Für normale Kontowechsel.",
+        "modeQuickDesc": "Sichtbarkeitsindizes und aktuelle Zuordnungen mit kurzem Zeitlimit reparieren. Zum Schreiben von Projektdaten die Instanz beenden.",
         "modeDeep": "Vollständige Reparatur",
-        "modeDeepDesc": "Repariert alle historischen Anbieter, Kataloge, Arbeitsbereiche und Unteragent-Indizes. Rollout-Dateien bleiben erhalten. Beenden Sie zuerst die Zielinstanz.",
+        "modeDeepDesc": "Umfasst Schnellreparatur, Projektwiederherstellung aus Sicherungen und Chatindexreparatur. Zielinstanz vorher beenden.",
         "scopeTitle": "Sitzungsumfang",
         "scopeAll": "Alle Sitzungen",
         "scopeAllDesc": "{{count}} Sitzung(en) in der aktuellen Liste reparieren.",
@@ -3626,9 +3842,26 @@
         "previewFailedWithError": "Vorschau der Sitzungsreparatur fehlgeschlagen: {{error}}",
         "confirmRepair": "Reparatur bestätigen",
         "title": "Verlauf reparieren",
-        "description": "Normalisiert Anbieter in SQLite-Indizes, Sitzungskatalog und Arbeitsbereichsstatus. Die ursprünglichen Rollout-Dateien bleiben bytegenau erhalten; nur Zeitstempel werden korrigiert. Zuvor wird eine lokale Sicherung erstellt.",
+        "description": "Die Schnellreparatur korrigiert Sichtbarkeitsindizes und aktuelle Projektzuordnungen. Die vollständige Reparatur nutzt auch ältere Sicherungen und repariert Chatindizes. Vor dem Schreiben werden lokale Sicherungen erstellt; Chatinhalte bleiben erhalten.",
         "stopInstanceHint": "Beenden Sie die ausgewählte Codex App-/ChatGPT-Instanz vor der vollständigen Reparatur vollständig. Eine Vorschau ist weiterhin möglich.",
-        "encryptedContentWarning": "Es wurde Verlauf erkannt, der von einem anderen Anbieter oder Konto verschlüsselt wurde. Metadaten können migriert werden, doch Fortsetzen oder Komprimieren kann fehlschlagen; wechseln Sie zum ursprünglichen Anbieter/Konto zurück oder starten Sie eine neue Sitzung."
+        "encryptedContentWarning": "Es wurde Verlauf erkannt, der von einem anderen Anbieter oder Konto verschlüsselt wurde. Metadaten können migriert werden, doch Fortsetzen oder Komprimieren kann fehlschlagen; wechseln Sie zum ursprünglichen Anbieter/Konto zurück oder starten Sie eine neue Sitzung.",
+        "modeHistory": "Bearbeiten/Abzweigen",
+        "modeHistoryDesc": "Behebt Fehler beim Bearbeiten und Verzweigen von Chats durch ungültige Indizes.",
+        "historyLiveHint": "Die Reparatur ist bei laufendem Client möglich. Starten Sie danach den Client neu und öffnen Sie die Chats erneut.",
+        "historyDescription": "Prüft ausgewählte Chats und deren Ursprungshistorie und setzt nur ungültige Seitenindizes zurück. Chatdaten, Konten und Provider-Einstellungen bleiben unverändert. Die Reparatur ist im laufenden Betrieb möglich; ein Neustart lädt die Indizes neu.",
+        "historyPreview": "{{count}} fehlerhafte Verlaufsindizes können neu aufgebaut werden. Der Chatverlauf bleibt unverändert.",
+        "historySuccess": "{{count}} ungültige Verlaufsindizes zurückgesetzt. Starten Sie den Client neu und öffnen Sie die Chats erneut, um sie neu aufzubauen. Sicherungen wurden aufbewahrt.",
+        "historyNoChanges": "Keine fehlerhaften Verlaufsindizes gefunden, die sicher neu aufgebaut werden können.",
+        "historyFailed": "Die Reparatur der Verlaufsindizes wurde nicht abgeschlossen: {{error}}",
+        "historyChanged": "Chatdaten wurden während der Reparatur geändert. Diese Reparatur wurde nicht angewendet. Versuchen Sie es in Kürze erneut.",
+        "historyScan": "Verlaufsindizes werden geprüft ({{current}}/{{total}})…",
+        "historyReset": "Fehlerhafte Indizes werden gesichert und zurückgesetzt…",
+        "projectsChanged": "Projektdaten wurden geändert. Vorschau aktualisieren und erneut versuchen.",
+        "projectsFailed": "Wiederherstellung lokaler Projekte fehlgeschlagen: {{error}}",
+        "projectsPreview": "Vorschau: {{projects}} Projekte, {{assignments}} Zuordnungen; {{skipped}} Projekte und {{ambiguous}} uneindeutige Chats übersprungen.",
+        "projectsSuccess": "Wiederhergestellt: {{projects}} Projekte, {{assignments}} Zuordnungen; {{skipped}} Projekte und {{ambiguous}} uneindeutige Chats übersprungen.",
+        "projectsPending": "Eine Wiederherstellung wurde unterbrochen. Zielinstanz beenden und die vollständige Reparatur ausführen, um offene Schreibvorgänge wiederherzustellen.",
+        "projectsDeferred": "Einige Projektdaten wurden zurückgestellt. Zielinstanz beenden und die Schnellreparatur wiederholen oder die vollständige Reparatur nutzen."
       },
       "importModal": {
         "title": "Sitzungen importieren",
@@ -4028,7 +4261,7 @@
         "apiKeyUrlInvalid": "Eine HTTP(S)-Verwaltungsadresse ohne eingebettete Zugangsdaten verwenden; API-Schlüssel gehören ins Schlüsselfeld."
       },
       "saveSuccess": "Modellanbieter gespeichert.",
-      "deleteBlocked": "Dieser Anbieter ist mit {{count}} Konten verknüpft und kann nicht gelöscht werden.",
+      "confirmDeleteWithAccounts": "Anbieter „{{name}}“ und {{count}} verknüpfte Konten löschen?",
       "confirmDelete": "Anbieter „{{name}}“ löschen?",
       "deleteFailed": "Anbieter konnte nicht gelöscht werden: {{error}}",
       "deleteApiKeyFailed": "API-Key konnte nicht gelöscht werden: {{error}}",
@@ -4052,7 +4285,9 @@
         "chatCompletions": "Chat-Completions-Protokoll",
         "deepseekResponsesHint": "Starte DeepSeek, um Gateway oder offizielle Direktverbindung zu wählen, und wähle dann Flash oder Pro. Das Gateway listet Modelle in Codex; bei Direktverbindung wird das Gateway übersprungen.",
         "deepseekChatHint": "DeepSeek Chat Completions nutzt für Alt-Pfade die lokale Gateway-Brücke. Wähle Responses, wenn du das offizielle Codex-Toolverhalten benötigst.",
-        "deepseekThirdPartyHint": "Diese Adresse ist kein offizieller DeepSeek-Endpunkt und wird als kompatibler Drittanbieter-Endpunkt behandelt; trage im Modellkatalog die echten Upstream-Modell-IDs ein und verwende keine offiziellen Modellnamen."
+        "deepseekThirdPartyHint": "Diese Adresse ist kein offizieller DeepSeek-Endpunkt und wird als kompatibler Drittanbieter-Endpunkt behandelt; trage im Modellkatalog die echten Upstream-Modell-IDs ein und verwende keine offiziellen Modellnamen.",
+        "anthropic": "Anthropic-Protokoll",
+        "gatewayRequired": "Dieses Protokoll benötigt das lokale Gateway. Wählen Sie hier das Startmodell."
       },
       "selectSavedProvider": "Gespeicherte Anbieter",
       "selectSavedApiKey": "Gespeicherte API-Keys",
@@ -4156,7 +4391,7 @@
         "selectVisible": "Sichtbare wählen",
         "resultSelectedCount": "{{count}} ausgewählt",
         "selectFailed": "Fehler wählen",
-        "deleteConfirm": "{{providerCount}} ausgewählte Provider löschen? Dabei werden auch {{accountCount}} exakt verknüpfte Codex-API-Key-Konten gelöscht.",
+        "deleteConfirm": "{{providerCount}} ausgewählte Anbieter und {{accountCount}} verknüpfte Konten löschen?",
         "deleteSuccess": "{{providerCount}} Provider und {{accountCount}} verknüpfte Konten gelöscht.",
         "deleteFailed": "Ausgewählte Elemente konnten nicht gelöscht werden: {{error}}",
         "protocolSummary": "{{protocol}} · {{mode}} · {{model}}",
@@ -4285,7 +4520,22 @@
       "importConfigPlaceholder": "Nutze „Konfiguration kopieren“ auf der Anbieterkarte und füge den Inhalt hier ein",
       "importConfigAction": "Konfiguration importieren",
       "importConfigFromClipboard": "Zwischenablage lesen",
-      "settingsRestartHint": "Anbietereinstellungen aktualisiert. Starten Sie laufende Codex-Instanzen oder API-Dienste mit diesem Anbieter neu, um sie anzuwenden."
+      "settingsRestartHint": "Anbietereinstellungen aktualisiert. Starten Sie laufende Codex-Instanzen oder API-Dienste mit diesem Anbieter neu, um sie anzuwenden.",
+      "anthropic": {
+        "auth": "Authentifizierung",
+        "hint": "Anthropic Messages-Gateway anbinden. Modelle abrufen oder manuell eingeben.",
+        "fetch": "Modelle abrufen",
+        "fetching": "Wird geladen…",
+        "fetchFailed": "Modelle konnten nicht abgerufen werden. Erneut versuchen oder Modell-IDs manuell eingeben.",
+        "import": "Konfig. importieren",
+        "importFailed": "Keine gültige Claude Code- oder Desktop-Gateway-Konfiguration gefunden."
+      },
+      "editor": {
+        "modelScope": "Modellbereich",
+        "providerDefault": "Anbieterstandard",
+        "sharedSettings": "Modelllisten und Fähigkeiten gelten für den gewählten Bereich. Protokoll, Anmeldung und Adresse gelten für den gesamten Anbieter.",
+        "saveScope": "Speichern aktualisiert den Anbieter und verknüpfte Konten. Ist das aktuelle Konto betroffen, werden auch die lokale Codex-Konfiguration und Zugangsdaten aktualisiert. Der Client startet nicht automatisch."
+      }
     },
     "quickSwitch": {
       "action": "Anbieter schnell wechseln",
@@ -4614,6 +4864,11 @@
       },
       "routing": {
         "optionsTitle": "Routingoptionen",
+        "sessionIdentityMapping": "Sitzungs-ID-Zuordnung",
+        "sessionIdentityMappingEnableHint": "Bei aktivierter Zuordnung erhält jedes vorgelagerte Konto beim Kontowechsel eigene Werte für Session-Id und Thread-Id. Das stärkt die Trennung der Kennungen, kann aber die Cache-Wiederverwendung zwischen Konten verringern. Im selben Konto werden vorhandene Zuordnungen weiterverwendet.",
+        "sessionIdentityMappingDisableHint": "Bei deaktivierter Zuordnung bleiben die ursprünglichen Client-Werte für Session-Id und Thread-Id erhalten. Verschiedene vorgelagerte Konten können diese Kennungen teilen. Das schwächt die Trennung, kann aber die Cache-Wiederverwendung zwischen Konten erhöhen.",
+        "sessionIdentityMappingCacheNote": "Die Cache-Trefferquote hängt auch von den Regeln des Anbieters, dem Kontobereich und dem Anfrageinhalt ab. Diese Einstellung garantiert weder eine höhere noch eine niedrigere Trefferquote.",
+        "sessionIdentityMappingSaveNote": "Nach der Bestätigung müssen Sie die Einstellungen speichern, um die Änderung anzuwenden.",
         "sessionAffinity": "Sitzungsbindung",
         "sessionAffinityTtl": "Ablauf (Sekunden)",
         "responsesWebsockets": "Responses über WebSocket",
@@ -4634,6 +4889,8 @@
         "allKinds": "Alle Typen",
         "allStatuses": "Alle Status",
         "allGatewayModes": "Alle Modi",
+        "sessionFilter": "Sitzung",
+        "sessionPlaceholder": "Sitzungs-ID",
         "modelFilter": "Modell",
         "modelPlaceholder": "Modell-ID",
         "accountFilter": "Konto",
@@ -5001,7 +5258,7 @@
       "boundProxyUnavailable": "Das verknüpfte Konto hat keinen verfügbaren Proxy. Wählen Sie erneut einen.",
       "sourceUnavailable": "Die Proxy-Quelle oder der Knoten ist nicht verfügbar. Wählen Sie erneut.",
       "operationTimeout": "Der Proxy-Vorgang hat das Zeitlimit überschritten. Versuchen Sie es erneut.",
-      "cardScopeHint": "Der gestartete Codex-Desktop-Client nutzt den Proxy dieser Karte. Verbindungen der Modell-Gateways zu ihren Anbietern behalten ihre eigenen Routen.",
+      "cardScopeHint": "Proxys von API-Key-Konten gelten für Desktop-Clients und ausgehende Anfragen des API-Dienstes. Der Proxy der API-Dienstkarte gilt nur für Desktop-Clients. Der Systemproxy bleibt unverändert.",
       "display": {
         "title": "Proxy-Anzeige",
         "compact": "Kompakt",
@@ -5302,7 +5559,7 @@
       "modeDefaultHint": "Dieses Konto verwendet keinen Proxy und behält den bisherigen Standardausgang.",
       "modeStaleHint": "Die gebundene Quelle oder der Knoten ist nicht mehr verfügbar. Bitte erneut auswählen.",
       "management": "Proxyverwaltung",
-      "managementHint": "Legen Sie Proxys für OAuth-, API-Konto- und API-Dienstkarten fest, ohne den Systemproxy zu ändern. Bei API-Karten gilt der Proxy für den gestarteten Desktop-Client; Modell-Gateways behalten ihre eigenen Routen.",
+      "managementHint": "Proxys von API-Key-Konten gelten für Desktop-Clients und ausgehende Anfragen des API-Dienstes. Der Proxy der API-Dienstkarte gilt nur für Desktop-Clients. Der Systemproxy bleibt unverändert.",
       "emptyTitle": "Ein eigener Zugang für dein Konto",
       "emptyDescription": "Keine geeigneten Kontokarten verfügbar. Fügen Sie ein OAuth- oder API-Konto hinzu oder aktivieren Sie die API-Dienstkarte. Wählen Sie dann hier einen Proxy.",
       "search": "Konten suchen",
@@ -5416,7 +5673,7 @@
         "subscriptionUrl": "Abo-URL",
         "nodeLinks": "Knotenlinks oder Konfiguration",
         "import": "Importieren",
-        "importNotice": "Abo-URLs und Zugangsdaten werden lokal verschlüsselt. Abo-Anfragen gehen ohne Konto-Token an den Anbieter.",
+        "importNotice": "Konfiguration und Ressourcen werden verschlüsselt gespeichert und zur Laufzeit in einem separaten Ordner entschlüsselt. Abonnement- und Ressourcenanfragen enthalten keine Konto-Token.",
         "intro": "Abos oder Knoten importieren und testen; anschließend in der Kontoliste auswählen und zuweisen.",
         "emptyTitle": "Ersten Proxy hinzufügen",
         "emptyHint": "Abonnements, Knotenlinks und HTTP / SOCKS5 werden unterstützt. Import und Test sind auch ohne Konto möglich.",
@@ -5461,7 +5718,7 @@
         "unsupported": "Nicht unterstützt",
         "invalidInput": "Namen und gültige Abo-URL, Knotenlink oder Proxy-Konfiguration eingeben.",
         "downloadFailed": "Abo-Download fehlgeschlagen. Netzwerk- und Proxy-Einstellungen prüfen und erneut versuchen.",
-        "downloadRedirect": "Abo-Download wegen einer Weiterleitung zu einem anderen Ursprung oder zu vieler Weiterleitungen gestoppt.",
+        "downloadRedirect": "Die Abonnementweiterleitung ist ungültig oder überschreitet das Limit.",
         "downloadDenied": "Der Abo-Server verweigert den Zugriff (HTTP 401/403). Link und Gültigkeit prüfen.",
         "downloadTls": "TLS-Verbindungsaufbau oder Zertifikatsprüfung für das Abo fehlgeschlagen. Netzwerk- und Proxy-Einstellungen prüfen.",
         "timeout": "Zeitüberschreitung. Vor erneutem Versuch den Status aktualisieren.",
@@ -5479,6 +5736,7 @@
         "loadBalanceGroup": "Lastverteilung",
         "reasonStrategy": "Diese Gruppenstrategie wird nicht unterstützt. Wählen Sie nach dem Aufklappen einen verfügbaren Knoten.",
         "reasonOptions": "Enthält ein noch nicht unterstütztes Protokoll oder eine Konfigurationsoption.",
+        "reasonProviderConfig": "Quelle, Filter oder Umwandlung dieses Knotenanbieters werden nicht unterstützt.",
         "reasonProvider": "Diese Gruppe benötigt externe Knotenanbieter, die noch nicht geladen wurden.",
         "reasonMembers": "Die Gruppenmitglieder haben die Prüfung nicht bestanden. Prüfen Sie die einzelnen Gründe.",
         "reasonInvalid": "Erforderliche Einstellungen fehlen oder sind ungültig.",
@@ -5500,6 +5758,14 @@
         "defaultProtocol": "Protokoll ohne Angabe",
         "credentialFormat": "Zugangsformat",
         "recognizing": "Wird erkannt…",
+        "nativePreview": "Beim Import verarbeitet Mihomo die Konfiguration direkt und lädt ihre Ressourcen. Die Vorschau greift weder auf Dateien noch auf das Netzwerk zu.",
+        "resourceDirectory": "Ressourcenordner",
+        "browseResources": "Ordner wählen",
+        "resourceDirectoryHint": "Wählen Sie bei lokalen Dateien den Ressourcenordner des Abonnements. Sein Inhalt wird in einen privaten Laufzeitordner kopiert und als verschlüsselte Momentaufnahme gespeichert.",
+        "resourceDirectoryRequired": "Wählen Sie den lokalen Ressourcenordner dieses Abonnements.",
+        "resourceMissing": "Lokale Ressourcen sind nicht verfügbar. Prüfen Sie den Ordner oder importieren Sie erneut.",
+        "rulesName": "Abonnementregeln",
+        "pendingProviders": "Beim Import werden {{count}} entfernte Knotenquellen geladen. Die Vorschau lädt sie nicht herunter.",
         "previewCount": "Gültig {{valid}} · Prüfen {{invalid}} · Doppelt {{duplicates}}",
         "line": "Zeile {{line}}",
         "ambiguous": "Mehrdeutiges Format. Zugangsformat wählen oder vollständige Proxy-URL verwenden.",
@@ -5601,7 +5867,7 @@
         "assign": "Proxy zuweisen",
         "specific": "Ausgewählte Konten",
         "shared": "Gemeinsamer Proxy",
-        "sharedHint": "Geeignete Karten ohne eigenen Proxy folgen diesem Proxy, auch neu hinzugefügte. Eigene Einstellungen und Kein Proxy haben Vorrang. API-Karten nutzen ihn für den Desktop-Client; Modell-Gateways behalten ihre eigenen Routen.",
+        "sharedHint": "Konten ohne eigenen Proxy übernehmen diesen Proxy, auch neue Konten. Eigene Proxys und Kein Proxy haben Vorrang. API-Key-Konten nutzen ihn für Desktop- und API-Anfragen; die API-Dienstkarte nur für Desktop-Clients.",
         "apply": "Zuweisen"
       },
       "managerResources": {
@@ -5711,6 +5977,14 @@
       }
     },
     "requestDiagnostics": {
+      "requestSizeTitle": "Anfragegröße",
+      "requestSizeHint": "Größe des dekomprimierten Client-JSON; Felder in kompakten JSON-Bytes. Nur Größen werden erfasst.",
+      "requestBytes": "Anfrage",
+      "historyBytes": "Verlauf",
+      "toolsBytes": "Werkzeuge",
+      "instructionsBytes": "Anweisungen",
+      "overloadRetry": "Überlast-Wiederholungen",
+      "overloadRecovery": "Erholungszeit",
       "recordPayloads": "Anfragetexte speichern",
       "recordPayloadsHint": "Standardmäßig aus. Begrenzte Kopien von Client- und Upstream-Anfragen werden lokal gespeichert. Ausschalten stoppt neue Aufzeichnungen; gespeicherte Texte lassen sich separat löschen.",
       "privacyHint": "Authentifizierungsfelder werden maskiert, Geheimnisse im Gespräch können jedoch erhalten bleiben. Vor dem Kopieren oder Teilen prüfen.",
@@ -5720,7 +5994,7 @@
       "title": "Anfragedetails",
       "totalLatency": "Gesamtzeit",
       "firstResponse": "Erste Antwort",
-      "firstResponseHint": "Zeit vom Anfragebeginn bis zum ersten Antwortfragment des Upstreams, nicht zwingend bis zum ersten erzeugten Token.",
+      "firstResponseHint": "Bei neuen Responses-Streaming-Anfragen läuft die Messung von der Verarbeitung des Anfrageinhalts durch das Gateway bis zum ersten Antwortereignis des Upstreams. Keepalive- und Ratenlimit-Meldungen werden übersprungen.",
       "unavailable": "Noch keine Diagnosedaten. Später aktualisieren. Ältere Anfragen werden nicht nachgetragen.",
       "attempts": "Versuche",
       "noAttempts": "Keine Versuchsfolge aufgezeichnet.",
@@ -5885,6 +6159,54 @@
       "label": "Aktives Kontingent",
       "description": "Ohne API-Dienst: Aktive lokale Konten werden alle 5–30 Sekunden aktualisiert. Änderungen an Sitzungsdateien lösen Nachprüfungen aus. Es werden nur aktuelle Dateimetadaten gelesen, keine Gesprächsinhalte. Kontoausschlüsse, Tarif- und Gruppenregeln gelten weiterhin. Standardmäßig aus.",
       "error": "Die Einstellung konnte nicht geladen oder gespeichert werden. Bitte erneut versuchen."
+    },
+    "pathRecovery": {
+      "title": "Codex-Startpfad festlegen",
+      "description": "Es wurde kein nutzbarer Pfad zum Codex-Client gefunden. Wähle die App oder öffne Codex manuell und lasse es erkennen.",
+      "reload": "Neu laden",
+      "timeout": "Die Zeit für den Vorgang ist abgelaufen. Versuche es erneut; der Start wird nicht automatisch fortgesetzt.",
+      "noCandidates": "Codex wurde nicht erkannt. Öffne den Client manuell und suche erneut oder wähle seinen Pfad.",
+      "pathRequired": "Wähle den Pfad zum Codex-Client oder gib ihn ein.",
+      "invalidPath": "Dies ist kein gültiger Pfad zum Codex-Desktop-Client. Wähle die App erneut.",
+      "candidates": "Erkannte Apps",
+      "autoLaunchHint": "Deaktiviere diese Option, um Konten ohne Start der Desktop-App zu wechseln. Du kannst die App weiterhin manuell starten.",
+      "manualLaunchHint": "Das Deaktivieren des automatischen Starts schließt diesen manuellen Start nicht ab. Nur Speichern bricht diesen Startversuch ab.",
+      "saveAndRetry": "Speichern & starten",
+      "saveWithoutLaunch": "Speichern & weiter",
+      "saveOnly": "Nur speichern",
+      "validationBusy": "Der vorherige Pfad wird noch geprüft. Versuche es gleich erneut."
+    },
+    "openaiUsage": {
+      "monthCost": "Monatskosten",
+      "scope": "Kosten der Organisation; Anfragen und Tokens nur für Text-APIs. Auswertung in UTC.",
+      "loading": "OpenAI-Nutzung wird geladen…",
+      "pending": "OpenAI-Nutzung ausstehend",
+      "permissionRequired": "Diesem Schlüssel fehlt die Leseberechtigung für die Organisationsnutzung (api.usage.read).",
+      "permissionGuide": "Admin-Schlüssel verwenden: Admin keys → Restricted → Usage API Scope → Read. Liefert Kosten und Nutzung, kein Restguthaben.",
+      "openAdminKeys": "Admin-Schlüssel erstellen",
+      "invalidKey": "Der Abfrageschlüssel ist ungültig oder abgelaufen. Prüfen Sie den Admin-API-Schlüssel.",
+      "networkFailed": "Keine Verbindung zur OpenAI-Nutzung. Später aktualisieren.",
+      "queryFailed": "Abfrage der OpenAI-Nutzung fehlgeschlagen. Später erneut versuchen.",
+      "organization": "Organisationsnutzung",
+      "configure": "Abfrage einrichten",
+      "settings": "Abfrageoptionen",
+      "title": "Nutzungsabfrage einrichten",
+      "optional": "Nutzungsabfrage (optional)",
+      "queryKey": "Admin-API-Schlüssel",
+      "callKey": "Modell-API-Schlüssel",
+      "notConfigured": "Mit einem Admin-Schlüssel lassen sich Kosten und Nutzung der Organisation abrufen.",
+      "purpose": "Verwenden Sie einen Admin-Schlüssel derselben Organisation wie der Modellschlüssel. Er dient nur der Nutzungsabfrage und ersetzt den Modellschlüssel nicht.",
+      "saveVerify": "Speichern & prüfen",
+      "remove": "Einrichtung entfernen",
+      "keyRequired": "Geben Sie einen Admin-API-Schlüssel ein.",
+      "saveFailed": "Abfrageeinstellungen konnten nicht gespeichert werden. Bitte erneut versuchen.",
+      "configChanged": "Konto oder Abfrageschlüssel wurde geändert. Öffnen Sie die Einstellungen erneut.",
+      "openFailed": "Die Schlüsselseite konnte nicht geöffnet werden. Bitte erneut versuchen.",
+      "costUnavailable": "Kein Betrag",
+      "costUnavailableHint": "Die offizielle Kosten-API hat für diesen Zeitraum keine Kosten geliefert. Anfragen und Tokens stammen aus einer separaten Nutzungs-API; fehlende Kostendaten bedeuten keine Ausgaben von null."
+    },
+    "officialApi": {
+      "hint": "Konto mit offiziellem OpenAI-API-Schlüssel, anhand der tatsächlichen Zieladresse erkannt."
     }
   },
   "githubCopilot": {
@@ -6151,6 +6473,10 @@
       "title": "WorkBuddy-Einstellungen",
       "appPath": "WorkBuddy-Pfad"
     },
+    "minimaxCode": {
+      "title": "MiniMax Code-Einstellungen",
+      "appPath": "MiniMax Code-Pfad"
+    },
     "zcode": {
       "title": "ZCode-Einstellungen",
       "appPath": "ZCode-Pfad"
@@ -6375,8 +6701,9 @@
       "desc": "Fügen Sie Ihr Kiro-Zugriffstoken oder exportierte JSON-Daten ein."
     },
     "import": {
-      "localDesc": "Importieren Sie Kiro-Kontodaten vom lokalen Kiro-Client oder einer JSON-Datei.",
-      "localClient": "Import aus lokalem Kiro"
+      "localDesc": "Lokal oder aus JSON importieren. JSON-Konten werden zuerst gespeichert; Anmeldedaten und Kontingente werden danach im Hintergrund aktualisiert.",
+      "localClient": "Import aus lokalem Kiro",
+      "invalidCredentials": "Anmeldedaten fehlen oder werden nicht unterstützt. Exportieren Sie das Konto erneut."
     },
     "injectToVSCode": "Wechseln Sie zu Kiro"
   },
@@ -6890,6 +7217,17 @@
       "resetUnknown": "Zeit der Zurucksetzung unbekannt",
       "statusUnknown": "Status: unbekannt",
       "statusNormal": "Status: normal",
+      "statusSynced": "Status: Sync",
+      "statusSyncedPending": "Status: Sync, Rest offen",
+      "fastAvailable": "Fast: {{times}}",
+      "fastTimes": "{{count}}×",
+      "fastUnlimited": "Unbegrenzt",
+      "fastPerMonth": "Fast/Mon: {{count}}",
+      "fastChannelPerMonth": "Express: {{count}}/Mon",
+      "fastChannelStatus": "Schnellkanal: {{status}}",
+      "freeRemainingUnknown": "Free Rest: --",
+      "timesRemainingUnknown": "Rest: --",
+      "soloParallel": "Paket: Solo ×{{count}}",
       "statusExhaustedFree": "Status: Nutzung aufgebraucht, Upgrade empfohlen",
       "statusExhaustedPro": "Status: Nutzung aufgebraucht, bitte upgraden oder nutzungsbasierte Abrechnung aktivieren",
       "bonusUsed": "Bonusguthaben: +{{amount}}",
@@ -6902,17 +7240,8 @@
       "payAsYouGoEnabled": "Nutzung nach Verbrauch: aktiviert",
       "payAsYouGoEmpty": "Nutzung nach Verbrauch: --",
       "payAsYouGoLabel": "Nutzungsabrechnung",
-      "statusSynced": "Status: Sync",
-      "statusSyncedPending": "Status: Sync, Rest offen",
-      "fastAvailable": "Fast: {{times}}",
-      "fastTimes": "{{count}}×",
-      "fastUnlimited": "Unbegrenzt",
-      "fastPerMonth": "Fast/Mon: {{count}}",
-      "fastChannelPerMonth": "Express: {{count}}/Mon",
-      "fastChannelStatus": "Schnellkanal: {{status}}",
-      "freeRemainingUnknown": "Free Rest: --",
-      "timesRemainingUnknown": "Rest: --",
-      "soloParallel": "Paket: Solo ×{{count}}"
+      "creditsMember": "Mitgliedschafts-Credits",
+      "creditsBonus": "Bonus-Credits"
     },
     "flowNotice": {
       "title": "Trae-Kontoleitfaden (zum Auf- und Zuklappen klicken)",
@@ -6928,6 +7257,18 @@
     "token": {
       "jsonOnlyDesc": "Vollständiges Trae-CN-JSON einfügen. Rohe Tokens werden nicht unterstützt.",
       "jsonOnlyPlaceholder": "Vollständiges Trae-CN-JSON..."
+    },
+    "checkin": {
+      "modalTitle": "Täglicher Check-in",
+      "durationMs": "{{ms}} ms",
+      "durationSeconds": "{{seconds}} s",
+      "durationTitle": "Gesamte Check-in-Zeit",
+      "logSuccess": "Erfolgreich ({{done}}/{{total}})",
+      "logPartial": "Teilweise ({{done}}/{{total}})",
+      "logIncomplete": "Unvollständig",
+      "detailSuccess": "Eingecheckt",
+      "detailAlreadyClaimed": "Heute bereits erhalten",
+      "detailError": "Check-in-Fehler"
     }
   },
   "codebuddyCn": {
@@ -6957,6 +7298,35 @@
     "syncToWorkbuddy": "Mit WorkBuddy synchronisieren"
   },
   "workbuddy": {
+    "credits": {
+      "planBase": "Tarifguthaben",
+      "planBonus": "Tarifbonus",
+      "benefit": "Plattformprämien",
+      "addon": "Gekaufte Credits",
+      "total": "Restguthaben gesamt",
+      "details": "Guthabendetails",
+      "usedOf": "Verbraucht {{used}}/{{total}}",
+      "remainingPercent": "{{percent}} % übrig",
+      "nearestExpiry": "Nächster Ablauf {{time}}",
+      "nextRefresh": "Nächste Erneuerung {{time}}",
+      "expiring": "Guthaben läuft bald ab",
+      "valid": "Gültig",
+      "expired": "Abgelaufen",
+      "expiresAt": "Läuft ab am {{time}}",
+      "expiryHours": "Läuft in 24 Std. ab",
+      "expiryDays": "Läuft in 3 Tagen ab",
+      "empty": "Keine Einträge",
+      "loadFailed": "Laden fehlgeschlagen ({{error}})",
+      "overview": "Übersicht",
+      "remaining": "{{amount}} übrig",
+      "loadMore": "Mehr laden",
+      "usage": "Verbrauchsdetails",
+      "requestAndTime": "Anfrage und Zeit",
+      "creditUsed": "Verbrauchte Credits",
+      "model": "Modell",
+      "recentUsage": "Letzte 5 Einträge",
+      "viewMore": "Mehr anzeigen"
+    },
     "title": "WorkBuddy-Kontenverwaltung",
     "noAccounts": "Keine WorkBuddy-Konten",
     "addAccount": "WorkBuddy-Konto hinzufügen",
@@ -6964,7 +7334,7 @@
       "title": "Hinweise zur WorkBuddy-Kontoverwaltung (zum Ein-/Ausklappen klicken)",
       "desc": "Beim Kontowechsel wird die lokale Anmeldedatei nach dem aktuellen Layout des offiziellen WorkBuddy-Clients geschrieben; der lokale Import liest dieselbe Datei. Die Daten werden nur lokal verarbeitet.",
       "permission": "Berechtigungsumfang: Lesen und Schreiben der WorkBuddy-Anmeldedatei (CodeBuddyExtension/Data/Public/auth/workbuddy-desktop.info) für lokalen Import und Kontowechsel; die alte state.vscdb wird nicht mehr gelesen oder geändert.",
-      "network": "Netzwerkumfang: OAuth-Anmeldung und Token-Aktualisierung senden Anfragen an WorkBuddy; Kontingentabfragen nutzen Billing-APIs. Lokale Anmeldedateien oder rohe Zugangsdaten werden nicht hochgeladen."
+      "network": "OAuth-Anmeldung und Token-Aktualisierung greifen auf WorkBuddy zu. Guthaben und Details werden mit dem Kontotoken beim Abrechnungsdienst abgefragt. Anmeldedateien und Systemschlüssel bleiben lokal."
     },
     "nickname": "Spitzname",
     "enterprise": "Unternehmen",
@@ -6981,8 +7351,8 @@
       "oauth": {
         "title": "Nur IDE-Anmeldedaten autorisieren",
         "item1": "Nach Abschluss von OAuth im Browser kann das Konto hinzugefügt und für den IDE-Wechsel genutzt werden.",
-        "item2": "Parameter für die Kontingentabfrage werden nicht automatisch gebunden.",
-        "item3": "Wenn Sie Kontingente anzeigen möchten, führen Sie auf der Kontokarte manuell „Kontingent abfragen“ aus."
+        "item2": "Nach der Autorisierung wird das Guthaben automatisch abgefragt.",
+        "item3": "Die Kontokarte zeigt das Guthaben. Die Detailansicht zeigt einzelne Gutschriften und Ablaufdaten."
       }
     },
     "oauthWebviewTab": "OAuth im WebView",
@@ -7098,8 +7468,172 @@
       "startTime": "Startzeit",
       "endTime": "Endzeit",
       "timeRangeHint": "Wählt täglich eine zufällige Zeit in diesem Bereich, um den Hintergrund-Check-in abzuschließen.",
+      "errors": "Fehler",
+      "tabSettings": "Auto-Check-in-Einstellungen",
+      "tabHistory": "Auto-Check-in-Verlauf",
+      "manualTest": "Testlauf",
+      "clearLogs": "Leeren",
+      "clearLogsFailed": "Löschen der Check-in-Einträge fehlgeschlagen: {{message}}",
+      "historyLoading": "Auto-Check-in-Verlauf wird geladen...",
+      "historyLoadFailed": "Auto-Check-in-Verlauf konnte nicht geladen werden: {{message}}",
+      "totalCredits": "{{credits}} Credits",
+      "historyRangeHint": "Es werden nur die Auto-Check-in-Aufzeichnungen der letzten 30 Tage aufbewahrt (insgesamt {{count}})",
+      "noHistory": "Keine Auto-Check-in-Aufzeichnungen der letzten 30 Tage",
+      "saveFailed": "Speichern der Auto-Check-in-Einstellungen fehlgeschlagen: {{message}}",
+      "manualTestPartialFailure": "Der Check-in ist für einige Konten fehlgeschlagen. Siehe Aufzeichnungen; eine Wiederholung im Hintergrund erfolgt später.",
+      "manualTestAlreadyRunning": "Ein Auto-Check-in-Vorgang läuft bereits. Bitte später die Aufzeichnungen prüfen.",
+      "manualTestFailed": "Testlauf fehlgeschlagen: {{message}}",
       "timeRangeError": "Die Startzeit darf nicht nach der Endzeit liegen"
     }
+  },
+  "minimaxCode": {
+    "title": "MiniMax Code-Kontenverwaltung",
+    "noAccounts": "Keine MiniMax Code-Konten",
+    "addAccount": "MiniMax Code-Konto hinzufügen",
+    "flowNotice": {
+      "title": "Hinweise zur MiniMax Code-Kontoverwaltung (zum Ein-/Ausklappen klicken)",
+      "desc": "Lokale MiniMax Code-Anmeldungen und Kontowechsel verwalten.",
+      "permission": "Offizielle MiniMax Code-Anmeldedateien lesen und schreiben. Jede Instanz nutzt ein eigenes Datenverzeichnis.",
+      "network": "Nur offizielle MiniMax-APIs für Anmeldung, Konto, Tarif und Credits kontaktieren. Lokale Anmeldedateien werden nicht hochgeladen."
+    },
+    "nickname": "Spitzname",
+    "enterprise": "Unternehmen",
+    "usage": "Nutzungsstatus",
+    "creditsBalance": "Guthaben",
+    "usageNormal": "Standard",
+    "usageAbnormal": "Anomal",
+    "usageViewDetail": "Details anzeigen",
+    "usageDetailTitle": "Details zum Nutzungsstatus",
+    "oauthWaiting": "Warte auf Abschluss der Autorisierung...",
+    "oauthDesc": "Klicken Sie auf die Schaltfläche unten, um die MiniMax Code-Autorisierungsseite im Browser zu öffnen.",
+    "oauthDescWebview": "Klicken Sie auf die Schaltfläche unten, um die MiniMax Code-Autorisierungsseite im integrierten WebView zu öffnen.",
+    "oauthFeature": {
+      "oauth": {
+        "title": "Nur IDE-Anmeldedaten autorisieren",
+        "item1": "Nach Abschluss von OAuth im Browser kann das Konto hinzugefügt und für den IDE-Wechsel genutzt werden.",
+        "item2": "Guthaben",
+        "item3": "Gekaufte Credits · Geschenkte Credits"
+      }
+    },
+    "oauthWebviewTab": "OAuth im WebView",
+    "oauthOpenWebview": "Im WebView öffnen",
+    "oauthOpenWebviewIncognito": "Im Inkognito-WebView öffnen",
+    "oauthOpenWebviewFailed": "WebView konnte nicht geöffnet werden: {{error}}",
+    "oauthOpenBrowserFallback": "Im Browser öffnen (Fallback)",
+    "oauthOpenBrowserFailed": "Browser konnte nicht geöffnet werden: {{error}}",
+    "oauthWebviewProgressHint": "Oben im WebView wird eine horizontale Schrittleiste angezeigt, damit blockierte Schritte leichter zu finden sind.",
+    "oauthFlow": {
+      "prepare": "Autorisierungslink vorbereiten",
+      "authorize": "Autorisierungslink öffnen und bestätigen",
+      "bind": "Autorisierungsergebnis abfragen und Konto binden",
+      "retryPrepare": "Autorisierungslink neu erzeugen",
+      "retryAuthorize": "Autorisierungslink erneut anfordern",
+      "retryBind": "Autorisierungsabfrage wiederholen",
+      "error": "Ablauffehler: {{error}}"
+    },
+    "tokenDesc": "Access Token von MiniMax Code einfügen:",
+    "jsonDesc": "JSON-Datei mit MiniMax Code-Konten auswählen:",
+    "import": {
+      "localDesc": "Kontodaten können aus dem lokalen MiniMax Code-Client oder aus einer JSON-Datei importiert werden.",
+      "localClient": "Aus lokalem MiniMax Code importieren"
+    },
+    "search": "MiniMax Code-Konten durchsuchen...",
+    "quotaQuery": {
+      "failedRefreshCompact": "Kontingentaktualisierung fehlgeschlagen",
+      "sectionTitle": "Kontingentabfrage",
+      "empty": "Noch keine gebundene Kontingentabfrage vorhanden",
+      "packageUnknown": "Unbekanntes Paket",
+      "quotaLabel": "Verbleibendes Kontingent",
+      "updatedAt": "Zuletzt abgefragt: {{time}}",
+      "cycleRange": "Zeitraum: {{start}} - {{end}}",
+      "cycleUnknown": "Keine Zeitraum-Information verfügbar",
+      "expireAt": "Läuft ab am: {{time}}",
+      "expireUnknown": "Ablaufzeit: keine Angabe",
+      "packageTitle": {
+        "base": "Basis-Erlebnispaket",
+        "activity": "Aktions-Geschenkpaket"
+      }
+    },
+    "extraCredit": {
+      "title": "Zusatzpaket"
+    },
+    "oauthUrlInputPlaceholder": "Autorisierungs-URL kann manuell eingegeben werden",
+    "oauthInvalidUrl": "Ungültige Autorisierungs-URL. Bitte eine vollständige URL eingeben.",
+    "oauthGotoWebview": "Bereits geöffnetes WebView zur eingegebenen URL navigieren",
+    "oauthGotoWebviewSuccess": "WebView wurde aufgefordert, zur eingegebenen URL zu navigieren.",
+    "oauthGotoWebviewFailed": "WebView-Navigation fehlgeschlagen: {{error}}",
+    "oauthWebviewInlineUrlPlaceholder": "URL eingeben, um innerhalb dieses WebViews zu navigieren",
+    "oauthWebviewInlineGo": "Los",
+    "oauthSuccessClosePrompt": "Konto erfolgreich hinzugefügt. Dieses WebView jetzt schließen?\nMit „WebView schließen“ wird sofort geschlossen, mit „Später“ bleibt es geöffnet.",
+    "oauthSuccessCloseTitle": "Konto hinzugefügt",
+    "oauthSuccessCloseNowLabel": "WebView schließen",
+    "oauthSuccessCloseLaterLabel": "Später",
+    "oauthSuccessCloseNowStatus": "✅ Konto hinzugefügt. Fenster wird geschlossen...",
+    "oauthSuccessCloseLaterStatus": "✅ Konto hinzugefügt. Dieses WebView bleibt geöffnet.",
+    "oauthWebviewOverlay": {
+      "steps": {
+        "prepare": "1 Autorisierungslink vorbereiten",
+        "authorize": "2 Autorisierungslink öffnen und bestätigen",
+        "bind": "3 Autorisierungsergebnis abfragen und Konto binden",
+        "complete": "5 Abgeschlossen (manuell schließen)"
+      },
+      "status": {
+        "loginConfirm": "Bitte schließen Sie die Anmeldung und Autorisierung auf dieser Seite ab."
+      }
+    },
+    "instances": {
+      "unsupported": {
+        "descPlatform": "MiniMax Code-Mehrinstanzen werden nur unter macOS, Windows und Linux unterstützt."
+      }
+    },
+    "quota": {
+      "usedOfTotal": "{{used}} / {{total}}​",
+      "noPlan": "Kein M Plan-Abo",
+      "purchased": "Gekaufte Credits",
+      "gifted": "Geschenkte Credits"
+    },
+    "checkin": {
+      "title": "Täglicher Check-in",
+      "modalTitle": "Täglicher Check-in",
+      "status": "Check-in-Status",
+      "checkedIn": "Eingecheckt",
+      "notCheckedIn": "Nicht eingecheckt",
+      "button": "Einchecken",
+      "button.loading": "Check-in läuft...",
+      "done": "Fertig",
+      "success": "Check-in erfolgreich! {{days}} Tage Serie",
+      "failure": "Einchecken fehlgeschlagen: {{message}}",
+      "failure.network": "Netzwerkfehler, bitte später erneut versuchen",
+      "lastCheckin": "Letzter Check-in: {{time}}",
+      "streak": "{{days}}-Tage-Serie",
+      "reward": "Belohnung: {{reward}}",
+      "refreshStatus": "Aktualisieren",
+      "checkAll": "Alle einchecken",
+      "noAccounts": "Keine Konten",
+      "querying": "Wird geladen...",
+      "streakDays": "{{days}} Tage",
+      "streakRewardCountdown": "Noch {{days}} Tage bis zur Bonusbelohnung",
+      "streakRewardToday": "Bonusbelohnung heute verfügbar!",
+      "recentDates": "Kürzlich: ",
+      "claimed": "Abgeholt",
+      "queryFailed": "Abfrage fehlgeschlagen",
+      "retry": "Erneut",
+      "inactive": "Inaktiv",
+      "inactiveHint": "Check-in für dieses Konto nicht aktiv",
+      "autoCheckinSettings": "Einstellungen für automatischen Check-in",
+      "autoCheckinLabel": "Auto-Check-in",
+      "autoCheckinOff": "Auto-Check-in Aus",
+      "autoCheckinEnabledHint": "Auto-Check-in aktiviert: Zufälliger Check-in zwischen {{start}} und {{end}}",
+      "autoCheckinDisabledHint": "Auto-Check-in deaktiviert",
+      "enableAutoCheckin": "Auto-Check-in aktivieren",
+      "enableAutoCheckinDesc": "Führt täglich zufällig innerhalb des angegebenen Zeitfensters einen Check-in durch",
+      "randomTimeRange": "Zufälliger Check-in-Zeitbereich",
+      "startTime": "Startzeit",
+      "endTime": "Endzeit",
+      "timeRangeHint": "Wählt täglich eine zufällige Zeit in diesem Bereich, um den Hintergrund-Check-in abzuschließen.",
+      "timeRangeError": "Die Startzeit darf nicht nach der Endzeit liegen"
+    },
+    "placeholder": "Die MiniMax Code-Kontoverwaltung ist in Kürze verfügbar."
   },
   "zcode": {
     "search": "ZCode-Konten suchen...",
@@ -7357,7 +7891,29 @@
     "continueMigrationScan": "Scan fortsetzen",
     "savePartialMigrationBatch": "Teil speichern",
     "saveCompleteMigrationBatch": "Alles speichern",
-    "clearMigrationBatch": "Batch leeren"
+    "clearMigrationBatch": "Batch leeren",
+    "searchPlaceholder": "Konten oder Typen suchen",
+    "noSearchResults": "Keine passenden Konten oder Typen",
+    "exportMigrationQr": "Migrations-QR exportieren",
+    "exportBackup": "Sicherung exportieren",
+    "importBackup": "Sicherung importieren",
+    "batchDelete": "Auswahl löschen",
+    "exportBackupHint": "Alle gespeicherten Einträge als JSON-Sicherung exportieren, unabhängig von Suche oder Auswahl.",
+    "editAccountHint": "Verwenden Sie Typ:Konto, zum Beispiel OpenAI:alice@example.com",
+    "migrationTitle": "Migrations-QR-Codes exportieren",
+    "migrationSelectedSummary": "{{count}} ausgewählte Konten werden exportiert.",
+    "migrationAllSummary": "Alle {{count}} gespeicherten Konten werden unabhängig von der Suche exportiert.",
+    "migrationWarning": "Diese QR-Codes enthalten geheime 2FA-Schlüssel. Bewahren Sie sie sicher auf.",
+    "migrationPage": "QR-Code {{current}} von {{total}} · {{count}} Konten in diesem Code",
+    "migrationPrevious": "Zurück",
+    "migrationNext": "Weiter",
+    "migrationSaveImage": "QR-Code speichern",
+    "migrationImageAlt": "Migrations-QR-Code {{current}} von {{total}}",
+    "migrationInvalidRecord": "Einige Einträge enthalten ungültige geheime Schlüssel. Prüfen Sie diese vor dem Export der Migrations-QR-Codes.",
+    "migrationRecordTooLarge": "Ein Konto enthält zu viele Informationen für einen Migrations-QR-Code. Kürzen Sie den Kontonamen und versuchen Sie es erneut.",
+    "migrationUnsupportedParameters": "Der Migrationsexport unterstützt derzeit nur sechsstellige SHA1-Codes mit einem Intervall von 30 Sekunden; einige Konten verwenden nicht unterstützte Parameter.",
+    "migrationQrFailed": "Migrations-QR-Codes konnten nicht erstellt werden. Bitte versuchen Sie es erneut.",
+    "exportFailed": "Export fehlgeschlagen. Prüfen Sie den Speicherort und versuchen Sie es erneut."
   },
   "logViewer": {
     "fileLabel": "Logdatei",
@@ -7559,6 +8115,17 @@
       "family": "Gruppe",
       "platform": "Aktuelles System",
       "unsupportedGroup": "Für diese Gruppe gibt es noch keine Ein-Klick-Clients."
+    },
+    "campaign": {
+      "badge": "11.11",
+      "title": "11,11 % Bonus auf Aufladungen",
+      "description": "Für neue und bestehende Nutzer.",
+      "period": "Aktionszeitraum: 1.–11. November 2026 (UTC+8)",
+      "terms": "Die Bedingungen stehen auf der Aktionsseite.",
+      "action": "Zur Aktion",
+      "inactive": "Diese Aktion ist derzeit nicht aktiv.",
+      "label": "11.11-Aktion · befristet",
+      "promotionDescription": "Die 11.11-Aktion beim offiziellen API-Relay-Partner von Cockpit: Neue und bestehende Nutzer erhalten im Aktionszeitraum 11,11 % Bonus auf Aufladungen. Mit Claude, ChatGPT, Gemini und weiteren führenden Modellen."
     }
   },
   "grok": {
@@ -7957,7 +8524,7 @@
     "model": "Prüfmodell",
     "selectModel": "Modell wählen",
     "verifyHint": "Das ausgewählte Modell dient nur zum Verbindungstest und schränkt andere verfügbare Modelle nicht ein. Die Prüfung sendet eine kurze Anfrage und verbraucht einen kleinen Teil deines Abo-Kontingents.",
-    "serviceHint": "Das Hinzufügen zum aktuellen Pool startet den API-Dienst nicht. Diese Version benötigt die native Engine.",
+    "serviceHint": "Das Hinzufügen eines Kontos zum aktuellen Pool startet den API-Dienst nicht.",
     "verify": "Nur prüfen",
     "verifyAndJoin": "Prüfen & hinzufügen",
     "remove": "Aus Dienst entfernen",
@@ -8017,8 +8584,6 @@
       "verify": "Die Modellanfrage wurde nicht abgeschlossen. Bitte erneut prüfen.",
       "usage": "Die Tarif- oder App-Nutzung ist begrenzt. Prüfe die Nutzung in den ChatGPT-Einstellungen.",
       "usageUnavailable": "Der offizielle Dienst kann die Nutzung derzeit nicht bestätigen. Versuche es später erneut; das bedeutet nicht, dass dein Kontingent aufgebraucht ist.",
-      "native": "Tarifzugriff erfordert derzeit die native Engine. Bitte zuerst im API-Dienst wechseln.",
-      "nativeSwitch": "Entferne die Tarifkonten aus dem API-Dienst, bevor du zu einer anderen Engine wechselst.",
       "browser": "Browser kann nicht geöffnet werden. Kopiere den Anmeldelink und öffne ihn manuell.",
       "configuration": "Die Autorisierungsregistrierung stimmt nicht überein. Melde dich erneut an oder verbinde den Tarif neu.",
       "notVerified": "Prüfe diesen Tarif, bevor du ihn zum API-Dienst hinzufügst.",
@@ -8198,7 +8763,6 @@
     "title": "Funktionsausweichroute",
     "hint": "Unterstützt ein Konto eine benötigte Funktion nicht, werden Ersatzkonten in dieser Reihenfolge mit den bestehenden Modellzuordnungen versucht.",
     "consent": "Beim Wechsel wird dieses Gespräch an das Ersatzkonto gesendet. Dessen Kontingent wird verbraucht oder es fallen entsprechende Kosten an.",
-    "nativeOnly": "Diese Engine führt keine Funktionsausweichroute aus. Zum Aktivieren zur nativen Engine wechseln; gespeicherte Einstellungen können deaktiviert werden.",
     "backups": "Ersatzkonten",
     "addBackup": "Ersatz hinzufügen",
     "backupEmpty": "Vor dem Aktivieren Ersatzkonten aus dem aktuellen API-Dienst-Pool wählen.",

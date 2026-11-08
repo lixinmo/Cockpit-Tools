@@ -158,6 +158,58 @@
     "providerClear": "선택 해제"
   },
   "common": {
+    "profileRestoreBusy": "로그인 상태를 복원 중입니다. 잠시 후 다시 시도하세요.",
+    "profileRestoreInvalid": "로그인 스냅샷 경로가 잘못되었습니다. 계정을 다시 가져오세요.",
+    "profileRestoreRecoveryFailed": "로그인 복원에 실패했습니다. 백업은 보존되었습니다: {{detail}}",
+    "dataQueryBusy": "데이터를 처리 중입니다. 잠시 후 다시 시도하세요。",
+    "apiBudget": {
+      "keyScope": "현재 Key",
+      "upgradeRequired": "통계와 요청 기록을 보려면 게이트웨이 컴퓨터의 Cockpit Tools를 업데이트하세요.",
+      "gatewayName": "Cockpit 게이트웨이",
+      "accountingNote": "기록된 차감액은 가격 재계산으로 바뀌지 않으며 추정액과 다를 수 있습니다. 예산은 UTC 기준으로 초기화됩니다.",
+      "preparing": "백그라운드에서 과거 통계를 준비 중입니다. 잠시 후 다시 시도하세요.",
+      "settled": "기록된 차감액",
+      "unrecorded": "기록 없음",
+      "unmeteredShort": "미계량",
+      "rangeLimit": "오늘 이전의 유효한 날짜를 선택하세요. 최대 93일입니다.",
+      "partialCharges": "요청 {{count}}건에 차감 기록이나 계량이 없습니다. 차감 통계는 기록된 금액만 포함합니다.",
+      "retention": "기록 시작: {{time}}. 게이트웨이에 보관된 로그만 포함합니다.",
+      "logFiltersNote": "필터는 아래 내역에만 적용됩니다. 통계와 그래프는 선택 기간을 사용합니다.",
+      "timeout": "시간 초과",
+      "textRequests": "텍스트",
+      "imageEdits": "이미지 편집",
+      "budget": "사용 예산",
+      "period": "주기",
+      "lifetime": "일회성",
+      "daily": "매일",
+      "weekly": "매주",
+      "monthly": "매월",
+      "dailyLimit": "일일 한도",
+      "concurrency": "동시 요청",
+      "dailyImages": "일일 이미지 요청",
+      "invalid": "허용 범위의 양수를 입력하세요.",
+      "hint": "설정된 정산 가격으로 계산합니다. 가격이 없는 모델은 사용할 수 없습니다. UTC 기준으로 초기화하며 이월하지 않습니다. 진행 중인 요청은 한도를 초과할 수 있습니다.",
+      "unmetered": "사용량이나 가격이 없는 요청은 금액에서 제외됩니다.",
+      "remote": "Cockpit 원격 서비스",
+      "active": "사용 가능",
+      "disabled": "비활성",
+      "service_disabled": "서비스 중지",
+      "token_limit_reached": "토큰 소진",
+      "budget_limit_reached": "예산 소진",
+      "images": "이미지 생성",
+      "consumed": "사용량",
+      "resetsAt": "다음 초기화",
+      "offline": "오프라인 · 캐시"
+    },
+    "networkErrors": {
+      "upstream": "상위 서비스",
+      "proxyConnection": "프록시 ‘{{proxy}}’를 통한 {{target}} 연결에 실패했습니다. 프록시 또는 네트워크 문제일 수 있습니다. 프록시를 확인하거나 다른 노드로 다시 시도하세요.",
+      "proxyTimeout": "프록시 ‘{{proxy}}’를 통한 {{target}} 연결 시간이 초과되었습니다. 프록시 또는 네트워크를 확인하거나 다른 노드로 다시 시도하세요.",
+      "proxyAuth": "프록시 ‘{{proxy}}’ 인증에 실패했습니다. 프록시 사용자 이름 또는 비밀번호를 확인하세요.",
+      "localProxyUnavailable": "로컬 프록시 ‘{{proxy}}’에 연결할 수 없습니다. 프록시 서비스가 실행 중인지 확인하세요.",
+      "directConnection": "{{target}} 연결에 실패했습니다. 네트워크를 확인하고 다시 시도하세요.",
+      "directTimeout": "{{target}} 연결 시간이 초과되었습니다. 네트워크를 확인하고 다시 시도하세요."
+    },
     "codexUsage": {
       "title": "할당량 및 사용량",
       "session": "현재 대화",
@@ -238,6 +290,7 @@
     "failureTime": "실패 시간",
     "clearRecord": "기록 삭제",
     "clearingRecord": "삭제 중…",
+    "to": "~",
     "dragSortHint": "왼쪽 핸들을 드래그해 순서를 변경하세요. 놓으면 자동 저장됩니다.",
     "dragSortFilteredHint": "순서를 변경하려면 검색을 지우세요.",
     "recycleBin": {
@@ -383,7 +436,11 @@
           "statusSkipped": "건너뜀",
           "statusPending": "가져오기 대기"
         },
-        "invalidJson": "JSON 형식이 올바르지 않습니다. 파일이나 붙여넣은 내용을 확인하세요."
+        "invalidJson": "JSON 형식이 올바르지 않습니다. 파일이나 붙여넣은 내용을 확인하세요.",
+        "empty": "가져올 데이터가 없습니다.",
+        "sizeLimit": "파일은 {{limit}} MiB 이하여야 합니다.",
+        "countLimit": "한 번에 최대 {{count}}개 계정을 가져올 수 있습니다.",
+        "itemFailed": "항목 {{index}}: {{error}}"
       },
       "externalImport": {
         "bundleInvalidJson": "가져오기 패키지가 유효한 JSON이 아닙니다",
@@ -494,6 +551,8 @@
         "title": "계정 개요"
       },
       "quota": {
+        "usageWithUnit": "사용량 ({{unit}})",
+        "usage": "사용량",
         "noData": "쿼터 데이터 없음",
         "queryFailed": "할당량 조회 실패",
         "resetDone": "재설정됨",
@@ -582,6 +641,29 @@
         "missingTiming": "유효한 출력 시간이 기록되지 않았습니다.",
         "shortWindow": "출력 관측 시간이 100밀리초 미만입니다."
       }
+    },
+    "deviceRestriction": {
+      "title": "기기 제한 기록",
+      "badge": "기기 제한됨",
+      "paused": "명확한 기기 제한이 감지되어 이 작업의 자동 시도를 중지했습니다. 계정 페이지에서 기록을 확인하세요.",
+      "note": "이 기록은 로컬 관찰 결과이며 OpenAI 기기 슬롯이 아닙니다. 계정이나 로컬 인증 정보를 삭제해도 서버의 기기 제한이 해제된다는 보장은 없습니다.",
+      "retryNote": "재시도를 허용해도 제한이 해제된 것으로 표시하지 않습니다. 명확한 제한을 다시 받으면 중지합니다.",
+      "desktop": "데스크톱 로그인",
+      "quota": "할당량 조회",
+      "api": "API 요청",
+      "oauth": "OAuth 로그인",
+      "token": "토큰 갱신",
+      "recovered": "작업 복구됨",
+      "pausedLabel": "시도 중지됨",
+      "retryEnabled": "재시도 허용됨",
+      "observed": "최초: {{first}} · 최근: {{last}} · 관찰 {{count}}회",
+      "check": "다시 확인",
+      "allowRetry": "재시도 허용",
+      "help": "공식 도움말",
+      "support": "지원 문의",
+      "failed": "작업을 완료하지 못했습니다. 마지막 상태를 유지합니다. 다시 시도하세요.",
+      "loginAttempt": "계정 미확인 로그인",
+      "removed": "삭제된 로컬 계정"
     }
   },
   "nav": {
@@ -608,6 +690,7 @@
     "traeCn": "Trae CN​",
     "traeSoloCn": "TRAE SOLO CN​",
     "codebuddyCn": "CodeBuddy CN​",
+    "minimaxcode": "MiniMax Code",
     "zed": "Zed 플랫폼",
     "expandSidebar": "사이드바 확장",
     "collapseSidebar": "사이드바 축소",
@@ -675,7 +758,12 @@
     "setAsDefaultInGroup": "이 그룹의 기본 플랫폼으로 설정",
     "removeFromGroup": "그룹에서 제거",
     "sidebarSelectedUnlimited": "선택됨 ({count})",
-    "tipWithGroupsUnlimited": "선택한 플랫폼 및 그룹을 수동으로 정렬합니다"
+    "tipWithGroupsUnlimited": "선택한 플랫폼 및 그룹을 수동으로 정렬합니다",
+    "enabledToggle": "사용",
+    "groupEnabledHint": "이 그룹의 모든 플랫폼을 함께 켜거나 끕니다",
+    "disabledHint": "끄면 자동 작업이 중지되고 설정 영역이 숨겨집니다. 메뉴 표시는 별도로 설정합니다",
+    "enableAll": "모두 켜기",
+    "disableAll": "모두 끄기"
   },
   "privacy": {
     "hideSensitive": "이메일 숨기기",
@@ -1162,6 +1250,12 @@
       "workbuddyAppPathPlaceholder": "기본 경로",
       "workbuddyPathSelect": "선택",
       "workbuddyPathReset": "기본값으로 재설정",
+      "minimaxCodeAppPath": "MiniMax Code 실행 경로",
+      "minimaxCodeAppPathDesc": "비워 두면 기본 경로를 사용합니다",
+      "minimaxCodeAppPathPlaceholder": "기본 경로",
+      "minimaxCodePathSelect": "선택",
+      "minimaxCodeAppPathPathSelect": "선택",
+      "minimaxCodePathReset": "기본값으로 재설정",
       "openclawAuthOverwrite": "Codex 전환 시 OpenClaw 로그인 덮어쓰기",
       "openclawAuthOverwriteDesc": "끄면 Codex만 전환되고 OpenClaw는 현재 로그인 상태를 유지합니다",
       "ghcpOpencodeAuthOverwrite": "GitHub Copilot 전환 시 OpenCode 로그인 덮어쓰기",
@@ -1233,6 +1327,8 @@
       "qoderPathSelect": "선택",
       "workbuddyAutoRefresh": "WorkBuddy 자동 할당량 갱신",
       "workbuddyAutoRefreshDesc": "백그라운드 자동 갱신 빈도",
+      "minimaxCodeAutoRefresh": "MiniMax Code 자동 할당량 갱신",
+      "minimaxCodeAutoRefreshDesc": "백그라운드 자동 갱신 빈도",
       "codexLocalAccessEntryVisible": "API 서비스 항목 표시",
       "codexLocalAccessEntryVisibleDesc": "Codex 개요에서 API 서비스 항목을 표시할지만 제어합니다. 로컬 API 서비스 자체를 중지하지 않으며, 여기나 빠른 설정에서 다시 켤 수 있습니다.",
       "codexLocalAccessEnabled": "API 서비스 사용",
@@ -1320,13 +1416,15 @@
       "codexPreserveExternalBridge": "외부 브리지 유지",
       "codexPreserveExternalBridgeDesc": "OAuth 계정 전환 시 로컬 기록으로 검증된 Codex Web GPT 브리지를 유지합니다. 기본값은 꺼짐입니다.",
       "codexEnhancements": {
-        "nativeFast": "기본 Fast 선택기",
-        "nativeFastDesc": "API Key 계정에서 공식 속도 메뉴를 활성화하고 모델이 지원하는 단계를 표시합니다. 실제 지원 여부와 요금은 API 제공업체에 따라 다릅니다.",
         "quotaCompat": "혼합 모드 한도 호환",
         "quotaCompatDesc": "실제 OAuth 로그인과 외부 API 경로를 함께 쓸 때만 구독 한도가 로컬 API 메시지를 차단하지 않도록 합니다. 실제 사용량과 이미지 한도는 바뀌지 않습니다.",
-        "restartHint": "기본적으로 켜져 있습니다. 변경 후 대상 Codex 인스턴스를 다시 시작하고 Cockpit Tools를 실행해 두세요. 기본 음성 입력은 클라이언트 기능과 설정을 따릅니다. Cockpit은 이를 대신 처리하거나 강제로 활성화하지 않습니다.",
-        "configFailed": "설정을 읽거나 저장하지 못했습니다: {{error}}"
-      }
+        "restartHint": "네이티브 예측은 기본적으로 꺼져 있습니다. 변경 후 대상 Codex 인스턴스를 다시 시작하고 Cockpit Tools를 실행해 두세요. 기본 음성 입력은 클라이언트 기능과 설정을 따릅니다. Cockpit은 이를 대신 처리하거나 강제로 활성화하지 않습니다.",
+        "configFailed": "설정을 읽거나 저장하지 못했습니다: {{error}}",
+        "nativePredictions": "네이티브 다음 단계 예측(Tab)",
+        "nativePredictionsDesc": "현재 대화의 API 제공업체와 모델로 다음 메시지를 제안합니다. API 크레딧을 추가로 사용합니다. 저장 후 Codex를 다시 시작하세요."
+      },
+      "timeDisplayMode": "시간 표시",
+      "timeDisplayModeDesc": "계정 카드와 목록에 표시할 시간입니다. 기본값은 전환 시간입니다"
     },
     "network": {
       "apiTitle": "반중력 조종석 API",
@@ -1629,6 +1727,42 @@
       "refreshed": "사용량 새로고침됨",
       "usage": "사용량",
       "tierOther": "기타"
+    },
+    "background": {
+      "title": "배경",
+      "description": "앱 배경만 변경합니다. 계정 카드와 컨트롤 모양은 유지됩니다.",
+      "presets": "배경 프리셋",
+      "default": "기본",
+      "mist": "안개",
+      "forest": "숲",
+      "dusk": "황혼",
+      "sand": "모래",
+      "custom": "사용자 지정",
+      "chooseImage": "이미지 선택",
+      "replaceImage": "이미지 변경",
+      "imageHint": "JPG, PNG, WebP, 최대 10 MB. 큰 이미지는 기기에서 축소됩니다.",
+      "preview": "미리 보기",
+      "strength": "강도",
+      "blur": "흐림",
+      "pixels": "{{count}} 픽셀",
+      "position": "이미지 위치",
+      "center": "가운데",
+      "top": "위",
+      "bottom": "아래",
+      "localHint": "변경 사항은 즉시 적용됩니다. 각 스킨의 이미지와 설정은 이 기기에 별도로 저장되며 이미지는 업로드되지 않습니다. 기본값 복원 시에도 내 스킨은 유지됩니다.",
+      "restore": "기본값 복원",
+      "imageType": "JPG, PNG 또는 WebP 이미지를 선택하세요.",
+      "imageSize": "10 MB 미만 이미지를 선택하세요.",
+      "imageRead": "이미지를 읽을 수 없습니다. 다른 파일을 선택하세요.",
+      "storage": "배경을 불러오거나 저장하지 못했습니다. 기존 배경은 유지됩니다. 다시 시도하세요.",
+      "saveFailed": "변경 사항은 표시되지만 저장하지 못했습니다. 다시 시도하세요. 이전에 저장한 스킨은 유지됩니다.",
+      "builtInSkins": "기본 스킨",
+      "mySkins": "내 스킨",
+      "addSkin": "스킨 추가",
+      "rename": "이름 변경",
+      "skinName": "스킨 이름",
+      "manageSkin": "스킨 관리: {{name}}",
+      "deleteSkinConfirm": "“{{name}}” 스킨을 삭제할까요? 사용 중인 스킨을 삭제하면 기본 배경으로 돌아갑니다."
     }
   },
   "appPath": {
@@ -1974,7 +2108,13 @@
     "tagUpdated": "태그가 업데이트되었습니다",
     "plan": {
       "personal": "개인"
-    }
+    },
+    "lastSwitchTime": "전환 시간",
+    "neverSwitched": "전환 이력 없음",
+    "refreshTime": "새로고침 시간",
+    "lastSwitchTimeFull": "전환 시간: {{time}}",
+    "refreshTimeFull": "새로고침 시간: {{time}}",
+    "toggleTimeMode": "전환 시간과 새로고침 시간 전환"
   },
   "overview": {
     "title": "계정 개요",
@@ -2338,6 +2478,74 @@
     "other_group": "기타 모델"
   },
   "codex": {
+    "resetAutomation": {
+      "nothingToReset": "현재 재설정할 할당량 기간이 없습니다.",
+      "unknownOutcome": "재설정 결과를 확인할 수 없습니다. 다시 시도하세요.",
+      "applyAllHint": "켜고 저장하면 모든 계정에 이 규칙을 복사하여 기존 사용자 지정 및 꺼짐 설정을 덮어씁니다.",
+      "applyAll": "모든 계정에 저장",
+      "accountHint": "개별 설정이 없는 계정은 공통 규칙을 사용합니다. 저장하면 현재 계정에만 적용됩니다.",
+      "title": "초기화 카드 자동 사용",
+      "accountTab": "현재 계정",
+      "publicTab": "공통 규칙",
+      "inherit": "공통 규칙 따르기",
+      "custom": "개별 규칙",
+      "off": "끄기",
+      "entryDefault": "자동 설정",
+      "noCredits": "카드 없음",
+      "publicHint": "개별 설정이 없는 계정의 기본 규칙입니다. 기존 사용자 지정 또는 꺼짐 설정은 유지됩니다.",
+      "before": "만료 전",
+      "expiry": "만료 전 사용",
+      "minutes": "분",
+      "hours": "시간",
+      "days": "일",
+      "hostHint": "Cockpit Tools 실행 중 확인합니다. 사용할 카드는 서버가 결정합니다.",
+      "invalidTime": "초 단위로 표현 가능한 양의 시간을 입력하세요.",
+      "invalidPercent": "0~100 사이의 정수 백분율을 입력하세요.",
+      "loadFailed": "규칙 로드 실패: {{error}}",
+      "saveFailed": "규칙 저장 실패: {{error}}",
+      "conflict": "다른 곳에서 규칙이 변경되었습니다. 다시 불러오세요.",
+      "busy": "이 계정의 초기화가 진행 중입니다.",
+      "storageError": "초기화 규칙을 읽거나 저장할 수 없습니다.",
+      "timeout": "요청 시간이 초과되었습니다. 저장된 요청 ID를 재사용하여 중복 사용을 방지합니다.",
+      "history": "최근 실행",
+      "reasonExpiry": "만료 임박",
+      "reasonQuota": "잔여량 부족",
+      "reasonManual": "수동 초기화",
+      "reasonCheck": "백그라운드 확인",
+      "pending": "결과 대기",
+      "editPublic": "공통 규칙 편집",
+      "accountMissing": "계정이 더 이상 없습니다.",
+      "masterLabel": "초기화 카드 자동 사용",
+      "ruleSource": "규칙 출처",
+      "weeklyTrigger": "주간 잔여량 조건",
+      "weeklyRemaining": "주간 잔여량 ≤",
+      "previewTitle": "실행 조건 미리보기",
+      "previewAny": "활성화된 조건 중 하나를 충족하면 초기화 카드 한 장을 사용합니다:",
+      "previewExpiry": "카드 만료까지 {{value}} {{unit}} 이내",
+      "previewWeekly": "주간 잔여량 {{percent}}% 이하",
+      "previewOff": "자동 사용이 꺼져 있어 아래 설정은 적용되지 않습니다.",
+      "previewEmpty": "활성화된 실행 조건이 없어 카드를 자동으로 사용하지 않습니다.",
+      "cardOn": "자동",
+      "cardOff": "꺼짐",
+      "orSeparator": " 또는 ",
+      "inheritHint": "공통 규칙을 따릅니다. 공통 규칙을 편집하거나 사용자 지정으로 전환하세요."
+    },
+    "overload": {
+      "setting": "과부하 시 계속 재시도",
+      "settingHint": "로컬 Codex API 서비스용입니다. 안전하게 재시도할 수 있는 요청은 모델이 복구될 때까지 기다립니다. 새 요청부터 적용됩니다.",
+      "retrying": "모델이 바빠 재시도 중 ({{count}})",
+      "count": "상위 서버 과부하 {{count}}회",
+      "countHint": "자동 재시도를 포함해 상위 서버의 응답을 집계합니다. 기록은 최대 7일간 보관됩니다.",
+      "history": "과부하 기록",
+      "empty": "이 기간에 과부하 오류가 없습니다.",
+      "attempt": "{{number}}번째 시도",
+      "sameAccount": "같은 계정에서 복구",
+      "otherAccount": "계정 전환 후 복구",
+      "pending": "결과 대기 중",
+      "cancelled": "취소됨",
+      "failed": "요청 실패",
+      "countUnavailable": "과부하 통계를 불러올 수 없습니다"
+    },
     "instance": {
       "errors": {
         "threadSyncWorkerFailed": "세션 동기화 작업 실패: {{error}}",
@@ -2364,6 +2572,14 @@
       "description": "기본 모드는 기존 라우팅을 유지합니다. 일반 할당량 우선 모드는 현재 API 키 풀에 있는 모든 Codex 계정의 일반 할당량이 소진된 후에만 크레딧을 허용합니다. 일반 할당량만 모드는 크레딧을 차단합니다. 계정별 크레딧 사용을 끈 설정이 항상 우선합니다.",
       "boundary": "할당량 스냅샷은 5분 동안 유효합니다. 제한 대상 계정의 할당량이 알 수 없음, 오래됨 또는 초기화됨 상태이면 선택 전에 자동으로 새로 고칩니다(최대 9초, 동시 조회는 병합). 새로 고침에 실패하면 계정을 안전하게 일시 중지합니다. 자세한 내용은 계정 풀 진단을 확인하세요. 진행 중인 요청은 회수할 수 없습니다. 요청이 할당량 경계를 넘거나 다른 클라이언트가 동시에 사용하면 공급자 측에서 크레딧이 소모될 수 있습니다. 확실한 지출 한도는 공급자 측에서 설정해야 합니다.",
       "strictHint": "일반 할당량만 모드는 모든 계정의 크레딧을 차단합니다. 계정별 스위치 설정은 다른 정책에서 사용할 수 있도록 유지됩니다."
+    },
+    "launchConfirmation": {
+      "title": "시작 확인 대기",
+      "description": "시작을 요청했지만 클라이언트 상태는 아직 확인되지 않았습니다. 이미 열려 있을 수 있으니 다시 시작하지 마세요.",
+      "check": "상태 확인",
+      "notRunning": "대상 인스턴스가 아직 감지되지 않았습니다. 나중에 다시 확인하거나 이 창을 닫은 후 시작을 재시도하세요.",
+      "checkFailed": "실행 상태를 읽을 수 없습니다. 나중에 다시 확인하세요.",
+      "maintenanceDeferred": "일부 대화 유지 관리가 완료되지 않았습니다. 기록은 유지되며 나중에 대화 관리에서 재시도할 수 있습니다."
     },
     "launchErrors": {
       "sessionRestoreFailed": "세션 복구에 실패했고 백업 복원이 완료되지 않아 실행을 중단했습니다. 다시 시도하기 전에 로그와 백업을 확인하세요.",
@@ -2594,14 +2810,8 @@
       "unsupportedCountryRegion": "현재 네트워크 지역에서는 Codex 인증을 새로고침할 수 없습니다. OpenAI 인증 서비스가 이 네트워크 출구를 거부했습니다. 지원되는 지역으로 전환한 뒤 다시 시도하세요."
     },
     "switchAuth": {
-      "apiOnlyTitle": "클라이언트 로그인 필요",
       "reauthorizeTitle": "Codex 인증 만료",
-      "apiOnlyDescription": "현재 클라이언트가 로그인 페이지로 이동했습니다. 클라이언트를 복구하려면 다시 인증하세요. 당분간 API 서비스는 계속 사용할 수 있습니다.",
-      "observationStatus": "로그인 페이지로의 이동이 감지되었습니다",
-      "observationTime": "최근 확인: {{time}}",
-      "loginRedirectTime": "최근 로그인 페이지 리디렉션: {{time}}",
       "observationInstance": "확인된 인스턴스: {{instance}}",
-      "launchTime": "인스턴스 시작 시간: {{time}}",
       "reauthorizeDescription": "로그인 정보를 갱신할 수 없고 access_token도 API 서비스에서 사용할 수 없습니다. 계속하려면 다시 인증하세요.",
       "idTokenUnavailable": "클라이언트 ID 정보가 만료되었으며 자동 갱신 후에도 유효한 id_token을 받지 못했습니다.",
       "reasonLabel": "원인",
@@ -2614,10 +2824,7 @@
       "startingInstanceAfterReauth": "인증이 업데이트되었습니다. 인스턴스를 다시 시작합니다...",
       "startInstanceAfterReauthFailed": "인증은 업데이트되었지만 인스턴스를 시작하지 못했습니다: {{error}}",
       "reauthorizedAndStartedInstance": "재인증 후 인스턴스를 시작했습니다",
-      "apiOnlyBadge": "인증 필요",
-      "clearClientAuth": "경고 지우기",
-      "clearClientAuthSuccess": "클라이언트 경고를 지웠습니다",
-      "clearClientAuthFailed": "클라이언트 경고를 지우지 못했습니다: {{error}}"
+      "apiTokenUsableDescription": "일부 로그인 자격 증명은 재인증이 필요합니다. 현재 액세스 토큰은 API 서비스에서 계속 사용할 수 있습니다."
     },
     "current": "현재",
     "empty": {
@@ -2687,6 +2894,16 @@
       "savedPath": "저장 경로"
     },
     "localAccess": {
+      "gatewayEngineNative": "Rust 네이티브",
+      "gatewayEngineSidecar": "Go (기존)",
+      "gatewayEngineHint": "기본 엔진은 Rust입니다. 최초 업그레이드 시 Rust로 전환되며 이후 선택은 유지됩니다. 전환하면 API 서비스가 재시작되어 진행 중인 요청이 중단될 수 있습니다. Codex 창은 열린 상태로 유지됩니다.",
+      "gatewayEngineSwitching": "엔진 전환 중…",
+      "gatewayEngineSwitchFailed": "엔진 전환 실패: {{error}}",
+      "gatewayEngineReadbackFailed": "현재 엔진을 확인할 수 없습니다. 새로고침 후 다시 시도하세요: {{error}}",
+      "gatewayEngineReadbackTimeout": "상태 새로고침 시간 초과",
+      "gatewayEngineOperationBusy": "다른 서비스 작업이 진행 중입니다. 잠시 후 다시 시도하세요.",
+      "gatewayEngineSwitchRestored": "전환에 실패하여 이전 엔진을 복원했습니다.",
+      "gatewayEngineRestoreFailed": "전환에 실패했고 이전 엔진도 복원하지 못했습니다. 서비스 상태를 확인한 후 다시 시도하세요.",
       "title": "API 서비스",
       "accountCount": "{{count}}개 계정",
       "baseUrl": "주소",
@@ -2933,7 +3150,6 @@
         "quotaReserveInvalid": "1에서 100 사이의 정수를 입력하세요.",
         "strictReserve": "엄격한 보호",
         "strictReserveDesc": "예약 할당량을 설정하면 안전 여유분 보호가 자동 적용됩니다. 기준값에 가까워지면 계정당 요청 하나만 보내고 완료 후 최신 할당량을 확인합니다. 다른 클라이언트의 사용량은 제한하지 않습니다.",
-        "strictNativeOnly": "엄격한 보호에는 Rust 엔진이 필요합니다. Go로 전환하기 전에 꺼 주세요.",
         "safetyMargin": "안전 여유",
         "safetyMarginUnit": "퍼센트포인트",
         "safetyMarginInvalid": "1에서 20 사이의 정수를 입력하세요.",
@@ -3016,17 +3232,7 @@
       "gatewayModeNewLabel": "API 서비스-신규",
       "gatewayModeOldLabel": "API 서비스-기존",
       "gatewayModeSaveSuccess": "API 서비스 게이트웨이 모드가 업데이트되었습니다",
-      "gatewayEngineNative": "Rust 네이티브",
-      "gatewayEngineSidecar": "Go (기존)",
-      "gatewayEngineHint": "기본 엔진은 Rust입니다. 최초 업그레이드 시 Rust로 전환되며 이후 선택은 유지됩니다. 전환하면 API 서비스가 재시작되어 진행 중인 요청이 중단될 수 있습니다. Codex 창은 열린 상태로 유지됩니다.",
-      "gatewayEngineSwitching": "엔진 전환 중…",
-      "gatewayEngineSwitchFailed": "엔진 전환 실패: {{error}}",
-      "gatewayEngineReadbackFailed": "현재 엔진을 확인할 수 없습니다. 새로고침 후 다시 시도하세요: {{error}}",
-      "gatewayEngineReadbackTimeout": "상태 새로고침 시간 초과",
       "gatewayEngineRequestsBusy": "진행 중인 요청이 있습니다. 완료 후 다시 시도하세요.",
-      "gatewayEngineOperationBusy": "다른 서비스 작업이 진행 중입니다. 잠시 후 다시 시도하세요.",
-      "gatewayEngineSwitchRestored": "전환에 실패하여 이전 엔진을 복원했습니다.",
-      "gatewayEngineRestoreFailed": "전환에 실패했고 이전 엔진도 복원하지 못했습니다. 서비스 상태를 확인한 후 다시 시도하세요.",
       "gatewayEngineStopped": "API 서비스가 중지되었습니다. 재시작 후 다시 시도하세요.",
       "gatewayGuideTitle": "여기서 게이트웨이 전환",
       "gatewayGuideDesc": "기본값은 새 게이트웨이입니다. 호환성 문제나 클라이언트 요청 오류가 있으면 여기서 기존 게이트웨이로 전환할 수 있습니다.",
@@ -3118,7 +3324,7 @@
       "imageGenerationMainModel": {
         "label": "이미지 주 모델",
         "notice": "일반 사용 시 이미지 주 모델을 변경하지 마세요.",
-        "hint": "공식 이미지 서비스로 요청을 전달하는 용도이며, 이미지 생성 모델을 선택하는 설정이 아닙니다. 공식 주 모델이 바뀐 경우에만 수동으로 수정하세요. 비워 두면 gpt-5.6-luna를 사용합니다.",
+        "hint": "Responses 내장 이미지 생성에만 사용됩니다. 독립 이미지 API에는 적용되지 않습니다. 비워 두면 gpt-5.6-luna를 사용합니다.",
         "invalid": "공백 없이 200자 이하의 모델 ID를 입력하세요."
       },
       "requestDetail": {
@@ -3184,7 +3390,7 @@
       "resetCreditDialogDesc": "속도 제한을 재설정하면 중단 없이 계속 작업할 수 있습니다. 사용 가능한 재설정: {{count}}회.",
       "resetCreditDialogAction": "사용량 재설정",
       "resetCreditNoCredits": "사용 가능한 재설정 횟수가 없습니다",
-      "resetCreditConsumed": "5시간 쿼터가 재설정되었습니다",
+      "resetCreditConsumed": "쿼터가 재설정되었습니다",
       "resetCreditFailed": "재설정 실패: {{error}}",
       "resetCreditRefreshAfterConsumeFailed": "재설정은 제출됐지만 쿼터 새로고침에 실패했습니다: {{error}}",
       "resetCreditsTitleWithExpiry": "5시간 창에 남은 재설정 횟수: {{count}}. 다음 만료: {{time}}",
@@ -3193,7 +3399,7 @@
       "resetCreditStatusRedeemed": "사용됨",
       "resetCreditStatusExpired": "만료됨",
       "resetCreditStatusUnknown": "알 수 없음",
-      "resetCreditNextExpiry": "다음 만료: {{time}}",
+      "resetCreditNextExpiry": "가장 가까운 초기화 만료 {{time}}",
       "resetCreditDetailsTitle": "재설정 상세",
       "resetCreditNoRecords": "재설정 기록 없음",
       "resetCreditRecordsLoadFailed": "재설정 기록을 불러오지 못했습니다: {{error}}",
@@ -3209,7 +3415,12 @@
       "codeReview": "코드 리뷰",
       "codeReviewShort": "리뷰",
       "monthlyCreditsHint": "이번 달 크레딧 잔량",
-      "monthlyCreditsInline": "크레딧: {{value}}"
+      "monthlyCreditsInline": "크레딧: {{value}}",
+      "resetCreditExpiryHours": "{{hours}}시간 {{minutes}}분",
+      "resetCreditExpiryMinutes": "{{minutes}}분",
+      "resetCreditExpiryExpired": "만료됨 · 상세 보기",
+      "resetCreditExpiryUrgent": "곧 만료: {{time}} · {{duration}}",
+      "resetCreditExpiryNormal": "만료 {{time}} · {{duration}}"
     },
     "quotaError": {
       "badge": "할당량 오류",
@@ -3486,6 +3697,7 @@
         "expand": "펼치기",
         "collapse": "접기",
         "repairVisibility": "표시 복구",
+        "repairIndex": "대화 인덱스 복구",
         "restoreSessions": "세션 복원",
         "exportSessions": "세션 내보내기",
         "importSessions": "세션 가져오기",
@@ -3518,6 +3730,10 @@
         "clear": "지우기"
       },
       "messages": {
+        "deleteNotConfirmed": "클라이언트에서 삭제 완료를 확인하지 못했습니다. 로컬 정리를 중단하고 백업을 보존했습니다: {{error}}",
+        "historyReadFailed": "대화 기록을 안전하게 읽을 수 없습니다: {{error}}",
+        "restoreIndexRetry": "대화 파일은 보존되었지만 대화 목록을 업데이트하지 못했습니다. 원본은 휴지통에 남아 있습니다. 문제를 해결한 후 다시 시도하세요: {{error}}",
+        "importIndexRetry": "대화 파일을 가져왔지만 대화 목록을 업데이트하지 못했습니다. 파일과 가져오기 패키지는 보존되었습니다. 문제를 해결한 후 다시 시도하세요: {{error}}",
         "pickOne": "세션을 하나 이상 선택해 주세요",
         "syncNeedTwo": "세션을 동기화하려면 인스턴스가 두 개 이상 필요합니다",
         "pickRestoreOne": "복원할 세션을 하나 이상 선택하세요",
@@ -3592,9 +3808,9 @@
         "providerLoadFailed": "provider 후보를 불러오지 못했습니다: {{error}}",
         "modeTitle": "복구 모드",
         "modeQuick": "빠른 복구",
-        "modeQuickDesc": "공식 상태 DB와 세션 인덱스의 공급자를 정규화합니다. rollout 파일은 유지합니다. 일반 계정 전환에 적합합니다.",
+        "modeQuickDesc": "짧은 시간 내에 표시 인덱스와 현재 소속을 복구합니다. 프로젝트 정보를 쓰려면 대상 인스턴스를 종료하세요.",
         "modeDeep": "전체 복구",
-        "modeDeepDesc": "이전 공급자, 목록, 작업 공간 및 하위 에이전트 인덱스를 복구합니다. rollout 파일은 유지합니다. 먼저 대상 인스턴스를 종료하세요.",
+        "modeDeepDesc": "빠른 복구에 스냅샷 기반 프로젝트 복원과 대화 인덱스 복구를 포함합니다. 적용 전에 대상 인스턴스를 종료하세요.",
         "scopeTitle": "세션 범위",
         "scopeAll": "모든 세션",
         "scopeAllDesc": "현재 관리 목록의 {{count}}개 세션을 복구합니다.",
@@ -3626,9 +3842,26 @@
         "previewFailedWithError": "세션 복구 미리보기에 실패했습니다: {{error}}",
         "confirmRepair": "복구 확인",
         "title": "기록 복구",
-        "description": "SQLite 인덱스, 세션 목록 및 작업 공간의 공급자 정보를 정규화합니다. 원본 rollout 파일의 바이트는 유지하고 시간만 보정합니다. 먼저 로컬 백업을 생성합니다.",
+        "description": "빠른 복구는 표시 인덱스와 현재 프로젝트 소속을 보완합니다. 전체 복구는 이전 스냅샷과 대화 인덱스도 복원합니다. 쓰기 전에 로컬 백업을 만들며 대화 로그 본문은 유지됩니다.",
         "stopInstanceHint": "전체 복구 전에 선택한 Codex App/ChatGPT 인스턴스를 완전히 종료하세요. 변경 사항은 먼저 미리 볼 수 있습니다.",
-        "encryptedContentWarning": "다른 공급자 또는 계정에서 암호화한 기록이 감지되었습니다. 메타데이터는 마이그레이션할 수 있지만 해당 세션을 계속하거나 압축하면 실패할 수 있습니다. 원래 공급자/계정으로 돌아가거나 새 세션을 시작하세요."
+        "encryptedContentWarning": "다른 공급자 또는 계정에서 암호화한 기록이 감지되었습니다. 메타데이터는 마이그레이션할 수 있지만 해당 세션을 계속하거나 압축하면 실패할 수 있습니다. 원래 공급자/계정으로 돌아가거나 새 세션을 시작하세요.",
+        "modeHistory": "편집/분기 복구",
+        "modeHistoryDesc": "인덱스 오류로 인한 메시지 편집 및 대화 분기 생성 실패를 복구합니다.",
+        "historyLiveHint": "클라이언트 실행 중에도 복구할 수 있습니다. 완료 후 클라이언트를 재시작하고 대화를 다시 여세요.",
+        "historyDescription": "선택한 대화와 상위 기록을 확인하고 잘못된 페이지 인덱스만 초기화합니다. 대화 기록, 계정, Provider 설정은 유지됩니다. 실행 중에도 복구할 수 있으며 완료 후 재시작하면 인덱스를 다시 불러옵니다.",
+        "historyPreview": "재구성할 수 있는 잘못된 기록 인덱스 {{count}}개를 찾았습니다. 대화 기록은 그대로 유지됩니다.",
+        "historySuccess": "잘못된 기록 인덱스 {{count}}개를 초기화했습니다. 클라이언트를 재시작하고 대화를 다시 열어 재구성하세요. 백업은 보관되었습니다.",
+        "historyNoChanges": "안전하게 재구성할 수 있는 잘못된 기록 인덱스를 찾지 못했습니다.",
+        "historyFailed": "기록 인덱스 복구를 완료하지 못했습니다: {{error}}",
+        "historyChanged": "복구 중 대화 데이터가 변경되었습니다. 이번 복구는 적용하지 않았습니다. 잠시 후 다시 시도하세요.",
+        "historyScan": "기록 인덱스 확인 중 ({{current}}/{{total}})…",
+        "historyReset": "잘못된 인덱스를 백업하고 초기화하는 중…",
+        "projectsChanged": "프로젝트 데이터가 변경되었습니다. 다시 미리 보고 재시도하세요.",
+        "projectsFailed": "로컬 프로젝트 복원 실패: {{error}}",
+        "projectsPreview": "미리보기: 프로젝트 {{projects}}개, 소속 {{assignments}}개. 프로젝트 {{skipped}}개와 소속이 불명확한 대화 {{ambiguous}}개 제외.",
+        "projectsSuccess": "복원 완료: 프로젝트 {{projects}}개, 소속 {{assignments}}개. 프로젝트 {{skipped}}개와 소속이 불명확한 대화 {{ambiguous}}개 제외.",
+        "projectsPending": "이전 복원이 중단되었습니다. 대상 인스턴스를 종료하고 전체 복구로 미완료 쓰기를 복원하세요.",
+        "projectsDeferred": "일부 프로젝트 정보의 처리가 보류되었습니다. 대상 인스턴스를 종료하고 빠른 복구를 재시도하거나 전체 복구를 사용하세요."
       },
       "importModal": {
         "title": "세션 가져오기",
@@ -4028,7 +4261,7 @@
         "apiKeyUrlInvalid": "자격 증명이 포함되지 않은 HTTP(S) 관리 페이지 주소를 입력하세요. API Key는 키 입력란에 넣으세요."
       },
       "saveSuccess": "모델 공급자가 저장되었습니다.",
-      "deleteBlocked": "이 공급자는 {{count}}개 계정에 연결되어 있어 삭제할 수 없습니다.",
+      "confirmDeleteWithAccounts": "공급자 “{{name}}” 및 연결된 계정 {{count}}개를 삭제할까요?",
       "confirmDelete": "공급자 \"{{name}}\"을(를) 삭제할까요?",
       "deleteFailed": "공급자 삭제 실패: {{error}}",
       "deleteApiKeyFailed": "API 키 삭제 실패: {{error}}",
@@ -4052,7 +4285,9 @@
         "chatCompletions": "Chat Completions 프로토콜",
         "deepseekResponsesHint": "DeepSeek을 시작하여 게이트웨이 또는 공식 직접 연결을 선택한 다음 Flash 또는 Pro를 선택하세요. 게이트웨이는 Codex에 모델을 표시하고, 직접 연결은 게이트웨이를 거치지 않습니다.",
         "deepseekChatHint": "DeepSeek Chat Completions는 레거시 경로에 로컬 게이트웨이 브리지를 사용합니다. 공식 Codex 도구 동작이 필요하면 Responses를 선택하세요.",
-        "deepseekThirdPartyHint": "이 주소는 DeepSeek 공식 엔드포인트가 아니므로 서드파티 호환 엔드포인트로 처리됩니다. 모델 목록에는 업스트림의 실제 모델 ID를 입력하고 공식 모델 이름은 사용하지 마세요."
+        "deepseekThirdPartyHint": "이 주소는 DeepSeek 공식 엔드포인트가 아니므로 서드파티 호환 엔드포인트로 처리됩니다. 모델 목록에는 업스트림의 실제 모델 ID를 입력하고 공식 모델 이름은 사용하지 마세요.",
+        "anthropic": "Anthropic 프로토콜",
+        "gatewayRequired": "이 프로토콜에는 로컬 게이트웨이가 필요합니다. 시작 모델을 선택하세요."
       },
       "selectSavedProvider": "저장된 공급자",
       "selectSavedApiKey": "저장된 API 키",
@@ -4156,7 +4391,7 @@
         "selectVisible": "현재 결과 선택",
         "resultSelectedCount": "{{count}}개 선택됨",
         "selectFailed": "실패 선택",
-        "deleteConfirm": "선택한 공급자 {{providerCount}}개를 삭제할까요? 정확히 연결된 Codex API Key 계정 {{accountCount}}개도 함께 삭제됩니다.",
+        "deleteConfirm": "선택한 공급자 {{providerCount}}개와 연결된 계정 {{accountCount}}개를 삭제할까요?",
         "deleteSuccess": "공급자 {{providerCount}}개와 연결 계정 {{accountCount}}개를 삭제했습니다.",
         "deleteFailed": "선택 항목 삭제 실패: {{error}}",
         "protocolSummary": "{{protocol}} · {{mode}} · {{model}}",
@@ -4285,7 +4520,22 @@
       "importConfigPlaceholder": "카드에서 '설정 복사' 후 내용을 여기에 붙여넣으세요",
       "importConfigAction": "설정 가져오기",
       "importConfigFromClipboard": "클립보드 읽기",
-      "settingsRestartHint": "공급자 설정이 업데이트되었습니다. 적용하려면 이 공급자를 사용하는 실행 중인 Codex 또는 API 서비스를 다시 시작하세요."
+      "settingsRestartHint": "공급자 설정이 업데이트되었습니다. 적용하려면 이 공급자를 사용하는 실행 중인 Codex 또는 API 서비스를 다시 시작하세요.",
+      "anthropic": {
+        "auth": "인증 방식",
+        "hint": "Anthropic Messages 게이트웨이에 연결합니다. 모델을 가져오거나 직접 입력하세요.",
+        "fetch": "모델 가져오기",
+        "fetching": "가져오는 중…",
+        "fetchFailed": "모델을 가져오지 못했습니다. 다시 시도하거나 모델 ID를 직접 입력하세요.",
+        "import": "설정 가져오기",
+        "importFailed": "유효한 Claude Code 또는 데스크톱 Gateway 설정이 없습니다."
+      },
+      "editor": {
+        "modelScope": "모델 설정 범위",
+        "providerDefault": "공급자 기본값",
+        "sharedSettings": "모델 목록과 기능은 선택한 범위에 적용됩니다. 프로토콜, 인증 방식, 주소는 공급자 공통 설정입니다.",
+        "saveScope": "저장하면 공급자와 연결된 계정이 업데이트됩니다. 현재 계정이 영향을 받으면 로컬 Codex 설정과 자격 증명도 업데이트됩니다. 클라이언트는 자동으로 시작되지 않습니다."
+      }
     },
     "quickSwitch": {
       "action": "공급자 빠른 전환",
@@ -4614,6 +4864,11 @@
       },
       "routing": {
         "optionsTitle": "라우팅 옵션",
+        "sessionIdentityMapping": "세션 ID 매핑",
+        "sessionIdentityMappingEnableHint": "켜면 업스트림 계정을 전환할 때 독립적인 Session-Id와 Thread-Id를 사용합니다. 식별자 격리는 강화되지만 계정 간 캐시 재사용은 줄어들 수 있습니다. 같은 계정에서는 기존 매핑을 계속 재사용합니다.",
+        "sessionIdentityMappingDisableHint": "끄면 클라이언트의 원래 Session-Id와 Thread-Id를 유지합니다. 서로 다른 업스트림 계정이 같은 식별자를 공유할 수 있어 격리는 약해지지만 계정 간 캐시 재사용은 늘어날 수 있습니다.",
+        "sessionIdentityMappingCacheNote": "캐시 적중률은 업스트림 규칙, 계정 범위 및 요청 내용에도 영향을 받으며, 이 설정을 바꾼다고 높아지거나 낮아지는 것은 아닙니다.",
+        "sessionIdentityMappingSaveNote": "확인 후 설정을 저장해야 변경 사항이 적용됩니다.",
         "sessionAffinity": "세션 고정",
         "sessionAffinityTtl": "만료 시간(초)",
         "responsesWebsockets": "WebSocket Responses 전송",
@@ -4634,6 +4889,8 @@
         "allKinds": "전체 유형",
         "allStatuses": "전체 상태",
         "allGatewayModes": "전체 모드",
+        "sessionFilter": "세션",
+        "sessionPlaceholder": "세션 ID",
         "modelFilter": "모델",
         "modelPlaceholder": "모델 ID",
         "accountFilter": "계정",
@@ -5001,7 +5258,7 @@
       "boundProxyUnavailable": "연결된 계정에 사용 가능한 프록시가 없습니다. 다시 선택하세요.",
       "sourceUnavailable": "프록시 소스 또는 노드를 사용할 수 없습니다. 다시 선택하세요.",
       "operationTimeout": "프록시 작업 시간이 초과되었습니다. 다시 시도하세요.",
-      "cardScopeHint": "이 카드의 프록시는 실행되는 Codex 데스크톱 클라이언트에 적용됩니다. 모델 게이트웨이의 업스트림 연결은 각각의 경로를 유지합니다.",
+      "cardScopeHint": "API Key 계정의 프록시는 데스크톱 클라이언트와 API 서비스의 업스트림 요청에 모두 적용됩니다. API 서비스 카드의 프록시는 데스크톱 클라이언트에만 적용됩니다. 시스템 프록시는 변경하지 않습니다.",
       "display": {
         "title": "프록시 표시",
         "compact": "간략",
@@ -5302,7 +5559,7 @@
       "modeDefaultHint": "이 계정은 프록시를 사용하지 않고 기존 기본 출구를 유지합니다.",
       "modeStaleHint": "연결한 소스 또는 노드를 더 이상 사용할 수 없습니다. 다시 선택하세요.",
       "management": "프록시 관리",
-      "managementHint": "시스템 프록시를 바꾸지 않고 OAuth·API 계정 및 API 서비스 카드에 프록시를 설정합니다. API 카드에서는 실행되는 데스크톱 클라이언트에 적용되며 모델 게이트웨이는 각각의 경로를 유지합니다.",
+      "managementHint": "API Key 계정의 프록시는 데스크톱 클라이언트와 API 서비스의 업스트림 요청에 모두 적용됩니다. API 서비스 카드의 프록시는 데스크톱 클라이언트에만 적용됩니다. 시스템 프록시는 변경하지 않습니다.",
       "emptyTitle": "계정 전용 연결 경로",
       "emptyDescription": "지원되는 계정 카드가 없습니다. OAuth 또는 API 계정을 추가하거나 API 서비스 카드를 활성화한 뒤 여기에서 프록시를 선택하세요.",
       "search": "계정 검색",
@@ -5416,7 +5673,7 @@
         "subscriptionUrl": "구독 URL",
         "nodeLinks": "노드 링크 또는 설정",
         "import": "가져오기",
-        "importNotice": "구독 URL과 노드 자격 증명은 로컬에 암호화해 저장합니다. 구독 요청에는 계정 Token을 보내지 않습니다.",
+        "importNotice": "설정과 리소스 스냅샷은 암호화해 저장하고 실행 시 별도 폴더에서 복호화합니다. 구독 및 리소스 요청에는 계정 토큰을 보내지 않습니다.",
         "intro": "구독이나 노드를 가져와 테스트한 뒤 계정 목록에서 선택하고 연결하세요.",
         "emptyTitle": "첫 프록시 추가",
         "emptyHint": "구독 주소, 노드 링크, HTTP / SOCKS5를 지원합니다. 계정 없이도 가져오기와 테스트가 가능합니다.",
@@ -5461,7 +5718,7 @@
         "unsupported": "지원 안 됨",
         "invalidInput": "이름과 유효한 구독 URL, 노드 링크 또는 프록시 설정을 입력하세요.",
         "downloadFailed": "구독 다운로드에 실패했습니다. 네트워크와 프록시 설정을 확인한 후 다시 시도하세요.",
-        "downloadRedirect": "다른 사이트로의 리디렉션 또는 과도한 리디렉션으로 구독 다운로드를 중단했습니다.",
+        "downloadRedirect": "구독 리디렉션이 잘못되었거나 횟수 제한을 초과했습니다.",
         "downloadDenied": "구독 서버가 접근을 거부했습니다(HTTP 401/403). 링크와 유효기간을 확인하세요.",
         "downloadTls": "구독 연결의 TLS 핸드셰이크 또는 인증서 검증에 실패했습니다. 네트워크와 프록시 설정을 확인하세요.",
         "timeout": "작업 시간이 초과되었습니다. 새로고침하여 결과를 확인한 후 재시도하세요.",
@@ -5479,6 +5736,7 @@
         "loadBalanceGroup": "부하 분산",
         "reasonStrategy": "이 그룹 방식은 지원되지 않습니다. 펼쳐서 사용 가능한 노드를 선택하세요.",
         "reasonOptions": "아직 지원되지 않는 프로토콜 또는 설정 옵션이 포함되어 있습니다.",
+        "reasonProviderConfig": "이 노드 목록의 소스, 필터 또는 변환 설정은 지원되지 않습니다.",
         "reasonProvider": "이 그룹에는 아직 불러오지 않은 외부 노드 공급자가 필요합니다.",
         "reasonMembers": "그룹 구성원이 검증을 통과하지 못했습니다. 개별 사유를 확인하세요.",
         "reasonInvalid": "필수 설정이 없거나 올바르지 않습니다.",
@@ -5500,6 +5758,14 @@
         "defaultProtocol": "프로토콜 생략 시",
         "credentialFormat": "인증 정보 형식",
         "recognizing": "인식 중…",
+        "nativePreview": "가져올 때 Mihomo가 설정을 직접 해석하고 리소스를 불러옵니다. 미리 보기에서는 파일이나 네트워크에 접근하지 않습니다.",
+        "resourceDirectory": "리소스 폴더",
+        "browseResources": "폴더 선택",
+        "resourceDirectoryHint": "로컬 파일이 있으면 구독 리소스 폴더를 선택하세요. 내용은 별도 실행 폴더에 복사되고 암호화된 스냅샷으로 저장됩니다.",
+        "resourceDirectoryRequired": "이 구독의 로컬 리소스 폴더를 선택하세요.",
+        "resourceMissing": "로컬 리소스를 사용할 수 없습니다. 폴더를 확인하거나 다시 가져오세요.",
+        "rulesName": "구독 규칙",
+        "pendingProviders": "가져올 때 원격 노드 목록 {{count}}개를 불러옵니다. 미리 보기에서는 다운로드하지 않습니다.",
         "previewCount": "유효 {{valid}} · 확인 필요 {{invalid}} · 중복 {{duplicates}}",
         "line": "{{line}}번째 줄",
         "ambiguous": "형식이 모호합니다. 인증 형식을 선택하거나 전체 프록시 URL을 사용하세요.",
@@ -5601,7 +5867,7 @@
         "assign": "프록시 지정",
         "specific": "선택한 계정",
         "shared": "공통 프록시",
-        "sharedHint": "독립 프록시가 없는 지원 카드는 새 카드를 포함해 이 프록시를 사용합니다. 독립 설정과 프록시 사용 안 함이 우선합니다. API 카드는 데스크톱 클라이언트에 적용되며 모델 게이트웨이는 각각의 경로를 유지합니다.",
+        "sharedHint": "개별 프록시가 없는 계정은 새 계정을 포함해 이 프록시를 상속합니다. 개별 프록시와 프록시 사용 안 함이 우선합니다. API Key 계정은 데스크톱과 API 요청에 모두 사용하며, API 서비스 카드는 데스크톱에만 사용합니다.",
         "apply": "지정"
       },
       "managerResources": {
@@ -5711,6 +5977,14 @@
       }
     },
     "requestDiagnostics": {
+      "requestSizeTitle": "요청 크기",
+      "requestSizeHint": "압축 해제된 클라이언트 JSON 크기입니다. 각 필드는 공백을 제거한 JSON 바이트 수이며 크기만 기록합니다.",
+      "requestBytes": "요청",
+      "historyBytes": "기록",
+      "toolsBytes": "도구",
+      "instructionsBytes": "지침",
+      "overloadRetry": "혼잡 재시도",
+      "overloadRecovery": "복구 시간",
       "recordPayloads": "요청 본문 기록",
       "recordPayloadsHint": "기본값은 꺼짐입니다. 클라이언트와 상위 요청 스냅샷을 크기 제한 내에서 로컬 저장합니다. 끄면 새 기록만 중단하며 저장된 본문은 별도로 지울 수 있습니다.",
       "privacyHint": "인증 필드는 가리지만 대화 본문의 민감한 정보는 남을 수 있습니다. 복사하거나 공유하기 전에 확인하세요.",
@@ -5720,7 +5994,7 @@
       "title": "요청 상세",
       "totalLatency": "총 소요 시간",
       "firstResponse": "첫 응답",
-      "firstResponseHint": "요청 시작부터 상위 서버의 첫 응답 조각까지의 시간이며 첫 생성 토큰 시간과 다를 수 있습니다.",
+      "firstResponseHint": "새 Responses 스트리밍 요청의 경우 게이트웨이가 요청 본문을 처리한 시점부터 첫 업스트림 응답 이벤트까지 측정합니다. 연결 유지 신호와 요청 빈도 제한 알림은 건너뜁니다.",
       "unavailable": "진단 정보가 아직 없습니다. 나중에 새로고침하세요. 과거 요청은 소급 기록하지 않습니다.",
       "attempts": "시도 이력",
       "noAttempts": "시도 이력이 기록되지 않았습니다.",
@@ -5885,6 +6159,54 @@
       "label": "활성 한도 동기화",
       "description": "API 서비스 없이 사용 중인 로컬 계정을 5~30초 간격으로 갱신합니다. 세션 파일이 바뀌면 추가 확인하며, 최근 파일 정보만 확인하고 대화 내용은 읽지 않습니다. 계정 제외, 요금제 및 그룹 설정을 유지합니다. 기본값은 꺼짐입니다.",
       "error": "설정을 불러오거나 저장하지 못했습니다. 다시 시도하세요."
+    },
+    "pathRecovery": {
+      "title": "Codex 실행 경로 설정",
+      "description": "사용 가능한 Codex 클라이언트 경로를 찾지 못했습니다. 앱을 선택하거나 Codex를 직접 연 다음 감지하세요.",
+      "reload": "다시 불러오기",
+      "timeout": "작업 시간이 초과되었습니다. 다시 시도하세요. 실행이 자동으로 이어지지는 않습니다.",
+      "noCandidates": "Codex가 감지되지 않았습니다. 클라이언트를 직접 열고 다시 감지하거나 경로를 선택하세요.",
+      "pathRequired": "Codex 클라이언트 경로를 선택하거나 입력하세요.",
+      "invalidPath": "유효한 Codex 데스크톱 클라이언트 경로가 아닙니다. 앱을 다시 선택하세요.",
+      "candidates": "감지된 앱",
+      "autoLaunchHint": "데스크톱 앱을 실행하지 않고 계정만 전환하려면 이 옵션을 끄세요. 이후에도 직접 실행할 수 있습니다.",
+      "manualLaunchHint": "자동 실행을 꺼도 이번 수동 실행이 완료되지는 않습니다. 설정만 저장하면 이번 실행 시도가 취소됩니다.",
+      "saveAndRetry": "저장 후 재시도",
+      "saveWithoutLaunch": "저장 후 계속",
+      "saveOnly": "설정만 저장",
+      "validationBusy": "이전 경로를 아직 확인 중입니다. 잠시 후 다시 시도하세요."
+    },
+    "openaiUsage": {
+      "monthCost": "이번 달 비용",
+      "scope": "조직 전체 비용입니다. 요청과 토큰은 텍스트 API만 포함하며 UTC로 집계합니다.",
+      "loading": "공식 사용량 조회 중…",
+      "pending": "공식 사용량 조회 대기",
+      "permissionRequired": "이 키에는 조직 사용량 읽기 권한이 없습니다(api.usage.read).",
+      "permissionGuide": "관리자 키 사용: Admin keys → Restricted → Usage API Scope → Read. 비용과 사용량을 조회할 수 있으며 잔액은 제공하지 않습니다.",
+      "openAdminKeys": "관리자 키 만들기",
+      "invalidKey": "조회 키가 유효하지 않거나 만료되었습니다. 관리자 API 키를 확인하세요.",
+      "networkFailed": "공식 사용량 서비스에 연결할 수 없습니다. 나중에 새로고침하세요.",
+      "queryFailed": "공식 사용량 조회에 실패했습니다. 나중에 다시 시도하세요.",
+      "organization": "조직 사용량",
+      "configure": "조회 설정",
+      "settings": "조회 설정",
+      "title": "사용량 조회 설정",
+      "optional": "사용량 조회 (선택)",
+      "queryKey": "관리자 API 키",
+      "callKey": "모델 API 키",
+      "notConfigured": "관리자 키를 설정하면 조직 비용과 사용량을 볼 수 있습니다.",
+      "purpose": "모델 키와 같은 조직의 관리자 키를 사용하세요. 이 키는 사용량 조회 전용이며 모델 키를 대체하지 않습니다.",
+      "saveVerify": "저장 및 검증",
+      "remove": "설정 삭제",
+      "keyRequired": "관리자 API 키를 입력하세요.",
+      "saveFailed": "조회 설정을 저장하지 못했습니다. 다시 시도하세요.",
+      "configChanged": "계정 또는 조회 키가 변경되었습니다. 설정을 다시 여세요.",
+      "openFailed": "키 페이지를 열지 못했습니다. 다시 시도하세요.",
+      "costUnavailable": "기록 없음",
+      "costUnavailableHint": "공식 비용 API가 해당 기간의 금액 기록을 반환하지 않았습니다. 요청 수와 Token은 별도의 사용량 API에서 가져오며, 금액 기록이 없다고 비용이 0인 것은 아닙니다."
+    },
+    "officialApi": {
+      "hint": "실제 연결 주소로 식별한 OpenAI 공식 API 키 계정입니다."
     }
   },
   "githubCopilot": {
@@ -6151,6 +6473,10 @@
       "title": "WorkBuddy 설정",
       "appPath": "WorkBuddy 경로"
     },
+    "minimaxCode": {
+      "title": "MiniMax Code 설정",
+      "appPath": "MiniMax Code 경로"
+    },
     "zcode": {
       "title": "ZCode 설정",
       "appPath": "ZCode 경로"
@@ -6375,8 +6701,9 @@
       "desc": "Kiro 액세스 토큰이나 내보낸 JSON 데이터를 붙여넣으세요."
     },
     "import": {
-      "localDesc": "로컬 Kiro 클라이언트 또는 JSON 파일에서 Kiro 계정 데이터를 가져옵니다.",
-      "localClient": "현지 키로에서 수입"
+      "localDesc": "로컬 또는 JSON에서 가져옵니다. JSON 계정을 먼저 저장한 후 백그라운드에서 로그인 상태와 사용 한도를 갱신합니다.",
+      "localClient": "현지 키로에서 수입",
+      "invalidCredentials": "인증 정보가 누락되었거나 지원되지 않습니다. 계정을 다시 내보내세요."
     },
     "injectToVSCode": "키로로 전환"
   },
@@ -6890,6 +7217,17 @@
       "resetUnknown": "재설정 시간 알 수 없음",
       "statusUnknown": "상태: 알 수 없음",
       "statusNormal": "상태: 정상",
+      "statusSynced": "상태: 동기화됨",
+      "statusSyncedPending": "상태: 동기화됨, 잔여량 확인 중",
+      "fastAvailable": "빠른 요청 {{times}}",
+      "fastTimes": "{{count}}회",
+      "fastUnlimited": "무제한",
+      "fastPerMonth": "빠른 요청/월: {{count}}",
+      "fastChannelPerMonth": "빠른 채널: {{count}}/월",
+      "fastChannelStatus": "빠른 채널: {{status}}",
+      "freeRemainingUnknown": "무료 잔여: --",
+      "timesRemainingUnknown": "남은 횟수: --",
+      "soloParallel": "혜택: Solo 병렬 {{count}}",
       "statusExhaustedFree": "상태: 사용량이 모두 소진되었습니다. 요금제 업그레이드를 권장합니다",
       "statusExhaustedPro": "상태: 사용량이 모두 소진되었습니다. 요금제를 업그레이드하거나 종량제를 활성화하세요",
       "bonusUsed": "보너스: +{{amount}}",
@@ -6902,17 +7240,8 @@
       "payAsYouGoEnabled": "종량제 사용: 활성화됨",
       "payAsYouGoEmpty": "종량제 사용: --",
       "payAsYouGoLabel": "종량제 사용",
-      "statusSynced": "상태: 동기화됨",
-      "statusSyncedPending": "상태: 동기화됨, 잔여량 확인 중",
-      "fastAvailable": "빠른 요청 {{times}}",
-      "fastTimes": "{{count}}회",
-      "fastUnlimited": "무제한",
-      "fastPerMonth": "빠른 요청/월: {{count}}",
-      "fastChannelPerMonth": "빠른 채널: {{count}}/월",
-      "fastChannelStatus": "빠른 채널: {{status}}",
-      "freeRemainingUnknown": "무료 잔여: --",
-      "timesRemainingUnknown": "남은 횟수: --",
-      "soloParallel": "혜택: Solo 병렬 {{count}}"
+      "creditsMember": "멤버십 크레딧",
+      "creditsBonus": "보너스 크레딧"
     },
     "flowNotice": {
       "title": "Trae 계정 안내 (클릭하여 펼치기/접기)",
@@ -6928,6 +7257,18 @@
     "token": {
       "jsonOnlyDesc": "전체 Trae CN 계정 JSON을 붙여넣으세요. 불안정한 식별·로그인 상태를 피하기 위해 원시 토큰은 지원하지 않습니다.",
       "jsonOnlyPlaceholder": "전체 Trae CN JSON 붙여넣기..."
+    },
+    "checkin": {
+      "modalTitle": "매일 체크인",
+      "durationMs": "{{ms}}밀리초",
+      "durationSeconds": "{{seconds}}초",
+      "durationTitle": "총 체크인 소요 시간",
+      "logSuccess": "성공 ({{done}}/{{total}})",
+      "logPartial": "일부 성공 ({{done}}/{{total}})",
+      "logIncomplete": "미완료",
+      "detailSuccess": "체크인 성공",
+      "detailAlreadyClaimed": "오늘 이미 받음",
+      "detailError": "체크인 오류"
     }
   },
   "codebuddyCn": {
@@ -6957,6 +7298,35 @@
     "syncToWorkbuddy": "WorkBuddy에 동기화"
   },
   "workbuddy": {
+    "credits": {
+      "planBase": "플랜 기본 크레딧",
+      "planBonus": "플랜 보너스 크레딧",
+      "benefit": "플랫폼 보상 크레딧",
+      "addon": "구매 크레딧",
+      "total": "총 남은 크레딧",
+      "details": "크레딧 내역",
+      "usedOf": "사용 {{used}}/{{total}}",
+      "remainingPercent": "{{percent}}% 남음",
+      "nearestExpiry": "가장 빠른 만료 {{time}}",
+      "nextRefresh": "다음 갱신 {{time}}",
+      "expiring": "곧 만료되는 크레딧 포함",
+      "valid": "유효",
+      "expired": "만료",
+      "expiresAt": "만료 {{time}}",
+      "expiryHours": "24시간 내 만료",
+      "expiryDays": "3일 내 만료",
+      "empty": "내역 없음",
+      "loadFailed": "불러오지 못했습니다 ({{error}})",
+      "overview": "크레딧 개요",
+      "remaining": "{{amount}} 남음",
+      "loadMore": "더 보기",
+      "usage": "사용 내역",
+      "requestAndTime": "요청 및 시간",
+      "creditUsed": "사용 크레딧",
+      "model": "모델",
+      "recentUsage": "최근 5건",
+      "viewMore": "더 보기"
+    },
     "title": "WorkBuddy 계정 관리",
     "noAccounts": "WorkBuddy 계정이 없습니다",
     "addAccount": "WorkBuddy 계정 추가",
@@ -6964,7 +7334,7 @@
       "title": "WorkBuddy 계정 관리 안내 (클릭하여 펼치기/접기)",
       "desc": "계정 전환은 최신 WorkBuddy 공식 클라이언트 구조에 맞춰 로컬 로그인 파일을 씁니다. 로컬 가져오기도 같은 파일을 읽습니다. 데이터는 로컬에서만 처리됩니다.",
       "permission": "권한 범위: 로컬 가져오기와 계정 전환을 위해 WorkBuddy 로그인 파일(CodeBuddyExtension/Data/Public/auth/workbuddy-desktop.info)을 읽고 씁니다. 기존 state.vscdb는 더 이상 읽거나 수정하지 않습니다.",
-      "network": "네트워크 범위: OAuth 로그인과 Token 갱신은 WorkBuddy 요청이 필요하고, 할당량 조회는 과금 API를 호출합니다. 로컬 로그인 파일이나 원본 자격 증명은 업로드되지 않습니다."
+      "network": "OAuth 로그인과 토큰 갱신은 WorkBuddy에 연결합니다. 크레딧 잔액과 내역은 계정 토큰으로 결제 서비스에서 조회합니다. 로그인 파일과 시스템 키는 이 기기에 저장됩니다."
     },
     "nickname": "닉네임",
     "enterprise": "기업",
@@ -6981,8 +7351,8 @@
       "oauth": {
         "title": "IDE 로그인 정보만 인증",
         "item1": "브라우저에서 OAuth를 완료하면 계정을 추가해 IDE 전환에 사용할 수 있습니다.",
-        "item2": "할당량 조회 파라미터는 자동으로 바인딩되지 않습니다.",
-        "item3": "할당량 표시가 필요하면 계정 카드에서 \"할당량 조회\"를 수동 실행하세요."
+        "item2": "인증 후 크레딧 잔액을 자동으로 조회합니다.",
+        "item3": "계정 카드에는 크레딧 개요가 표시됩니다. 내역에서 지급 기록과 만료일을 확인할 수 있습니다."
       }
     },
     "oauthWebviewTab": "WebView 인증",
@@ -7098,8 +7468,172 @@
       "startTime": "시작 시간",
       "endTime": "종료 시간",
       "timeRangeHint": "매일 이 시간대 내에서 무작위 시간을 선택하여 백그라운드 출석 체크를 완료합니다.",
+      "errors": "오류",
+      "tabSettings": "자동 출석 체크 설정",
+      "tabHistory": "자동 출석 체크 기록",
+      "manualTest": "테스트 실행",
+      "clearLogs": "지우기",
+      "clearLogsFailed": "체크인 기록 삭제 실패: {{message}}",
+      "historyLoading": "자동 체크인 기록을 불러오는 중...",
+      "historyLoadFailed": "자동 체크인 기록을 불러오지 못했습니다: {{message}}",
+      "totalCredits": "{{credits}} 크레딧",
+      "historyRangeHint": "최근 30일간의 자동 출석 체크 기록만 유지됩니다 (총 {{count}}건)",
+      "noHistory": "최근 30일간 자동 출석 체크 기록이 없습니다",
+      "saveFailed": "자동 출석 체크 설정 저장 실패: {{message}}",
+      "manualTestPartialFailure": "일부 계정 출석 체크에 실패했습니다. 기록을 확인하세요. 잠시 후 백그라운드에서 자동으로 재시도됩니다.",
+      "manualTestAlreadyRunning": "자동 출석 체크 작업이 실행 중입니다. 잠시 후 기록을 확인해 주세요.",
+      "manualTestFailed": "테스트 실행 실패: {{message}}",
       "timeRangeError": "시작 시간은 종료 시간보다 늦을 수 없습니다"
     }
+  },
+  "minimaxCode": {
+    "title": "MiniMax Code 계정 관리",
+    "noAccounts": "MiniMax Code 계정이 없습니다",
+    "addAccount": "MiniMax Code 계정 추가",
+    "flowNotice": {
+      "title": "MiniMax Code 계정 관리 안내 (클릭하여 펼치기/접기)",
+      "desc": "MiniMax Code의 로컬 로그인과 계정 전환을 관리합니다.",
+      "permission": "MiniMax Code 공식 로그인 파일을 읽고 씁니다. 기본 및 추가 인스턴스는 별도 데이터 폴더를 사용합니다.",
+      "network": "인증, 계정, 요금제, 크레딧 정보는 MiniMax 공식 API에만 요청합니다. 로컬 로그인 파일은 업로드하지 않습니다."
+    },
+    "nickname": "닉네임",
+    "enterprise": "기업",
+    "usage": "사용 상태",
+    "creditsBalance": "크레딧 잔액",
+    "usageNormal": "정상",
+    "usageAbnormal": "이상",
+    "usageViewDetail": "상세 보기",
+    "usageDetailTitle": "사용량 상태 상세",
+    "oauthWaiting": "인증 완료를 기다리는 중...",
+    "oauthDesc": "아래 버튼을 클릭하면 브라우저에서 MiniMax Code 인증 페이지를 엽니다.",
+    "oauthDescWebview": "아래 버튼을 클릭하면 내장 WebView에서 MiniMax Code 인증 페이지를 엽니다.",
+    "oauthFeature": {
+      "oauth": {
+        "title": "IDE 로그인 정보만 인증",
+        "item1": "브라우저에서 OAuth를 완료하면 계정을 추가해 IDE 전환에 사용할 수 있습니다.",
+        "item2": "크레딧 잔액",
+        "item3": "구매 크레딧 · 지급 크레딧"
+      }
+    },
+    "oauthWebviewTab": "WebView 인증",
+    "oauthOpenWebview": "WebView에서 열기",
+    "oauthOpenWebviewIncognito": "시크릿 WebView에서 열기",
+    "oauthOpenWebviewFailed": "WebView 열기 실패: {{error}}",
+    "oauthOpenBrowserFallback": "브라우저에서 열기 (대체)",
+    "oauthOpenBrowserFailed": "브라우저 열기 실패: {{error}}",
+    "oauthWebviewProgressHint": "WebView 상단에 가로 단계 표시줄이 표시되어 멈춘 단계를 쉽게 찾을 수 있습니다.",
+    "oauthFlow": {
+      "prepare": "인증 링크 준비",
+      "authorize": "인증 링크를 열고 승인",
+      "bind": "인증 결과를 폴링해 계정 바인딩",
+      "retryPrepare": "인증 링크 다시 생성",
+      "retryAuthorize": "인증 링크 다시 요청",
+      "retryBind": "인증 폴링 다시 시도",
+      "error": "흐름 오류: {{error}}"
+    },
+    "tokenDesc": "MiniMax Code access token을 붙여 넣으세요:",
+    "jsonDesc": "MiniMax Code 계정이 포함된 JSON 파일을 선택하세요:",
+    "import": {
+      "localDesc": "로컬 MiniMax Code 클라이언트 또는 JSON 파일에서 계정 데이터를 가져올 수 있습니다.",
+      "localClient": "로컬 MiniMax Code에서 가져오기"
+    },
+    "search": "MiniMax Code 계정 검색...",
+    "quotaQuery": {
+      "failedRefreshCompact": "할당량 새로고침 실패",
+      "sectionTitle": "할당량 조회",
+      "empty": "아직 바인딩된 할당량 조회 정보가 없습니다",
+      "packageUnknown": "플랜 정보 알 수 없음",
+      "quotaLabel": "남은 할당량",
+      "updatedAt": "최근 조회: {{time}}",
+      "cycleRange": "주기: {{start}} - {{end}}",
+      "cycleUnknown": "주기 정보 없음",
+      "expireAt": "만료 시간: {{time}}",
+      "expireUnknown": "만료 시간: 없음",
+      "packageTitle": {
+        "base": "기본 체험 패키지",
+        "activity": "활동 증정 패키지"
+      }
+    },
+    "extraCredit": {
+      "title": "추가 크레딧"
+    },
+    "oauthUrlInputPlaceholder": "인증 URL을 수동으로 입력할 수 있습니다",
+    "oauthInvalidUrl": "인증 URL 형식이 올바르지 않습니다. 전체 URL을 입력하세요.",
+    "oauthGotoWebview": "열려 있는 WebView를 입력한 URL로 이동",
+    "oauthGotoWebviewSuccess": "WebView에 입력한 URL로 이동하도록 요청했습니다.",
+    "oauthGotoWebviewFailed": "WebView 이동 실패: {{error}}",
+    "oauthWebviewInlineUrlPlaceholder": "이 WebView 안에서 이동할 URL 입력",
+    "oauthWebviewInlineGo": "이동",
+    "oauthSuccessClosePrompt": "계정 추가가 완료되었습니다. 지금 이 WebView를 닫을까요?\n\"WebView 닫기\"를 선택하면 바로 닫고, \"나중에\"를 선택하면 그대로 유지합니다.",
+    "oauthSuccessCloseTitle": "계정 추가 완료",
+    "oauthSuccessCloseNowLabel": "WebView 닫기",
+    "oauthSuccessCloseLaterLabel": "나중에",
+    "oauthSuccessCloseNowStatus": "✅ 계정 추가가 완료되었습니다. 창을 닫는 중...",
+    "oauthSuccessCloseLaterStatus": "✅ 계정 추가가 완료되었습니다. 이 WebView는 계속 열려 있습니다.",
+    "oauthWebviewOverlay": {
+      "steps": {
+        "prepare": "1 인증 링크 준비",
+        "authorize": "2 인증 링크를 열고 승인",
+        "bind": "3 인증 결과를 폴링해 계정 바인딩",
+        "complete": "5 완료(수동으로 닫기)"
+      },
+      "status": {
+        "loginConfirm": "이 페이지에서 로그인 및 권한 부여를 완료하세요."
+      }
+    },
+    "instances": {
+      "unsupported": {
+        "descPlatform": "MiniMax Code 다중 인스턴스는 macOS, Windows, Linux에서만 지원됩니다."
+      }
+    },
+    "quota": {
+      "usedOfTotal": "{{used}} / {{total}}​",
+      "noPlan": "M Plan 미구독",
+      "purchased": "구매 크레딧",
+      "gifted": "지급 크레딧"
+    },
+    "checkin": {
+      "title": "일일 체크인",
+      "modalTitle": "일일 체크인",
+      "status": "체크인 상태",
+      "checkedIn": "체크인 완료",
+      "notCheckedIn": "미체크인",
+      "button": "출석",
+      "button.loading": "체크인 중...",
+      "done": "완료",
+      "success": "체크인 성공! {{days}}일 연속",
+      "failure": "출석 실패: {{message}}",
+      "failure.network": "네트워크 오류입니다. 잠시 후 다시 시도해 주세요",
+      "lastCheckin": "마지막 체크인: {{time}}",
+      "streak": "{{days}}일 연속",
+      "reward": "보상: {{reward}}",
+      "refreshStatus": "새로고침",
+      "checkAll": "전체 체크인",
+      "noAccounts": "계정 없음",
+      "querying": "로딩 중...",
+      "streakDays": "{{days}}일",
+      "streakRewardCountdown": "보너스 보상까지 {{days}}일 남음",
+      "streakRewardToday": "오늘 보너스 보상을 받을 수 있습니다!",
+      "recentDates": "최근: ",
+      "claimed": "수령 완료",
+      "queryFailed": "조회 실패",
+      "retry": "재시도",
+      "inactive": "사용 불가",
+      "inactiveHint": "이 계정에서는 출석체크를 사용할 수 없습니다",
+      "autoCheckinSettings": "자동 출석 체크 설정",
+      "autoCheckinLabel": "자동 출석 체크",
+      "autoCheckinOff": "자동 출석 체크 꺼짐",
+      "autoCheckinEnabledHint": "자동 출석 체크 활성화: {{start}} ~ {{end}} 사이 무작위 체크인",
+      "autoCheckinDisabledHint": "자동 출석 체크 비활성화",
+      "enableAutoCheckin": "자동 출석 체크 활성화",
+      "enableAutoCheckinDesc": "지정된 시간 내에서 매일 무작위로 자동 출석 체크를 진행합니다",
+      "randomTimeRange": "무작위 출석 체크 시간대",
+      "startTime": "시작 시간",
+      "endTime": "종료 시간",
+      "timeRangeHint": "매일 이 시간대 내에서 무작위 시간을 선택하여 백그라운드 출석 체크를 완료합니다.",
+      "timeRangeError": "시작 시간은 종료 시간보다 늦을 수 없습니다"
+    },
+    "placeholder": "MiniMax Code 계정 관리가 곧 제공됩니다."
   },
   "zcode": {
     "search": "ZCode 계정 검색...",
@@ -7357,7 +7891,29 @@
     "continueMigrationScan": "스캔 계속",
     "savePartialMigrationBatch": "일부 저장",
     "saveCompleteMigrationBatch": "전체 저장",
-    "clearMigrationBatch": "배치 지우기"
+    "clearMigrationBatch": "배치 지우기",
+    "searchPlaceholder": "계정 또는 유형 검색",
+    "noSearchResults": "일치하는 계정 또는 유형이 없습니다",
+    "exportMigrationQr": "이전용 QR 코드 내보내기",
+    "exportBackup": "백업 내보내기",
+    "importBackup": "백업 가져오기",
+    "batchDelete": "선택 항목 삭제",
+    "exportBackupHint": "검색이나 선택 여부와 관계없이 저장된 모든 기록을 JSON 백업으로 내보냅니다.",
+    "editAccountHint": "유형:계정 형식으로 입력하세요. 예: OpenAI:alice@example.com",
+    "migrationTitle": "이전용 QR 코드 내보내기",
+    "migrationSelectedSummary": "선택한 계정 {{count}}개를 내보냅니다.",
+    "migrationAllSummary": "검색 조건과 관계없이 저장된 계정 {{count}}개를 모두 내보냅니다.",
+    "migrationWarning": "이 QR 코드에는 2FA 비밀 키가 포함되어 있습니다. 안전하게 보관하세요.",
+    "migrationPage": "QR 코드 {{current}} / {{total}} · 이 코드에 계정 {{count}}개 포함",
+    "migrationPrevious": "이전",
+    "migrationNext": "다음",
+    "migrationSaveImage": "QR 코드 저장",
+    "migrationImageAlt": "이전용 QR 코드 {{current}} / {{total}}",
+    "migrationInvalidRecord": "일부 기록에 잘못된 비밀 키가 있습니다. 이전용 QR 코드를 내보내기 전에 확인하세요.",
+    "migrationRecordTooLarge": "계정 정보가 너무 많아 이전용 QR 코드에 담을 수 없습니다. 계정 이름을 줄인 후 다시 시도하세요.",
+    "migrationUnsupportedParameters": "현재 이전용 내보내기는 SHA1, 6자리, 30초 코드만 지원합니다. 일부 계정에 지원되지 않는 매개변수가 있습니다.",
+    "migrationQrFailed": "이전용 QR 코드를 생성하지 못했습니다. 다시 시도하세요.",
+    "exportFailed": "내보내기에 실패했습니다. 저장 위치를 확인한 후 다시 시도하세요."
   },
   "logViewer": {
     "fileLabel": "로그 파일",
@@ -7559,6 +8115,17 @@
       "family": "그룹",
       "platform": "현재 시스템",
       "unsupportedGroup": "이 그룹에는 아직 원클릭으로 쓸 수 있는 클라이언트가 없습니다."
+    },
+    "campaign": {
+      "badge": "11.11",
+      "title": "충전 시 11.11% 추가 지급",
+      "description": "신규 및 기존 사용자 모두 참여할 수 있습니다.",
+      "period": "행사 기간: 2026년 11월 1일~11일 (UTC+8)",
+      "terms": "자세한 조건은 행사 페이지를 확인하세요.",
+      "action": "행사 보기",
+      "inactive": "현재 행사 기간이 아닙니다.",
+      "label": "11.11 한정 행사",
+      "promotionDescription": "Cockpit 공식 제휴 API 중계 서비스의 11.11 혜택입니다. 신규 및 기존 사용자 모두 행사 기간 충전 시 11.11%를 추가로 받습니다. Claude, ChatGPT, Gemini 등 주요 모델을 지원합니다."
     }
   },
   "grok": {
@@ -7957,7 +8524,7 @@
     "model": "연결 확인 모델",
     "selectModel": "모델 선택",
     "verifyHint": "선택한 모델은 연결 테스트에만 사용하며 다른 사용 가능한 모델을 제한하지 않습니다. 검증 시 짧은 요청을 한 번 보내며 소량의 요금제 사용량이 차감됩니다.",
-    "serviceHint": "현재 계정 풀에 추가해도 API 서비스는 시작되지 않습니다. 이 버전은 네이티브 엔진만 지원합니다.",
+    "serviceHint": "현재 계정 풀에 계정을 추가해도 API 서비스가 시작되지는 않습니다.",
     "verify": "검증만",
     "verifyAndJoin": "검증 후 추가",
     "remove": "서비스에서 제외",
@@ -8017,8 +8584,6 @@
       "verify": "모델 요청이 완료되지 않았습니다. 다시 검증하세요.",
       "usage": "요금제 또는 앱 사용량이 제한되었습니다. ChatGPT 사용량 설정을 확인하세요.",
       "usageUnavailable": "공식 서비스가 현재 사용량을 확인할 수 없습니다. 나중에 다시 시도하세요. 요금제 한도 소진을 의미하지는 않습니다.",
-      "native": "요금제 인증은 네이티브 엔진만 지원합니다. 먼저 API 서비스에서 엔진을 전환하세요.",
-      "nativeSwitch": "다른 엔진으로 전환하기 전에 요금제 계정을 API 서비스에서 제외하세요.",
       "browser": "브라우저를 열 수 없습니다. 인증 링크를 복사하여 직접 여세요.",
       "configuration": "인증 등록 정보가 일치하지 않습니다. 인증을 다시 시도하거나 요금제를 다시 연결하세요.",
       "notVerified": "API 서비스에 추가하기 전에 요금제 인증을 검증하세요.",
@@ -8198,7 +8763,6 @@
     "title": "기능 대체 경로",
     "hint": "계정이 필요한 기능을 지원하지 않으면 기존 모델 매핑을 사용해 지정 순서대로 예비 계정을 시도합니다.",
     "consent": "전환하면 이번 대화가 예비 계정으로 전송되며 해당 계정의 한도가 소모되거나 요금이 발생합니다.",
-    "nativeOnly": "현재 엔진에서는 기능 대체가 작동하지 않습니다. 켜려면 네이티브 엔진으로 전환하세요. 저장된 설정은 끌 수 있습니다.",
     "backups": "예비 계정",
     "addBackup": "예비 계정 추가",
     "backupEmpty": "켜기 전에 현재 API 서비스 계정 풀에서 예비 계정을 선택하세요.",

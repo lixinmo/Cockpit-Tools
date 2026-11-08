@@ -13,13 +13,18 @@ import type { CodexAccountGroup } from "../services/codexAccountGroupService";
 import { splitValidityFilterValues } from "./accountValidityFilter";
 import { compareCurrentAccountFirst } from "./currentAccountSort";
 import {
-  isCodexClientReauthNoticeOnly,
+  isCodexApiUsableReauthNotice,
   isCodexRefreshTokenReusedAccount,
 } from "./codexSwitchAuthFailure";
-import { normalizeAccountsOverviewScope } from "./accountsOverviewFilterPersistence";
+import {
+  normalizeAccountsOverviewScope,
+  readAccountsOverviewFilterField,
+  writeAccountsOverviewFilterField,
+} from "./accountsOverviewFilterPersistence";
 import {
   persistUserMemoryList,
   readUserMemoryList,
+  restoreUserMemoryList,
   USER_MEMORY_LISTS,
 } from "./userMemory";
 
@@ -58,6 +63,7 @@ export const CODEX_OVERVIEW_FILTER_FIELDS = {
 
 const CODEX_CUSTOM_SORT_ACTIVE_KEY =
   "agtools.codex.accounts.custom_sort_active.v1";
+export const CODEX_CUSTOM_SORT_RESTORED_EVENT = "codex:custom-sort-restored";
 
 export type CodexOverviewSortDirection = "asc" | "desc";
 
@@ -303,7 +309,7 @@ export function isCodexOverviewAccountAbnormal(
   if (isCodexRefreshTokenReusedAccount(account)) return false;
   // refresh_token 失效只影响官方客户端切号。只要 access_token 仍在 API
   // 服务的安全有效期内，该账号就仍是可用账号，不应计入“授权失败”。
-  if (isCodexClientReauthNoticeOnly(account)) return false;
+  if (isCodexApiUsableReauthNotice(account)) return false;
   if (account.requires_reauth === true) return true;
 
   const rawMessage = getCodexAccountQuotaError(account.quota_error)?.message?.trim() ?? "";
@@ -577,4 +583,19 @@ export function writeCodexCustomSortActive(active: boolean): void {
   } catch {
     // ignore persistence failures
   }
+}
+
+export async function restoreCodexCustomSortOrder(accountIds: string[], active: boolean): Promise<void> {
+  await restoreUserMemoryList(USER_MEMORY_LISTS.codexCustomSort, accountIds);
+  const savedSort = readAccountsOverviewFilterField<string>(
+    CODEX_OVERVIEW_FILTER_SCOPE, CODEX_OVERVIEW_FILTER_FIELDS.sortBy, "created_at",
+  );
+  const sortBy = active ? "custom" : savedSort === "custom" ? "created_at" : savedSort;
+  writeAccountsOverviewFilterField(CODEX_OVERVIEW_FILTER_SCOPE, CODEX_OVERVIEW_FILTER_FIELDS.sortBy, sortBy);
+  if (readAccountsOverviewFilterField(CODEX_OVERVIEW_FILTER_SCOPE, CODEX_OVERVIEW_FILTER_FIELDS.sortBy, null) !== sortBy) {
+    throw new Error("codex_sort_mode_save_failed");
+  }
+  // Imports must surface failures instead of reporting that the mode was restored.
+  localStorage.setItem(CODEX_CUSTOM_SORT_ACTIVE_KEY, active ? "1" : "0");
+  window.dispatchEvent(new Event(CODEX_CUSTOM_SORT_RESTORED_EVENT));
 }

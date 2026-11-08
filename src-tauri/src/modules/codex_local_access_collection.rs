@@ -220,6 +220,7 @@ fn save_collection_to_path(
                             .map(str::to_owned),
                     )
                     .unwrap_or(None);
+                    next.continuous_overload_retry = current.get("continuousOverloadRetry").and_then(Value::as_bool).unwrap_or(false);
                     next.request_payload_logging = current
                         .get("requestPayloadLogging")
                         .and_then(Value::as_bool)
@@ -239,6 +240,17 @@ fn save_collection_to_path(
                     if let Some(updated_at) = current.get("updatedAt").and_then(Value::as_i64) {
                         next.updated_at = next.updated_at.max(updated_at);
                     }
+                    if let Some(keys) = current.get("apiKeys").and_then(Value::as_array) {
+                        for key in &mut next.api_keys {
+                            if let Some(previous) = keys.iter().find(|value| value["id"] == key.id) {
+                                let previous: CodexLocalAccessApiKey = serde_json::from_value(previous.clone())
+                                    .map_err(|error| format!("Cannot preserve API key accounting: {error}"))?;
+                                key.token_used = key.token_used.max(previous.token_used);
+                                merge_key_budget_usage(&mut key.budget_usage, &previous.budget_usage);
+                                if previous.updated_at > key.updated_at { key.budget = previous.budget; }
+                            }
+                        }
+                    }
                 }
                 Err(error) => {
                     // Keep the existing recovery path for damaged files. With no readable
@@ -256,6 +268,7 @@ fn save_collection_to_path(
         // disk choice. This also closes joining-vs-engine-switch races.
         enforce_chatgpt_plan_image_policy(&mut next, &[]);
         native_validate_chatgpt_plan_mode(&next, next.gateway_mode)?;
+        credits_compat::validate_mode(&next, next.gateway_mode)?;
         serde_json::to_string_pretty(&next)
             .map_err(|error| format!("序列化本地接入配置失败: {error}"))
     })
@@ -596,6 +609,7 @@ fn replace_stats_window_if_more_complete(
 
 fn ensure_stats_maintenance_started() {
     ensure_request_log_error_maintenance_started();
+    ensure_remote_analytics_started();
     if GATEWAY_STATS_MAINTENANCE_COMPLETED.load(Ordering::SeqCst) {
         return;
     }
@@ -2074,11 +2088,13 @@ async fn ensure_runtime_loaded_without_start_with_profile_restore(
                 model_pricings: Vec::new(),
                 excluded_models: Vec::new(),
                 session_affinity: true,
+                session_identity_mapping_enabled: true,
                 session_affinity_ttl_ms: DEFAULT_SESSION_AFFINITY_TTL_MS,
                 session_affinity_default_enabled_migrated: true,
                 responses_websockets_enabled: false,
                 max_retry_credentials: 0,
                 max_retry_interval_ms: DEFAULT_MAX_RETRY_INTERVAL_MS,
+                continuous_overload_retry: false,
                 timeouts: CodexLocalAccessTimeouts::default(),
                 active_timeout_preset_id: "long_wait".to_string(),
                 timeout_presets: Vec::new(),

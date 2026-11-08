@@ -75,6 +75,7 @@ pub struct ExecutionPolicy {
     /// Zero means no credential-count limit (pool, time and replay fences still apply).
     pub credential_retries: u16,
     pub retry_max_delay: Duration,
+    pub continuous_overload_retry: bool,
     pub send_retries: u8,
     pub send_retry_max_delay: Duration,
     pub retry_base_delay: Duration,
@@ -102,6 +103,7 @@ impl Default for ExecutionPolicy {
             total_timeout: Duration::ZERO,
             credential_retries: 0,
             retry_max_delay: Duration::from_secs(1),
+            continuous_overload_retry: false,
             send_retries: 0,
             send_retry_max_delay: Duration::from_millis(1200),
             retry_base_delay: Duration::from_millis(200),
@@ -208,6 +210,7 @@ pub enum WireApi {
     #[default]
     Responses,
     Chat,
+    Anthropic,
 }
 
 #[derive(Clone, Debug)]
@@ -233,6 +236,7 @@ pub struct ImageRoute {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TransportFailureKind {
     TlsDecrypt,
+    TlsDecryptHttp2,
 }
 
 #[derive(Clone, Debug)]
@@ -244,11 +248,15 @@ pub struct ServiceError {
     pub response_error: Option<Value>,
     pub retry_after: Option<Duration>,
     pub credential_scope: bool,
+    pub transient_rate_limit: bool,
     /// Local, typed transport evidence; never inferred from an upstream message.
     pub transport_failure: Option<TransportFailureKind>,
     /// Proven local build/connect failure before an HTTP request reached upstream.
     /// Timeouts, read failures and WebSocket upgrade failures do not establish this.
     pub upstream_not_sent: bool,
+    /// Internal identity of a candidate rejected by the local quota gate before
+    /// dispatch. This is never exposed in the public error response.
+    pub local_rejected_account_id: Option<String>,
 }
 
 impl ServiceError {
@@ -260,8 +268,10 @@ impl ServiceError {
             response_error: None,
             retry_after: None,
             credential_scope: false,
+            transient_rate_limit: false,
             transport_failure: None,
             upstream_not_sent: false,
+            local_rejected_account_id: None,
         }
     }
 
@@ -271,17 +281,28 @@ impl ServiceError {
     }
 
     pub fn with_error_details(mut self, error: Value) -> Self {
+        self.transient_rate_limit = super::transient_rate_limit::applies(&error);
+        if self.transient_rate_limit {
+            self.status = 429;
+            self.credential_scope = false;
+        }
         self.response_error = Some(error);
         self
     }
 
     pub fn with_credential_scope(mut self, credential_scope: bool) -> Self {
-        self.credential_scope = credential_scope;
+        self.credential_scope = credential_scope && !self.transient_rate_limit;
         self
     }
 
     pub fn with_upstream_not_sent(mut self, upstream_not_sent: bool) -> Self {
         self.upstream_not_sent = upstream_not_sent;
+        self
+    }
+
+    pub fn with_local_rejected_account(mut self, account_id: impl Into<String>) -> Self {
+        self.local_rejected_account_id = Some(account_id.into());
+        self.upstream_not_sent = true;
         self
     }
 }
@@ -296,6 +317,7 @@ impl std::error::Error for ServiceError {}
 
 #[derive(Clone, Debug)]
 pub struct RequestReport {
+    pub transient_rate_limit: bool,
     /// One-way fingerprint of the actual SIWC access token for stale-error fencing.
     /// Never serialized into public logs or request payloads.
     pub official_access_fingerprint: Option<String>,
@@ -341,6 +363,10 @@ pub trait Host: Send + Sync + 'static {
     fn invalidate_transport(&self, _identity: &str) -> bool {
         false
     }
+    /// Proven HTTP/2 TLS corruption; default hosts only retire the failed pool.
+    fn invalidate_http2_transport(&self, identity: &str) -> bool {
+        self.invalidate_transport(identity)
+    }
     /// Caller-visible model profiles and protocol-derived multi-agent policy.
     /// Before routing only boundary/tool preparation is requested; a selected
     /// route determines whether its protocol needs portable message input.
@@ -380,6 +406,8 @@ pub trait Host: Send + Sync + 'static {
     fn payload_logging_enabled(&self) -> BoxFuture<'_, bool> {
         Box::pin(async { false })
     }
+    fn overload_attempt(&self, _request_id: &str, _attempt: &super::diagnostics::DiagnosticAttempt) {}
+    fn overload_outcome(&self, _request_id: &str, _outcome: &str, _account_id: Option<&str>) {}
     fn diagnostic(&self, _context: super::diagnostics::DiagnosticContext) -> BoxFuture<'_, ()> {
         Box::pin(async {})
     }
@@ -444,6 +472,16 @@ pub trait Host: Send + Sync + 'static {
             message,
         )
     }
+    fn route_quota_exhausted<'a>(
+        &'a self, route: &'a Route, status: u16, retry_after: Option<Duration>,
+    ) -> BoxFuture<'a, ()> {
+        self.route_failed_attempt(route, &route.model, status, retry_after, true, None)
+    }
+    fn route_transient_rate_limited<'a>(
+        &'a self, route: &'a Route, model: &'a str, retry_after: Option<Duration>,
+    ) -> BoxFuture<'a, ()> {
+        self.route_failed_attempt(route, model, 429, retry_after, false, None)
+    }
     fn retry_cooldown_wait<'a>(
         &'a self,
         _caller: &'a Caller,
@@ -466,6 +504,18 @@ pub trait Host: Send + Sync + 'static {
         Box::pin(async { Ok(true) })
     }
     fn authorize<'a>(&'a self, bearer: &'a str) -> BoxFuture<'a, Result<Caller, ServiceError>>;
+    fn authorize_management<'a>(&'a self, bearer: &'a str) -> BoxFuture<'a, Result<Caller, ServiceError>> {
+        self.authorize(bearer)
+    }
+    fn caller_permit<'a>(&'a self, _caller: &'a Caller) -> BoxFuture<'a, Result<Option<Arc<dyn Send + Sync>>, ServiceError>> {
+        Box::pin(async { Ok(None) })
+    }
+    /// A verified rebuild may use an eligible backup before waiting for an exhausted owner.
+    fn route_for_rebuild<'a>(
+        &'a self, caller: &'a Caller, request: RouteRequest,
+    ) -> BoxFuture<'a, Result<Route, ServiceError>> {
+        self.route(caller, request)
+    }
     fn route<'a>(
         &'a self,
         caller: &'a Caller,
@@ -482,6 +532,11 @@ pub trait Host: Send + Sync + 'static {
     ) -> BoxFuture<'a, Result<Route, ServiceError>> {
         self.route(caller, request)
     }
+    /// Validate a control on an already occupied socket without acquiring a
+    /// second concurrency permit or selecting a replacement account.
+    fn validate_websocket_control<'a>(
+        &'a self, _caller: &'a Caller, _route: &'a Route, _request: &'a RouteRequest,
+    ) -> BoxFuture<'a, Result<(), ServiceError>> { Box::pin(async { Ok(()) }) }
     /// Persist an observed upstream rejection before deciding whether history
     /// can be replayed. Candidate selection and local preflight are not attempts.
     fn observe_official_failure<'a>(

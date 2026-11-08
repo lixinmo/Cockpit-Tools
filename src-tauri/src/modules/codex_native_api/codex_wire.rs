@@ -63,6 +63,18 @@ pub(super) fn normalize_websocket(
     normalize_inner(headers, body, chatgpt, false, true)
 }
 
+/// OpenAI steering accepts only its protocol fields, including API-key routes.
+/// Keep client correlation IDs locally; unrelated vendor extensions stay opaque.
+pub(super) fn normalize_steering(body: &mut Value, chatgpt: bool, endpoint: &str) {
+    let public_openai = reqwest::Url::parse(endpoint).is_ok_and(|url| matches!(url.scheme(), "https" | "wss")
+        && url.host_str().is_some_and(|host| host == "api.openai.com" || host.ends_with(".api.openai.com")));
+    if (chatgpt || public_openai) && body["type"] == "response.steer" {
+        if let Some(object) = body.as_object_mut() {
+            object.remove("event_id");
+        }
+    }
+}
+
 fn normalize_inner(
     headers: &mut HeaderMap,
     body: &mut Value,
@@ -70,6 +82,10 @@ fn normalize_inner(
     compact: bool,
     websocket: bool,
 ) -> Result<(), ServiceError> {
+    if chatgpt {
+        super::codex_hosted_images::validate(headers, body)?;
+        super::codex_hosted_images::normalize(body);
+    }
     let streaming = body.get("stream").and_then(Value::as_bool) == Some(true);
     let Some(object) = body.as_object_mut() else {
         return Err(ServiceError::new(
@@ -91,7 +107,9 @@ fn normalize_inner(
         }
         object.insert("stream".into(), json!(true));
         object.insert("store".into(), json!(false));
-        object.insert("parallel_tool_calls".into(), json!(true));
+        if object.get("parallel_tool_calls") != Some(&Value::Bool(false)) {
+            object.insert("parallel_tool_calls".into(), json!(true));
+        }
         let sources = object
             .get("include")
             .and_then(Value::as_array)
@@ -112,7 +130,6 @@ fn normalize_inner(
             },
         );
         for field in [
-            "max_output_tokens",
             "max_completion_tokens",
             "temperature",
             "top_p",
@@ -201,8 +218,11 @@ fn normalize_inner(
     if !compact && (header_lite || metadata_lite) {
         body["parallel_tool_calls"] = json!(false);
         if lite::uses_image(body) {
-            // Go promotes explicit image requests to full Responses rather than discarding them.
-            headers.remove(LITE_HEADER);
+            // Optional image declarations never change the selected protocol.
+            // Forced hosted images were rejected before any mutation above.
+            if metadata_lite && !header_lite {
+                headers.insert(LITE_HEADER, axum::http::HeaderValue::from_static("true"));
+            }
         } else {
             lite::filter(body);
             if metadata_lite && !header_lite {

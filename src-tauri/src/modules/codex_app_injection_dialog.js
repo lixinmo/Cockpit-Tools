@@ -43,27 +43,41 @@
   const statuses = () => !finite(accountCount) || accountCount === 0 ? '' : '<div class="health"><span>ChatGPT</span><span>' + dot('green') + esc(label('available')) + ' <strong>' + number(availableAccountCount) + '/' + number(accountCount) + '</strong></span><span>' + dot('') + esc(label('issues')) + ' <strong>' + number(abnormalAccountCount) + '</strong></span><span>' + dot('') + esc(label('cooling')) + ' <strong>' + number(cooldownAccountCount) + '</strong></span></div>';
   const segmented = (name, choices, selected) => '<div class="segmented">' + choices.map(([value,key]) => '<button type="button" data-cockpit-dialog-action="' + name + '" data-value="' + value + '" aria-pressed="' + (value === selected) + '">' + esc(label(key)) + '</button>').join('') + '</div>';
   const binding = root => typeof root.usageState?.__binding?.binding === 'string' ? root.usageState.__binding.binding : null;
+  const retryDelays = [2000, 5000, 10000];
 
   function state(root) {
     if (!root.dialogState || root.dialogState.threadId !== (root.threadId || null) || root.dialogState.binding !== binding(root)) {
       if (root.dialogState) cancel(root);
       root.dialogState = {threadId:root.threadId || null, binding:binding(root), tab:'overview', scope:'chat', period:'week', rows:[], nextCursor:null,
         summary:null, session:null, pending:null, handled:null, loaded:false, available:null, unavailableReason:null,
-        error:false, requestedAt:0, paged:false, scopeCaches:Object.create(null), summaryCaches:Object.create(null)};
+        error:false, requestedAt:0, paged:false, retryCount:0, retryAt:null, hostAvailable:root.hostAvailable !== false,
+        scopeCaches:Object.create(null), summaryCaches:Object.create(null)};
     }
     return root.dialogState;
   }
-  function issue(root, cursor = null) {
+  function issue(root, cursor = null, automaticRetry = false, view = null) {
     const s = state(root);
+    if (!automaticRetry) s.retryCount = 0;
+    s.retryAt = null;
     s.pending = {requestToken:Date.now().toString(36) + '-' + Math.random().toString(36).slice(2),
-      threadId:s.threadId,binding:s.binding,scope:s.scope,period:s.period,cursor,view:s.tab};
+      threadId:s.threadId,binding:s.binding,scope:s.scope,period:s.period,cursor,view:view || s.tab};
     s.requestedAt = Date.now();
     s.error = false;
+    if (s.available === false) s.available = null;
+    s.unavailableReason = null;
     // The persistent CDP binding is optional. A disconnected binding leaves the
     // same token available to the bounded host poller, rather than losing it.
     if (typeof window.__cockpitUsageRequest === 'function') {
       try { window.__cockpitUsageRequest(JSON.stringify(s.pending)); } catch { /* Poll fallback. */ }
     }
+  }
+  function scheduleRetry(s) {
+    s.retryAt = s.retryCount < retryDelays.length ? Date.now() + retryDelays[s.retryCount] : null;
+  }
+  function fail(s) {
+    s.error = true;
+    s.handled = s.pending.requestToken;
+    if (s.pending.view !== 'openLogs') scheduleRetry(s);
   }
   function accept(root) {
     const s = state(root), q = s.pending;
@@ -73,13 +87,19 @@
     if (response.requestToken !== q.requestToken) return;
     // Never show a response from a former chat, scope, period or pagination request.
     if (['threadId','binding','scope','period','cursor','view'].some(key => (response[key] ?? null) !== (q[key] ?? null))) return;
-    if (response.error) { s.error = true; s.handled = q.requestToken; return; }
+    if (response.error) { fail(s); return; }
     s.handled = q.requestToken;
     s.available = response.available === true;
     s.unavailableReason = response.unavailableReason || null;
     // Unavailability is not an empty successful query. Keep only the already
     // verified snapshot in this exact thread/service binding and scope.
-    if (!s.available) return;
+    if (!s.available) {
+      if (['service_unavailable','remote_unreachable','statistics_preparing'].includes(s.unavailableReason)) scheduleRetry(s);
+      return;
+    }
+    s.retryCount = 0;
+    s.retryAt = null;
+    if (q.view === 'openLogs') { issue(root); return; }
     const page = response.requests;
     if (q.view === 'logs' && page && Array.isArray(page.rows)) {
       if (q.cursor == null) s.rows = [];
@@ -98,14 +118,24 @@
     if (!root.quotaDetailsOpen) return null;
     const s = state(root);
     accept(root);
-    if (root.hostAvailable === false) return null;
+    const wasAvailable = s.hostAvailable;
+    s.hostAvailable = root.hostAvailable !== false;
+    if (!s.hostAvailable) return null;
+    // A restored bridge must use a fresh token: a former failed token stays
+    // settled in both the renderer and host cache. Keep the verified snapshot.
+    if (!wasAvailable && s.pending && s.pending.view !== 'openLogs' && (s.error || s.available === false || loading(s))) {
+      issue(root,s.pending.cursor,false,s.pending.view);
+    }
     if (loading(s) && Date.now() - s.requestedAt > 10000) {
-      s.error = true;
-      s.handled = s.pending.requestToken;
+      fail(s);
     }
     const completed = !s.pending || s.handled === s.pending.requestToken;
+    if (completed && s.retryAt !== null && Date.now() >= s.retryAt) {
+      s.retryCount += 1;
+      issue(root,s.pending?.cursor || null,true);
+    }
     // Do not refresh a paginated snapshot underneath the reader. A manual refresh starts a new one.
-    if (!s.pending || (completed && !s.error && !s.paged && Date.now() - s.requestedAt > 5000 && root.hostAvailable !== false)) issue(root);
+    else if (!s.pending || (completed && !s.error && s.available !== false && !s.paged && Date.now() - s.requestedAt > 5000)) issue(root);
     return s.pending;
   }
   function loading(s) { return Boolean(s.pending && s.handled !== s.pending.requestToken); }
@@ -113,7 +143,11 @@
     if (typeof window.__cockpitUsageRequest === 'function') {
       try { window.__cockpitUsageRequest('null'); } catch { /* Disconnected host. */ }
     }
-    if (root.dialogState) root.dialogState.pending = null;
+    if (root.dialogState) {
+      root.dialogState.pending = null;
+      root.dialogState.retryCount = 0;
+      root.dialogState.retryAt = null;
+    }
   }
   function reset(root) { cancel(root); delete root.dialogState; }
   function refresh(root) {
@@ -148,7 +182,7 @@
       + (legacy ? entry('legacyTier',legacy) : '')
       + (adaptation ? '<span class="cell-tier adjusted" title="' + esc(label('tierHint')) + '">' + esc(label('tierAdjusted')) + '</span>' : '');
   }
-  function requestRow(row) {
+  function requestRow(row, remote = false) {
     const date = finite(row.timestamp) && row.timestamp > 0 ? new Date(row.timestamp) : null;
     const timestamp = date && Number.isFinite(date.getTime()) ? date : null;
     const category = String(row.errorCategory || '').trim().toLowerCase();
@@ -159,11 +193,13 @@
     const address = typeof row.accountEmail === 'string' ? row.accountEmail.trim() : '';
     const visibleAddress = !/^(?:codex_|chatgpt_plan_|api-key-[a-f0-9]{8}$)/i.test(address) || address.includes('@') ? address : '';
     const email = row.accountDisplayName || visibleAddress || missingLabel;
+    const imageKind = {image_generation:'imageGeneration',image_edit:'imageEdit'}[row.requestKind];
     return '<tr class="request-row"><td><span class="cell-date">' + esc(timestamp ? timestamp.toLocaleDateString(undefined, {month:'2-digit',day:'2-digit'}) : missingLabel)
       + '</span><time class="cell-time">' + esc(timestamp ? timestamp.toLocaleTimeString(undefined, {hour12:false}) : missingLabel) + '</time></td>'
-      + '<td><span class="cell-email" title="' + esc(email) + '">' + esc(email) + '</span>' + badge(row.plan) + '<span class="cell-route">' + esc(route) + '</span></td>'
+      + (remote ? '<td><span class="cell-email" title="' + esc(row.requestId || missingLabel) + '">' + esc(row.requestId || missingLabel) + '</span></td>' : '<td><span class="cell-email" title="' + esc(email) + '">' + esc(email) + '</span>' + badge(row.plan) + '<span class="cell-route">' + esc(route) + '</span></td>')
       + '<td><span class="cell-model" title="' + esc(row.requestedModel || row.model || missingLabel) + '">' + esc(row.requestedModel || row.model || missingLabel) + '</span>'
-      + (row.upstreamModel ? '<span class="cell-upstream" title="' + esc(row.upstreamModel) + '">↳ ' + esc(row.upstreamModel) + '</span>' : '') + '<span class="cell-muted">' + esc(row.reasoningEffort || missingLabel) + '</span>' + tiers(row) + '</td>'
+      + (!remote && row.upstreamModel ? '<span class="cell-upstream" title="' + esc(row.upstreamModel) + '">↳ ' + esc(row.upstreamModel) + '</span>' : '')
+      + (imageKind ? '<span class="cell-muted">' + esc(label(imageKind)) + '</span>' : '<span class="cell-muted">' + esc(row.reasoningEffort || missingLabel) + '</span>' + tiers(row)) + '</td>'
       + '<td>' + metricList([['input',number(row.inputTokens)],['output',number(row.outputTokens)],['cached',number(row.cachedTokens)],['total',number(row.totalTokens)]]) + '</td>'
       + '<td>' + metricList([['firstResponse',ms(row.firstResponseMs)],['totalDuration',ms(row.latencyMs)],['speed',rate(rowSpeed(row))]]) + '</td>'
       + '<td><span class="cell-result ' + (outcome === 'success' ? '' : 'failed') + '">' + dot(outcome === 'success' ? 'green' : '') + esc(label(outcome)) + '</span>'
@@ -173,6 +209,16 @@
   }
   function quotaContent(root, input) {
     const {badgeKind:kind,formatMoney,shortProductLabel} = input;
+    const remote = root.usageState?.__remoteService;
+    if (remote?.product === 'cockpit-tools') {
+      const budget = remote.budget;
+      const remaining = budget?.remainingMicrousd;
+      return resourceTable([label('provider'),label('remoteBudget'),label('remoteUsed')], [[
+        label('remoteGatewayName') + ' · ' + remote.keyLabel,
+        finite(remaining) ? formatMoney(remaining / 1000000, 'USD') : label('remoteUnlimited'),
+        finite(budget?.usedMicrousd) ? formatMoney(budget.usedMicrousd / 1000000, 'USD') : missingLabel,
+      ]]);
+    }
     if (kind === 'deepseek') {
       const lines = balanceLines.length ? balanceLines : [{currency:null,totalBalance:null}];
       return resourceTable([label('provider'),accountPoolLabel,balanceLabel],lines.map(line => [
@@ -205,8 +251,9 @@
     const statsHint = summary?.incomplete ? label('excludedHistory').replace(/\{\{\s*count\s*\}\}/g, String(summary.excludedUnknownRequests || 0)) : '';
     const successRate = summary && summary.requests > 0 && finite(summary.successRequests) ? percentage(summary.successRequests / summary.requests * 100) : missingLabel;
     const cost = usd(summary?.estimatedCostUsd);
-    const range = summary && finite(summary.sinceMs) && finite(summary.untilMs) ? new Date(summary.sinceMs).toLocaleDateString() + ' — ' + new Date(Math.max(summary.sinceMs,summary.untilMs - 1)).toLocaleDateString() : missingLabel;
-    return '<div class="overview-sections"><section class="business-section quota-block" data-resource-kind="' + esc(input.badgeKind) + '"><div class="business-label"><h3 class="section-title">' + dot('purple') + esc(input.badgeKind === 'deepseek' ? balanceLabel : label('quotaTitle')) + '</h3></div><div class="business-content">' + quotaContent(root,input) + '</div></section>'
+    const dateOptions = root.usageState?.__remoteService?.product === 'cockpit-tools' ? {timeZone:'UTC'} : undefined;
+    const range = summary && finite(summary.sinceMs) && finite(summary.untilMs) ? new Date(summary.sinceMs).toLocaleDateString(undefined,dateOptions) + ' — ' + new Date(Math.max(summary.sinceMs,summary.untilMs - 1)).toLocaleDateString(undefined,dateOptions) : missingLabel;
+    return '<div class="overview-sections"><section class="business-section quota-block" data-resource-kind="' + esc(input.badgeKind) + '"><div class="business-label"><h3 class="section-title">' + dot('purple') + esc(root.usageState?.__remoteService ? label('remoteBudget') : input.badgeKind === 'deepseek' ? balanceLabel : label('quotaTitle')) + '</h3></div><div class="business-content">' + quotaContent(root,input) + '</div></section>'
       + '<section class="business-section session-block"><div class="business-label"><h3 class="section-title">' + dot('blue') + esc(label('session')) + '</h3></div><div class="business-content session-metrics"><dl class="session-metric model"><dt>' + esc(label('model')) + '</dt><dd title="' + esc(sessionModel) + '">' + esc(sessionModel) + '</dd>'
       + (session?.upstreamModel && session.upstreamModel !== sessionModel ? '<dd class="metric-sub" title="' + esc(session.upstreamModel) + '">↳ ' + esc(session.upstreamModel) + '</dd>' : '') + '<dd class="metric-sub">' + esc(session?.reasoningEffort || '') + '</dd></dl>'
       + metric(label('averageSpeed'),input.averageSpeed || missingLabel) + metric(label('averageCache'),input.averageCache || missingLabel) + metric(label('firstResponse'),ms(session?.firstResponseMs)) + '</div></section>'
@@ -216,15 +263,16 @@
   }
   function logs(root) {
     const s = state(root), busy = loading(s);
+    const remote = root.usageState?.__remoteService?.product === 'cockpit-tools';
     const empty = root.hostAvailable === false ? label('hostUnavailable') : s.error ? label('dataFailed') : busy ? label('loading')
       : !s.threadId && s.scope === 'chat' || s.unavailableReason === 'unlinked_session' ? label('unlinkedSession')
-      : s.available === false ? label('serviceUnavailable') : label('noRequests');
-    return '<section class="logs-view"><div class="log-toolbar">' + segmented('scope',[['chat','scopeChat'],['service','scopeService']],s.scope) + '<span class="log-caption">' + esc(label('newestFirst')) + '</span></div>'
+      : s.available === false ? unavailableText(s) : label('noRequests');
+    return '<section class="logs-view"><div class="log-toolbar">' + segmented('scope',[['chat','scopeChat'],['service',remote ? 'remoteKeyScope' : 'scopeService']],s.scope) + '<span class="log-caption">' + esc(label('newestFirst')) + '</span></div>'
       + '<div class="request-scroll" role="region" tabindex="0" aria-label="' + esc(label('requestsTitle')) + '"><table class="request-table"><colgroup>' + ['time','account','model','token','performance','result'].map(name => '<col class="' + name + '-col">').join('') + '</colgroup><thead><tr>'
-      + ['requestTime','account','model','token','performance','result'].map(key => '<th scope="col">' + esc(label(key)) + '</th>').join('') + '</tr></thead><tbody>' + s.rows.map(requestRow).join('')
+      + ['requestTime',remote ? 'requestId' : 'account','model','token','performance','result'].map(key => '<th scope="col">' + esc(label(key)) + '</th>').join('') + '</tr></thead><tbody>' + s.rows.map(row => requestRow(row,remote)).join('')
       + (!s.rows.length ? '<tr><td colspan="6" class="empty-state">' + esc(empty) + '</td></tr>' : '') + '</tbody></table></div><div class="load-more-row"><span class="records-count" role="status" aria-live="polite">'
-      + esc(label('shownRows').replace(/\{\{\s*count\s*\}\}/g, String(s.rows.length))) + '</span><button class="load-more" type="button" data-cockpit-dialog-action="more"' + (busy || !s.nextCursor || root.hostAvailable === false ? ' disabled' : '') + '>'
-      + esc(busy ? label('loading') : s.nextCursor || s.available === false ? label('more') : label('allLoaded')) + '</button></div></section>';
+      + esc(label('shownRows').replace(/\{\{\s*count\s*\}\}/g, String(s.rows.length))) + '</span><button class="load-more" type="button" data-cockpit-dialog-action="more"' + (busy || (remote && (!s.nextCursor || s.rows.length >= 200)) || (s.scope === 'chat' && !s.threadId) || root.hostAvailable === false ? ' disabled' : '') + '>'
+      + esc(label('more')) + '</button></div></section>';
   }
   function fit(details) {
     const width = details.getBoundingClientRect().width;
@@ -246,11 +294,15 @@
     }
     details.style.height = Math.min(details.__cockpitDialogSize.height,700,window.innerHeight * 0.85,Math.max(0,window.innerHeight - 32)) + 'px';
   }
+  function unavailableText(s) {
+    const keys = {unlinked_session:'unlinkedSession',remote_unsupported:'remoteUpgradeRequired',remote_unreachable:'dataFailed',statistics_preparing:'remotePreparing'};
+    return label(keys[s.unavailableReason] || 'serviceUnavailable');
+  }
   function render(root, details, input) {
     query(root);
     const s = state(root), busy = loading(s);
     const disabled = root.refreshing || root.hostAvailable === false;
-    const unavailable = s.available === false ? label(s.unavailableReason === 'unlinked_session' ? 'unlinkedSession' : 'serviceUnavailable') : '';
+    const unavailable = s.available === false ? unavailableText(s) : '';
     const error = root.refreshError ? usageLabels[root.refreshError] || label('refreshFailed') : s.error ? label('dataFailed') : unavailable;
     details.__cockpitOverviewHtml = overview(root,input);
     const html = '<header class="topbar"><span>' + esc(label('title')) + '</span><button class="close" type="button" data-cockpit-quota-close aria-label="' + esc(closeLabel) + '">×</button></header>'
@@ -299,8 +351,11 @@
           issue(root);
         }
         else if (action === 'period' && ['today','week'].includes(value)) { if (s.period === value) return; s.period = value; s.summary = s.summaryCaches[value] || null; issue(root); }
-        else if (action === 'more' && s.nextCursor) { s.paged = true; issue(root,s.nextCursor); }
-        else if (action === 'retry') { issue(root,s.pending?.cursor || null); }
+        else if (action === 'more' && (s.scope === 'service' || s.threadId)) {
+          if (root.usageState?.__remoteService?.product === 'cockpit-tools') {if(s.nextCursor && s.rows.length < 200) issue(root,s.nextCursor,true,'logs');}
+          else issue(root,null,false,'openLogs');
+        }
+        else if (action === 'retry') { issue(root,s.pending?.cursor || null,false,s.pending?.view); }
         else return;
         root.render();
       };

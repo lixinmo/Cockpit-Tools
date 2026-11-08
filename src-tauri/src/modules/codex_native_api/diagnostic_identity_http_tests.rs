@@ -25,6 +25,38 @@ use std::{
 };
 use tokio_tungstenite::tungstenite::{client::IntoClientRequest, Message};
 
+#[tokio::test]
+async fn legacy_session_header_reuses_scoped_identity_on_real_http_requests() {
+    let (mut handle, _host, source, task, _dir) =
+        identity_fixture(WireApi::Responses, false, false).await;
+    for header in ["session_id", "session_id", "session-id"] {
+        let response = http_client()
+            .post(format!("http://{}/v1/responses", handle.addr))
+            .bearer_auth("key")
+            .header(header, "pi-session")
+            .json(&json!({"model":"m","input":[],"prompt_cache_key":"pi-session"}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 200);
+        let _: Value = response.json().await.unwrap();
+    }
+    {
+        let seen = source.seen.lock().unwrap();
+        assert_eq!(seen.len(), 3);
+        assert_ne!(seen[0].headers["session-id"], "pi-session");
+        for request in &seen[1..] {
+            assert_eq!(request.headers["session-id"], seen[0].headers["session-id"]);
+            assert_eq!(request.headers["thread-id"], seen[0].headers["thread-id"]);
+        }
+        assert!(seen
+            .iter()
+            .all(|request| !request.headers.contains_key("session_id")));
+    }
+    handle.shutdown(Duration::from_secs(2)).await.unwrap();
+    task.abort();
+}
+
 #[derive(Clone)]
 struct WireRecord {
     path: String,
@@ -113,6 +145,8 @@ async fn identity_ws(
 
 #[path = "account_installation_auxiliary_tests.rs"]
 mod installation_auxiliary_tests;
+#[path = "diagnostic_identity_mapping_tests.rs"]
+mod session_identity_mapping_tests;
 struct IdentityHost {
     base: String,
     wire: WireApi,
@@ -252,6 +286,20 @@ async fn identity_fixture(
     tokio::task::JoinHandle<()>,
     tempfile::TempDir,
 ) {
+    identity_fixture_with_options(wire, native_socket, retry, Options::default()).await
+}
+async fn identity_fixture_with_options(
+    wire: WireApi,
+    native_socket: bool,
+    retry: bool,
+    options: Options,
+) -> (
+    Handle,
+    Arc<IdentityHost>,
+    Arc<IdentitySource>,
+    tokio::task::JoinHandle<()>,
+    tempfile::TempDir,
+) {
     let source = Arc::new(IdentitySource {
         seen: Mutex::new(vec![]),
         connections: AtomicUsize::new(0),
@@ -285,7 +333,7 @@ async fn identity_fixture(
         "127.0.0.1:0".parse().unwrap(),
         host.clone(),
         dir.path().join("identity.sqlite"),
-        Options::default(),
+        options,
     )
     .await
     .unwrap();

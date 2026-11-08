@@ -219,9 +219,9 @@ struct UsageResponse {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct CodexResetCreditsSnapshot {
-    available_count: Option<i64>,
-    credits: Vec<CodexResetCredit>,
-    next_expires_at: Option<i64>,
+    pub(crate) available_count: Option<i64>,
+    pub(crate) credits: Vec<CodexResetCredit>,
+    pub(crate) next_expires_at: Option<i64>,
 }
 
 fn normalize_remaining_percentage(window: &WindowInfo) -> Result<i32, String> {
@@ -973,16 +973,8 @@ async fn refresh_account_tokens(account: &mut CodexAccount, reason: &str) -> Res
 
 /// 查询单个账号的配额
 pub async fn fetch_quota(account: &CodexAccount) -> Result<FetchQuotaResult, String> {
-    fetch_quota_impl(account, false).await
-}
-
-/// Same read-only transport and identity validation; only the local Credits
-/// admission parser preserves explicit exhaustion in an incomplete window.
-pub(crate) async fn fetch_quota_for_credits(account: &CodexAccount) -> Result<FetchQuotaResult, String> {
-    fetch_quota_impl(account, true).await
-}
-
-async fn fetch_quota_impl(account: &CodexAccount, credits_admission: bool) -> Result<FetchQuotaResult, String> {
+    use crate::modules::codex_device_restrictions as restrictions;
+    let observation_started = restrictions::now();
     let account_id = account.account_id.clone().or_else(|| {
         codex_account::extract_chatgpt_account_id_from_access_token(&account.tokens.access_token)
     });
@@ -1018,6 +1010,10 @@ async fn fetch_quota_impl(account: &CodexAccount, credits_admission: bool) -> Re
     ));
 
     if !status.is_success() {
+        if restrictions::explicit_message(&body) {
+            restrictions::observe_account(account, restrictions::QUOTA, "usage_response", observation_started, true).await;
+            return Err(restrictions::paused_message());
+        }
         let detail_code = extract_detail_code_from_body(&body);
 
         crate::modules::codex_auth_diagnostic::log_event(
@@ -1073,6 +1069,7 @@ async fn fetch_quota_impl(account: &CodexAccount, credits_admission: bool) -> Re
         else { parse_quota_from_usage(&usage, &body)? };
     let plan_type = usage.plan_type.clone();
 
+    restrictions::observe_account(account, restrictions::QUOTA, "usage_response", observation_started, false).await;
     Ok(FetchQuotaResult { quota, plan_type })
 }
 
@@ -1574,20 +1571,48 @@ pub async fn fetch_account_reset_credits(
     }
 }
 
+// Matches the official Codex backend-client consume response. HTTP 2xx
+// acknowledges the request; only the outcome confirms a redemption.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum ResetCreditConsumeOutcome {
+    Reset,
+    NothingToReset,
+    NoCredit,
+    AlreadyRedeemed,
+}
+
+impl ResetCreditConsumeOutcome {
+    pub(crate) fn into_result(self) -> Result<(), String> {
+        use crate::modules::codex_reset_automation::message;
+        match self {
+            Self::Reset | Self::AlreadyRedeemed => Ok(()),
+            Self::NothingToReset => Err(message("nothingToReset")),
+            Self::NoCredit => Err(message("noCredits")),
+        }
+    }
+}
+
+fn parse_reset_credit_consume_outcome(body: &str) -> Result<ResetCreditConsumeOutcome, String> {
+    #[derive(Deserialize)]
+    struct ConsumeResponse {
+        code: ResetCreditConsumeOutcome,
+    }
+    serde_json::from_str::<ConsumeResponse>(body)
+        .map(|response| response.code)
+        .map_err(|_| crate::modules::codex_reset_automation::message("unknownOutcome"))
+}
+
 async fn post_reset_credit_once(
     account: &CodexAccount,
     redeem_request_id: &str,
+    expected_identity: &str,
     credit_id: Option<&str>,
-) -> Result<(), String> {
-    if !codex_auto_reset::supports_account(account) {
-        return Err("该账号不支持主动重置额度".to_string());
+) -> Result<ResetCreditConsumeOutcome, String> {
+    if crate::modules::codex_reset_automation::account_identity(account) != expected_identity {
+        return Err(crate::modules::codex_reset_automation::message("conflict"));
     }
-    // Targeted consumption is the automatic path. Token preparation/401
-    // recovery may have awaited since the policy check; honor a disable before
-    // sending either POST. Explicit manual consumption has no selected ID.
-    if credit_id.is_some() && !auto_reset_settings(&account.id).enabled {
-        return Err("该账号的 Auto Consume Reset 已关闭，未发送自动消费请求".to_string());
-    }
+    crate::modules::codex_reset_automation::authorize_redemption(&account.id, redeem_request_id, expected_identity)?;
     let request_body = codex_auto_reset::consume_body(redeem_request_id, credit_id);
     let response = send_codex_api_request(
         account,
@@ -1612,7 +1637,7 @@ async fn post_reset_credit_once(
     ));
 
     if status.is_success() {
-        return codex_auto_reset::validate_consume_response(&body);
+        return parse_reset_credit_consume_outcome(&body);
     }
 
     let detail_code = extract_detail_code_from_body(&body);
@@ -1629,12 +1654,16 @@ fn is_unauthorized_error(message: &str) -> bool {
     message.contains("401") || message.contains(&StatusCode::UNAUTHORIZED.to_string())
 }
 
-async fn consume_reset_credit_request(
+pub async fn consume_reset_credit(account_id: &str) -> Result<(), String> {
+    crate::modules::codex_reset_automation::consume_manual(account_id).await
+}
+
+pub(crate) async fn consume_reset_credit_with_request_id(
     account_id: &str,
-    credit_id: Option<&str>,
     redeem_request_id: &str,
-) -> Result<(), String> {
-    validate_reset_account(account_id)?;
+    expected_identity: &str,
+    credit_id: Option<&str>,
+) -> Result<ResetCreditConsumeOutcome, String> {
     let mut account = codex_account::prepare_account_for_injection(account_id).await?;
     if !codex_auto_reset::supports_account(&account) {
         return Err("该账号不支持主动重置额度".to_string());
@@ -1644,7 +1673,7 @@ async fn consume_reset_credit_request(
             "Codex 主动重置使用显式 mock JSON 空操作: account_id={}",
             account_id
         ));
-        return Ok(());
+        return Ok(ResetCreditConsumeOutcome::Reset);
     }
 
     if !account.is_agent_identity_auth()
@@ -1656,14 +1685,14 @@ async fn consume_reset_credit_request(
         codex_account::save_account_preserving_egress_proxy(&account)?;
     }
 
-    match post_reset_credit_once(&account, redeem_request_id, credit_id).await {
-        Ok(()) => Ok(()),
+    match post_reset_credit_once(&account, redeem_request_id, expected_identity, credit_id).await {
+        Ok(outcome) => Ok(outcome),
         Err(error) if !account.is_agent_identity_auth() && is_unauthorized_error(&error) => {
             refresh_account_tokens(&mut account, "主动重置接口返回 401").await?;
             sync_subscription_expiry_from_current_id_token(&mut account);
             normalize_subscription_retry_state(&mut account);
             codex_account::save_account_preserving_egress_proxy(&account)?;
-            post_reset_credit_once(&account, redeem_request_id, credit_id).await
+            post_reset_credit_once(&account, redeem_request_id, expected_identity, credit_id).await
         }
         Err(error) => Err(error),
     }
@@ -1723,176 +1752,45 @@ fn validate_reset_account(account_id: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn auto_reset_settings(account_id: &str) -> codex_auto_reset::Settings {
-    let mut settings = crate::modules::config::get_user_config()
-        .codex_auto_reset
-        .for_account(account_id);
-    // Keep saved preferences, but never apply them to an unsupported/deleted
-    // account or a standalone official authorization projection.
-    settings.enabled &= codex_account::load_account(account_id)
-        .is_some_and(|account| codex_auto_reset::supports_account(&account));
-    settings
-}
-
-static AUTO_RESET_MONITOR_STARTED: std::sync::Once = std::sync::Once::new();
-static AUTO_RESET_MONITOR_WAKE: std::sync::LazyLock<Arc<tokio::sync::Notify>> =
-    std::sync::LazyLock::new(|| Arc::new(tokio::sync::Notify::new()));
-
-struct AutoResetMonitorOperations;
-
-impl crate::modules::codex_auto_reset_monitor::Operations for AutoResetMonitorOperations {
-    fn enabled_account_ids(&self) -> Vec<String> {
-        crate::modules::config::get_user_config()
-            .codex_auto_reset
-            .enabled_account_ids()
-            .into_iter()
-            .filter(|id| {
-                codex_account::load_account(id)
-                    .is_some_and(|account| codex_auto_reset::supports_account(&account))
-            })
-            .collect()
-    }
-
-    fn is_enabled(&self, account_id: &str) -> bool {
-        auto_reset_settings(account_id).enabled
-    }
-
-    async fn refresh(&self, account_id: String) -> Result<(), String> {
-        // Settings may change after the task became due or while another
-        // account occupied the quota queue. The automatic hook checks again
-        // after fetching quota and reset details, immediately before consuming.
-        if !self.is_enabled(&account_id)
-            || !codex_account::load_account(&account_id)
-                .is_some_and(|account| codex_auto_reset::supports_account(&account))
-        {
-            return Ok(());
-        }
-        logger::log_info(&format!(
-            "[Codex Auto Reset] account_id={}, action=background_refresh_started",
-            account_id,
-        ));
-        Box::pin(refresh_account_quota_background(&account_id))
-            .await
-            .map(|_| ())
-    }
-
-    fn refresh_finished(&self, account_id: &str, result: &Result<(), String>) {
-        if let Err(error) = result {
-            logger::log_warn(&format!(
-                "[Codex Auto Reset] account_id={}, action=background_refresh_failed, retry=next_cycle, error={error}",
-                account_id,
-            ));
-        }
-    }
-}
-
-/// Backend lifetime, independent of the main WebView's visibility or existence.
-pub(crate) fn ensure_auto_reset_monitor_started() {
-    AUTO_RESET_MONITOR_STARTED.call_once(|| {
-        logger::log_info("[Codex Auto Reset] background monitor started, interval_seconds=60, enabled_accounts_only=true");
-        tauri::async_runtime::spawn(crate::modules::codex_auto_reset_monitor::run(
-            AutoResetMonitorOperations,
-            Arc::clone(&AUTO_RESET_MONITOR_WAKE),
-        ));
-    });
-}
-
-pub(crate) fn notify_auto_reset_settings_changed() {
-    AUTO_RESET_MONITOR_WAKE.notify_one();
-}
-
-fn acquire_reset_guard(account_id: &str) -> Result<Option<codex_auto_reset::ResetGuard>, String> {
-    codex_auto_reset::ResetGuard::acquire(&crate::modules::config::get_data_dir()?, account_id)
-}
-
-struct AutoResetOperations<'a> {
-    account_id: &'a str,
-    runtime_snapshot: &'a codex_account::CodexQuotaRuntimeSnapshot,
-    quota_only: bool,
-}
-
-impl codex_auto_reset::Operations for AutoResetOperations<'_> {
-    fn account_id(&self) -> &str {
-        self.account_id
-    }
-
-    fn settings(&self) -> codex_auto_reset::Settings {
-        auto_reset_settings(self.account_id)
-    }
-
-    async fn fetch_credits(&mut self) -> Result<Vec<CodexResetCredit>, String> {
-        let snapshot = fetch_account_reset_credits(self.account_id).await?;
-        if snapshot.available_count == Some(0) {
-            return Ok(Vec::new());
-        }
-        Ok(snapshot.credits)
-    }
-
-    async fn consume(&mut self, credit_id: &str, request_id: &str) -> Result<(), String> {
-        consume_reset_credit_request(self.account_id, Some(credit_id), request_id).await
-    }
-
-    async fn refresh(&mut self) -> Result<Option<CodexQuota>, String> {
-        let result = refresh_account_quota_without_auto_reset(
-            self.account_id,
-            RefreshQuotaOptions::default(),
-            self.runtime_snapshot,
-            self.quota_only,
-        )
-        .await?;
-        Ok(result.fresh.then_some(result.quota))
-    }
-}
-
-/// The manual action shares the same lock/latch as automation. Its existing UI
-/// refresh is harmless: the latch survives until a fresh weekly recovery.
-pub async fn consume_reset_credit(account_id: &str) -> Result<(), String> {
-    validate_reset_account(account_id)?;
-    let guard = acquire_reset_guard(account_id)?
-        .ok_or_else(|| "该账号正在刷新额度或使用 Reset，请稍后重试".to_string())?;
-    if guard
-        .pending()?
-        .is_some_and(|pending| pending.awaiting_refresh)
-    {
-        return Err("上次 Reset 后尚未取得最新额度，请刷新额度后重试".to_string());
-    }
-    let request_id = uuid::Uuid::new_v4().to_string();
-    guard.record(&codex_auto_reset::Attempt {
-        credit_id: None,
-        redeem_request_id: request_id.clone(),
-        threshold: auto_reset_settings(account_id).threshold,
-        awaiting_refresh: true,
-    })?;
-    // Keep the durable barrier after releasing this guard. The existing manual
-    // UI refresh (or the next scheduled refresh) confirms the latest quota.
-    consume_reset_credit_request(account_id, None, &request_id).await
-}
-
 async fn refresh_account_quota_once(
     account_id: &str,
     options: RefreshQuotaOptions,
     runtime_snapshot: &codex_account::CodexQuotaRuntimeSnapshot,
     quota_only: bool,
 ) -> Result<CodexQuota, String> {
-    let mut operations = AutoResetOperations {
-        account_id,
-        runtime_snapshot,
-        quota_only,
+    // Manual/activity refresh may release a legacy barrier, but never consumes.
+    // Acquire before GET so an older query cannot release a newer POST barrier.
+    let guard = crate::modules::config::get_data_dir()
+        .and_then(|dir| codex_auto_reset::ResetGuard::acquire(&dir, account_id));
+    let result = refresh_account_quota_without_auto_reset(
+        account_id, options, runtime_snapshot, quota_only,
+    ).await?;
+    if result.fresh {
+        if let Ok(Some(guard)) = guard {
+            match crate::modules::codex_reset_automation::remaining_threshold(account_id) {
+                Ok(threshold) => { let _ = guard.observe_recovery(&result.quota, threshold); }
+                Err(error) => logger::log_warn(&format!("[Codex Reset Automation] {error}")),
+            }
+        }
+    }
+    Ok(result.quota)
+}
+
+/// Fresh evidence for the single Reset worker, which already owns its file lock.
+/// Cached ownership-deferral results must not trigger spending or clear barriers.
+pub(crate) async fn refresh_account_quota_for_reset(account_id: &str) -> Result<Option<CodexQuota>, String> {
+    validate_reset_account(account_id)?;
+    let account = codex_account::load_account(account_id)
+        .ok_or_else(|| "Codex 账号不存在".to_string())?;
+    let snapshot = if account.is_agent_identity_auth() {
+        codex_account::CodexQuotaRuntimeSnapshot::empty()
+    } else {
+        codex_account::CodexQuotaRuntimeSnapshot::capture().await?
     };
-    codex_auto_reset::refresh_quota(
-        crate::modules::config::get_data_dir(),
-        quota_only,
-        |quota_only| {
-            refresh_account_quota_without_auto_reset(
-                account_id,
-                options,
-                runtime_snapshot,
-                quota_only,
-            )
-        },
-        &mut operations,
-    )
-    .await
+    let result = refresh_account_quota_without_auto_reset(
+        account_id, RefreshQuotaOptions::default(), &snapshot, true,
+    ).await?;
+    Ok(result.fresh.then_some(result.quota))
 }
 
 /// 刷新账号配额并保存（包含 token 自动刷新）
@@ -2075,6 +1973,9 @@ async fn refresh_account_quota_without_auto_reset(
     crate::modules::codex_local_access::confirm_gateway_quota_refresh(
         account_id, &result.quota, quota_query_started,
     );
+    crate::modules::codex_local_access::clear_native_quota_cooldown_after_refresh(
+        account_id, &result.quota, quota_query_started,
+    ).await;
     if quota_only {
         return Ok(RefreshedQuota {
             quota: result.quota,
@@ -3065,5 +2966,26 @@ mod tests {
                 && !lower.contains("referer:")
                 && !lower.contains("sec-fetch-site:")
         }));
+    }
+}
+
+#[cfg(test)]
+mod reset_credit_outcome_tests {
+    use super::*;
+
+    #[test]
+    fn reset_credit_consume_checks_business_result_of_successful_http_response() {
+        for (body, applied) in [
+            (r#"{"code":"reset","windows_reset":2}"#, true),
+            (r#"{"code":"already_redeemed"}"#, true),
+            (r#"{"code":"nothing_to_reset"}"#, false),
+            (r#"{"code":"no_credit"}"#, false),
+        ] {
+            let outcome = parse_reset_credit_consume_outcome(body).unwrap();
+            assert_eq!(outcome.into_result().is_ok(), applied, "{body}");
+        }
+        for body in ["", "{}", r#"{"code":"unknown"}"#, "<html>OK</html>"] {
+            assert!(parse_reset_credit_consume_outcome(body).is_err(), "{body}");
+        }
     }
 }

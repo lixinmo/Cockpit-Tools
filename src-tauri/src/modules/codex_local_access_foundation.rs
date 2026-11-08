@@ -264,6 +264,7 @@ const CODEX_PROVIDER_MODEL_SHELL_POOL: &[&str] = &["gpt-5.6-sol", "gpt-5.6-terra
 // overflow models. The retired model remains valid only for explicit API providers.
 const CODEX_PROVIDER_IDENTITY_ONLY_MODEL_IDS: &[&str] = &[
     "gpt-6.1-sol",
+    "gpt-6.1-terra",
     "gpt-6-astra",
     "gpt-6-sol",
     "gpt-6-luna",
@@ -362,7 +363,7 @@ const RESPONSE_AFFINITY_TTL_MS: i64 = 24 * 60 * 60 * 1000;
 const MAX_RESPONSE_AFFINITY_BINDINGS: usize = 4096;
 const PREPARED_ACCOUNT_CACHE_TTL_MS: i64 = 30 * 1000;
 const STATE_RECENT_USAGE_EVENT_LIMIT: usize = 100;
-const DEFAULT_MODEL_PRICING_VERSION: u64 = 7;
+const DEFAULT_MODEL_PRICING_VERSION: u64 = 8;
 const MODEL_PRICING_REPRICE_BATCH_SIZE: i64 = 1_000;
 const MODEL_PRICING_REPRICE_PARALLEL_MIN_ROWS: usize = 2_000;
 const LOCAL_ACCESS_LOGS_DB_BUSY_TIMEOUT: Duration = Duration::from_secs(5);
@@ -417,19 +418,6 @@ const CODEX_IMAGE_MODEL_ID: &str = "gpt-image-2.5";
 const LEGACY_CODEX_IMAGE_MODEL_ID: &str = "gpt-image-2";
 const CODEX_GPT_RESERVE_MODEL_ID: &str = "gpt-reserve";
 const CODEX_AUTO_REVIEW_MODEL_ID: &str = "codex-auto-review";
-/// API 服务 / 本地网关 profile 向客户端展示的 GPT 系列模型。
-///
-/// 只保留官方客户端推荐集里的这几个模型，显示名与官方客户端保持一致（`GPT-` 前缀、空格分隔）；
-/// 其它历史模型仍然可以路由，只是不再出现在客户端模型选择器里。
-const LOCAL_GATEWAY_VISIBLE_GPT_MODELS: &[(&str, &str)] = &[
-    ("gpt-6.1-sol", "GPT-6.1 Sol"),
-    ("gpt-6-astra", "GPT-6 Astra"),
-    ("gpt-6-sol", "GPT-6 Sol"),
-    ("gpt-6-luna", "GPT-6 Luna"),
-    ("gpt-5.6-sol", "GPT-5.6 Sol"),
-    ("gpt-5.6-terra", "GPT-5.6 Terra"),
-    ("gpt-5.6-luna", "GPT-5.6 Luna"),
-];
 const DEFAULT_IMAGES_MAIN_MODEL: &str = "gpt-5.6-luna";
 
 fn effective_image_generation_main_model(model: Option<&str>) -> &str {
@@ -985,19 +973,10 @@ struct ParsedRequest {
 }
 
 fn request_uses_responses_lite(request: &ParsedRequest) -> bool {
-    request
-        .headers
-        .keys()
-        .any(|name| name.eq_ignore_ascii_case(CODEX_RESPONSES_LITE_HEADER))
-}
-
-fn request_body_uses_responses_lite(request: &ParsedRequest) -> bool {
-    request_uses_responses_lite(request)
-        || parse_request_body_json(&request.body)
-            .as_ref()
-            .and_then(|body| body.get("model"))
-            .and_then(Value::as_str)
-            .is_some_and(codex_protocol::codex_model_uses_responses_lite)
+    request.headers.iter().any(|(name, value)| {
+        name.eq_ignore_ascii_case(CODEX_RESPONSES_LITE_HEADER)
+            && value.trim().eq_ignore_ascii_case("true")
+    })
 }
 
 #[derive(Debug, Clone)]
@@ -1747,6 +1726,7 @@ fn preserve_runtime_collection_fields(
 ) {
     // Only the dedicated settings command changes this field after initial load.
     collection.request_payload_logging = current.request_payload_logging;
+    collection.continuous_overload_retry = current.continuous_overload_retry;
     collection.capability_fallback = current.capability_fallback.clone();
     collection.multi_agent = current.multi_agent.clone();
     prune_multi_agent_references(collection);
@@ -1764,6 +1744,8 @@ fn preserve_runtime_collection_fields(
     for api_key in &mut collection.api_keys {
         if let Some(current_api_key) = current.api_keys.iter().find(|item| item.id == api_key.id) {
             api_key.token_used = api_key.token_used.max(current_api_key.token_used);
+            merge_key_budget_usage(&mut api_key.budget_usage, &current_api_key.budget_usage);
+            if current_api_key.updated_at > api_key.updated_at { api_key.budget = current_api_key.budget.clone(); }
         }
     }
 }
@@ -1794,6 +1776,7 @@ fn sync_runtime_collection(
     if let Some(handle) = runtime.native_handle.as_ref() {
         handle.set_cooling_disabled(collection.disable_cooling);
         handle.set_session_affinity_enabled(collection.session_affinity);
+        handle.set_session_identity_mapping_enabled(collection.session_identity_mapping_enabled);
     }
     // Start the maintenance thread without waiting for SQLite/schema/body cleanup.
     let _ = request_diagnostics_writer();
@@ -2409,18 +2392,15 @@ fn api_service_experimental_model_catalog() -> Option<Vec<String>> {
 
 /// 客户端模型选择器里展示的 GPT 模型 ID（官方推荐集）。
 fn local_gateway_visible_gpt_model_ids() -> Vec<String> {
-    LOCAL_GATEWAY_VISIBLE_GPT_MODELS
-        .iter()
-        .map(|(model_id, _)| model_id.to_string())
+    local_gateway_visible_gpt_model_definitions()
+        .into_iter()
+        .map(|(model_id, _)| model_id)
         .collect()
 }
 
 /// 客户端模型目录（profile `model_catalog_json`）里的 GPT 条目：模型 ID + 官方显示名。
 fn local_gateway_visible_gpt_model_definitions() -> Vec<(String, String)> {
-    LOCAL_GATEWAY_VISIBLE_GPT_MODELS
-        .iter()
-        .map(|(model_id, display_name)| (model_id.to_string(), display_name.to_string()))
-        .collect()
+    crate::modules::codex_model_catalog::recommended_models()
 }
 
 /// API 服务对外展示的模型清单：官方推荐 GPT 集 + 客户端内部需要的隐藏模型。

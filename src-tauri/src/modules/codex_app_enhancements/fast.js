@@ -1,7 +1,8 @@
 /*
- * Cockpit Tools native service-tier integration.
+ * Cockpit Tools native model-menu integration.
  * Independently implemented against the desktop client's local module structure.
- * The account, requirements and model serviceTiers data are never fabricated.
+ * Service-tier requirements and model capabilities stay native. Custom
+ * API providers retain their declared Ultra capability and explicit user limits.
  */
 (() => {
   "use strict";
@@ -11,6 +12,8 @@
   const allowExpression = (host, auth) =>
     `window.__cockpitNativeFast?.allow(${host},${auth})===true`;
   const enabled = () => root.__cockpitEnhancements?.nativeFast === true;
+  const predictionsEnabled = () => root.__cockpitEnhancements?.nativePredictions === true
+    && root.__cockpitEnhancements?.apiKeyAuthVerified === true;
   const quotaModuleEnabled = () => root.__cockpitEnhancements?.quotaCompat === true
     || root.__cockpitEnhancements?.apiService === true;
   const allow = (host, auth) => enabled() && host === "local"
@@ -21,6 +24,13 @@
       || auth == null && root.__cockpitEnhancements?.apiKeyAuthVerified === true);
   const failure = (source, reason) => ({ ok: false, patchedSource: source, diagnostics: { reason } });
 
+  function includeUltra(nativeValue, host, auth, custom, teamCatalog) {
+    // This only removes the native rollout gate for custom API providers.
+    // The caller's include flag, enabled efforts and each model's declared
+    // capabilities still go through the unmodified native selector.
+    return nativeValue || custom === true && teamCatalog == null && allow(host, auth);
+  }
+
   // Each gate is checked together with its surrounding call contract. No
   // replacement is applied unless all four known contracts occur exactly once.
   function transform(source) {
@@ -28,6 +38,9 @@
     if (typeof source !== "string" || source.length > LIMIT) return failure(source, "source-limit");
     const edits = [];
     const count = { ui: 0, request: 0, queued: 0, explicit: 0 };
+    let queuedPolicy = null;
+    let catalogMatches = 0;
+    let reasoningMatches = 0;
     const matches = (pattern) => source.matchAll(new RegExp(pattern, "g"));
     const enclosing = (at) => {
       const start = source.lastIndexOf("function ", at);
@@ -38,16 +51,16 @@
       edits.push({ start, end: start + before.length, text: after });
     };
 
-    for (const match of matches(`(?<identity>${NAME})\\?\\.authMethod===\`chatgpt\`\\|\\|\\k<identity>\\?\\.authMethod===\`personalAccessToken\``)) {
+    for (const match of matches(`(?<identity>${NAME})\\?\\.authMethod===\`chatgpt\`\\|\\|\\k<identity>\\?\\.authMethod===\`personalAccessToken\`(?:\\|\\|\\k<identity>\\?\\.authMethod===\`amazonBedrock\`)?`)) {
       const before = enclosing(match.index);
       const after = source.slice(match.index + match[0].length, match.index + match[0].length + 1100);
       const host = before.match(new RegExp(`(?<host>${NAME})=(?<argument>${NAME})\\?\\.hostId\\?\\?${NAME},${match.groups.identity}=${NAME}\\(\\k<host>\\),${NAME}=$`));
-      if (!host || !/isPending:/.test(after) || !/serviceTierAccess:/.test(after)
+      if (!host || !after.startsWith(",") || !/isPending:/.test(after) || !/serviceTierAccess:/.test(after)
         || !after.includes(`!!${match.groups.identity}?.isLoading`)) continue;
       add("ui", match.index, match[0], `(${match[0]}||${allowExpression(host.groups.host, `${match.groups.identity}?.authMethod`)})`);
     }
 
-    for (const match of matches(`(?<auth>${NAME})!==\`chatgpt\`&&\\k<auth>!==\`personalAccessToken\``)) {
+    for (const match of matches(`(?<auth>${NAME})!==\`chatgpt\`&&\\k<auth>!==\`personalAccessToken\`(?:&&\\k<auth>!==\`amazonBedrock\`)?`)) {
       const before = enclosing(match.index);
       const signature = before.match(new RegExp(`^function ${NAME}\\((?<scope>${NAME}),(?<host>${NAME})\\)\\{let ${match.groups.auth}=await ${NAME}\\(\\k<scope>,\\k<host>\\);if\\($`));
       const after = source.slice(match.index + match[0].length, match.index + match[0].length + 500);
@@ -67,23 +80,76 @@
       if (!before.endsWith(`${manager}.getHostId()===\`local\`&&await ${storage}.readGlobalState(\`use-copilot-auth-if-available\`)===!0&&await ${runtime}.isCopilotApiAvailable()?!1:`)) continue;
       const account = match[0].slice(0, -"===`chatgpt`".length);
       add("queued", match.index, match[0], `((__cockpitType)=>__cockpitType===\`chatgpt\`||${allowExpression(`${manager}.getHostId()`, "__cockpitType")})(${account})`);
+      queuedPolicy = "legacy";
     }
 
-    for (const match of matches(`(?<account>${NAME})\\?\\.type===\`chatgpt\`(?=\\?(?<options>${NAME})\\.serviceTier:null)`)) {
+    // 26.1021 keeps Copilot selection inside the runtime and reads the account
+    // into a local variable. Match the complete read contract, not arbitrary ORs.
+    for (const match of matches(`(?<account>${NAME})\\.account\\?\\.type===\`chatgpt\`\\|\\|\\k<account>\\.account\\?\\.type===\`amazonBedrock\``)) {
+      const before = enclosing(match.index);
+      const signature = before.match(new RegExp(
+        `^function ${NAME}\\((?<manager>${NAME}),\\{runtime:(?<runtime>${NAME})\\},(?<beforeRead>${NAME}),${NAME}\\)\\{let (?<pending>${NAME})=null;`
+        + `return\\{async readServiceTier\\((?<model>${NAME})\\)\\{for\\(;\\k<pending>!=null;\\)await \\k<pending>\\.catch\\(\\(\\)=>void 0\\);`
+        + `return \\k<beforeRead>\\(\\),${NAME}\\(\\k<manager>\\.requestClient,\\k<manager>\\.logger,\\k<model>,async\\(\\)=>\\{`
+        + `if\\(\\k<manager>\\.getHostId\\(\\)===\`local\`&&await \\k<runtime>\\.isUsingCopilotInference\\(\\)\\)return!1;`
+        + `let ${match.groups.account}=await \\k<manager>\\.getAccount\\(\\{priority:\`critical\`\\}\\);return $`,
+      ));
+      const after = source.slice(match.index + match[0].length, match.index + match[0].length + 50);
+      if (!signature || !after.startsWith("})},async writeServiceTier(")) continue;
+      const { manager, runtime } = signature.groups;
+      if (new Set([manager, runtime, match.groups.account]).size !== 3) continue;
+      add("queued", match.index, match[0], `(${match[0]}||${allowExpression(`${manager}.getHostId()`, `${match.groups.account}.account?.type`)})`);
+      queuedPolicy = "runtime";
+    }
+
+    for (const match of matches(`(?<account>${NAME})\\?\\.type===\`chatgpt\`(?:\\|\\|\\k<account>\\?\\.type===\`amazonBedrock\`)?(?=\\?(?<options>${NAME})\\.serviceTier:null)`)) {
       const before = enclosing(match.index);
       const signature = before.match(new RegExp(`^function ${NAME}\\((?<manager>${NAME}),\\{settings:(?<settings>${NAME}),storage:(?<storage>${NAME}),filesystem:${NAME},runtime:(?<runtime>${NAME})\\},${NAME},${NAME},${NAME}\\)\\{`));
       if (!signature || !before.includes("submissionOptions") || !before.includes("Promise.all([")) continue;
       const { manager, runtime, storage } = signature.groups;
       const hostMatch = before.match(new RegExp(`(?<host>${NAME})=${match.groups.options}\\?\\.executionHostId\\?\\?${manager}\\.getHostId\\(\\);`));
       if (!hostMatch || !before.endsWith(`let{account:${match.groups.account}}=await ${manager}.getAccount({priority:\`critical\`});return `)) continue;
-      add("explicit", match.index, match[0], `(${match[0]}||${hostMatch.groups.host}===\`local\`&&${allowExpression(`${manager}.getHostId()`, `${match.groups.account}?.type`)}&&!(await ${storage}.readGlobalState(\`use-copilot-auth-if-available\`)===!0&&await ${runtime}.isCopilotApiAvailable()))`);
+      if (new Set([manager, runtime, storage, hostMatch.groups.host, match.groups.account]).size !== 5) continue;
+      const copilot = queuedPolicy === "runtime"
+        ? `await ${runtime}.isUsingCopilotInference()`
+        : `await ${storage}.readGlobalState(\`use-copilot-auth-if-available\`)===!0&&await ${runtime}.isCopilotApiAvailable()`;
+      add("explicit", match.index, match[0], `(${match[0]}||${hostMatch.groups.host}===\`local\`&&${allowExpression(`${manager}.getHostId()`, `${match.groups.account}?.type`)}&&!(${copilot}))`);
     }
+    // Inspect the native model query only to adapt the custom-provider reasoning gate.
+    // Speed capabilities and the model list remain exactly as returned by the CLI.
+    const selectOptions = `(?<select>${NAME})\\(\\{additionalAvailableModels:new Set\\(${NAME}\\),apiKeyDaybreakSupported:${NAME},authMethod:(?<auth>${NAME}),availableModels:(?<defaults>${NAME})\\.availableModels,defaultModel:\\k<defaults>\\.defaultModel,enabledReasoningEfforts:${NAME},hasConfiguredModelCatalog:(?<catalog>${NAME}),includeUltraReasoningEffort:(?<ultra>${NAME}),isCustomModelProvider:(?<custom>${NAME}),models:\\k<models>,useHiddenModels:\\k<defaults>\\.useHiddenModels\\}\\)`;
+    const selectors = [
+      `select:(?<selector>\\(\\{data:(?<models>${NAME})\\}\\)=>${selectOptions})`,
+      `select:(?<selector>\\(\\{data:(?<models>${NAME}),isTeamCatalog:(?<team>${NAME})=!1\\}\\)=>\\(\\{\\.\\.\\.${selectOptions},isTeamCatalog:\\k<team>\\}\\))`,
+    ];
+    for (const pattern of selectors) for (const match of matches(pattern)) {
+      const offset = Math.max(0, match.index - 2400);
+      const before = source.slice(offset, match.index);
+      const request = before.match(new RegExp(`${NAME}\\(${NAME},(?<host>${NAME})\\)\\.sendRequest\\(\`model/list\`,\\{includeHidden:!0,cursor:null,limit:${NAME}\\},\\{priority:${NAME}\\}\\)\\},$`));
+      if (!request) continue;
+      catalogMatches++;
+      const { auth, catalog, ultra, custom } = match.groups;
+      const { host } = request.groups;
+
+      // Validate the enclosing query contract and the exact gate feeding this
+      // selector, rather than replacing a feature flag globally. Retain the
+      // caller's explicit includeUltraReasoningEffort=false short circuit.
+      const header = before.match(new RegExp(`\\(\\{additionalAvailableModels:${NAME},authMethod:${auth},enabledReasoningEfforts:${NAME},hasConfiguredModelCatalog:${catalog},hostId:${host},includeUltraReasoningEffort:(?<requested>${NAME}),isCustomModelProvider:${custom},limit:${NAME},modelCatalogPath:${NAME},modelProvider:${NAME}(?:,teamCatalog:(?<teamCatalog>${NAME}))?\\},\\{get:(?<get>${NAME}),queryClient:${NAME},scope:${NAME}\\}\\)=>\\{`));
+      if (!header) continue;
+      const gate = new RegExp(`[,;]${ultra}=${header.groups.requested}&&(?<value>${header.groups.get}\\(${NAME},\`1186680773\`\\));return\\{`).exec(before.slice(header.index + header[0].length));
+      if (!gate) continue;
+      const start = offset + header.index + header[0].length + gate.index + gate[0].indexOf(gate.groups.value);
+      edits.push({ start, end: start + gate.groups.value.length,
+        text: `window.__cockpitNativeFast.includeUltra(${gate.groups.value},${host},${auth},${custom},${header.groups.teamCatalog || 'null'})` });
+      reasoningMatches++;
+    }
+    if (catalogMatches > 1) return failure(source, "ambiguous-model-catalog");
     if (Object.values(count).some(value => value !== 1)) return failure(source, "unsupported-gates");
     edits.sort((a, b) => a.start - b.start);
     if (edits.some((edit, i) => i > 0 && edit.start < edits[i - 1].end)) return failure(source, "overlapping-gates");
     let patched = source;
     for (const edit of edits.reverse()) patched = patched.slice(0, edit.start) + edit.text + patched.slice(edit.end);
-    return { ok: true, patchedSource: patched, diagnostics: { reason: "prepared", gates: count } };
+    return { ok: true, patchedSource: patched, diagnostics: { reason: "prepared", gates: count, modelCatalog: catalogMatches, reasoning: reasoningMatches } };
   }
 
   function localAsset(value, entry = false) {
@@ -96,26 +162,102 @@
     } catch { return false; }
   }
 
-  function localPrimary(value, initialUrl) {
+  // 26.1027 loads index -> app-main -> app-initial; older builds import
+  // app-initial directly. Follow only these bootstrap modules, not the whole
+  // application graph (which contains thousands of unrelated chunks).
+  function* initialModuleDiscovery(entries) {
+    const roots = [...new Set(entries)];
+    if (!roots.length || roots.length > 4 || roots.some(url => !localAsset(url, true)))
+      return { ok: false, reason: 'unsupported-entry' };
+    const candidates = new Set(), mains = new Set();
+    let bytes = 0;
+    const inspect = (source, parent, followMain) => {
+      if (typeof source !== 'string' || (bytes += source.length) > LIMIT)
+        throw Error('source-limit');
+      for (const token of tokens(source)) {
+        if (token.kind !== 'literal' || !/^["'`]\.\/app-(?:initial|main)-[A-Za-z0-9_-]+\.js["'`]$/.test(token.text)) continue;
+        const url = new URL(token.text.slice(1, -1), parent).href;
+        if (localAsset(url)) candidates.add(url);
+        else if (followMain) mains.add(url);
+      }
+    };
+    for (const entry of roots) inspect(yield entry, entry, true);
+    if (mains.size > 4) return { ok: false, reason: 'ambiguous-bootstrap' };
+    for (const main of mains) inspect(yield main, main, false);
+    if (!candidates.size) return { ok: false, reason: 'initial-module-not-found' };
+    if (candidates.size !== 1) return { ok: false, reason: 'ambiguous-module' };
+    return { ok: true, url: [...candidates][0] };
+  }
+
+  async function resolveInitialModule(entries, read) {
+    const discovery = initialModuleDiscovery(entries);
+    let step = discovery.next();
+    while (!step.done) step = discovery.next(await read(step.value));
+    return step.value;
+  }
+
+  function resolveInitialModuleSync(entries, read) {
+    const discovery = initialModuleDiscovery(entries);
+    let step = discovery.next();
+    while (!step.done) step = discovery.next(read(step.value));
+    return step.value;
+  }
+
+  function localCompanion(value, initialUrl, adapter = false) {
     try {
       const url = new URL(value), initial = new URL(initialUrl);
       return localAsset(initialUrl) && url.protocol === initial.protocol && url.host === initial.host
         && !url.search && !url.hash && !url.username && !url.password
         && url.pathname.slice(0, url.pathname.lastIndexOf('/')) === initial.pathname.slice(0, initial.pathname.lastIndexOf('/'))
-        && /\/assets\/app-primary-[A-Za-z0-9_-]+\.js$/.test(url.pathname);
+        && (adapter ? /\/assets\/codex-composer-adapter-[A-Za-z0-9_-]+\.js$/ : /\/assets\/app-primary-[A-Za-z0-9_-]+\.js$/).test(url.pathname);
+    } catch { return false; }
+  }
+
+  const localPrimary = (value, initialUrl) => localCompanion(value, initialUrl);
+  const localAdapter = (value, initialUrl) => localCompanion(value, initialUrl, true);
+  const quotaModules = modules => modules.filter(module => !module.predictionKind);
+  const completionKinds = modules => quotaModules(modules).length === 2 ? ['quota-primary', 'quota']
+    : quotaModules(modules).length === 1 ? ['quota'] : [];
+  const PREDICTION_MARKER = '/*cockpit-native-predictions-graph-v1*/';
+  function localPredictionModule(value, initialUrl, kind) {
+    try {
+      const url = new URL(value), initial = new URL(initialUrl);
+      const prefix = { composer: 'composer-content', host: 'initialize-app-host-services', settings: 'general-settings' }[kind];
+      return !!prefix && localAsset(initialUrl) && url.protocol === initial.protocol && url.host === initial.host
+        && !url.search && !url.hash && !url.username && !url.password
+        && url.pathname.slice(0, url.pathname.lastIndexOf('/')) === initial.pathname.slice(0, initial.pathname.lastIndexOf('/'))
+        && new RegExp(`/assets/${prefix}-[A-Za-z0-9_-]+\\.js$`).test(url.pathname);
     } catch { return false; }
   }
 
   const sourceLength = value => value.source.length + (value.modules || []).reduce((sum, module) => sum + module.source.length, 0);
-  function validModules(source, url, modules, mode = 'full') {
-    if (mode !== 'full' || !Array.isArray(modules)) return false;
+  const validQuotaReason = reason => typeof reason === 'string' && /^[a-z][a-z0-9_-]{0,63}$/.test(reason);
+  function validModules(source, url, modules, mode = 'full', quotaReason = null) {
+    if (!['full', 'fast-only', 'prediction-only'].includes(mode) || !Array.isArray(modules)) return false;
     // Do not reinstall a staged module produced by the retired dictation bridge
     // or capability suppression. The original client module remains available.
     if (typeof source !== 'string' || source.includes('__cockpitNativeDictation')
       || source.includes('__cockpitApiDictation')) return false;
-    if (modules.length !== (quotaModuleEnabled() ? 1 : 0)) return false;
-    return typeof source === 'string' && modules.every(module => module && localPrimary(module.url, url)
-      && typeof module.source === 'string' && module.source.includes('window.__cockpitNativeFastComplete?.("quota")'))
+    if (mode === 'prediction-only' && !(predictionsEnabled() && !enabled() && quotaModuleEnabled()
+      && validQuotaReason(quotaReason) && !source.includes('__cockpitQuotaCompat') && quotaModules(modules).length === 0)) return false;
+    if (mode === 'fast-only' && !(enabled() && quotaModuleEnabled() && validQuotaReason(quotaReason)
+        && quotaModules(modules).length === 0 && source.length <= LIMIT && !source.includes('__cockpitQuotaCompat')
+        && (source.match(/window\.__cockpitNativeFast\?\.allow\(/g) || []).length === 4)) return false;
+    // The validated initial module fixes the graph shape; a truncated current
+    // graph must never be reinterpreted as the older two-module layout.
+    const currentLayout = (source.match(/globalThis\.__cockpitQuotaCompat\.initialLayout="adapter-v1";/g) || []).length;
+    const quota = quotaModules(modules);
+    if (currentLayout > 1 || quota.length !== (mode === 'full' && quotaModuleEnabled() ? currentLayout === 1 ? 2 : 1 : 0)) return false;
+    const prediction = modules.filter(module => module.predictionKind);
+    if (prediction.length !== (source.includes(PREDICTION_MARKER) ? 3 : 0)
+      || new Set(modules.map(module => module.url)).size !== modules.length
+      || prediction.some(module => !localPredictionModule(module.url, url, module.predictionKind)
+        || typeof module.source !== 'string' || !module.source.includes(PREDICTION_MARKER))) return false;
+    const kinds = completionKinds(quota);
+    return quota.every((module, index) => module
+      && (index === 0 ? localPrimary(module.url, url) : localAdapter(module.url, url))
+      && typeof module.source === 'string'
+      && module.source.includes(`window.__cockpitNativeFastComplete?.(${JSON.stringify(kinds[index])})`))
       && sourceLength({ source, modules }) <= LIMIT;
   }
 
@@ -231,6 +373,20 @@
     return null;
   }
 
+  function yieldToRenderer() {
+    // A background Electron page clamps setTimeout; yielding once per chunk
+    // must not turn a local module rewrite into a sequence of one-second waits.
+    if (typeof root.scheduler?.yield === 'function') return root.scheduler.yield();
+    if (typeof root.MessageChannel === 'function') return new Promise(resolve => {
+      const channel = new root.MessageChannel();
+      channel.port1.onmessage = () => {
+        channel.port1.close(); channel.port2.close(); resolve();
+      };
+      channel.port2.postMessage(null);
+    });
+    return new Promise(resolve => (root.setTimeout || setTimeout)(resolve, 0));
+  }
+
   async function rewriteModule(source, url) {
     const iterator = tokens(source);
     const buffered = [];
@@ -250,7 +406,7 @@
     while ((token = next())) {
       if (token.end - checkpoint > 256 * 1024) {
         checkpoint = token.end;
-        await new Promise(resolve => (root.setTimeout || setTimeout)(resolve, 0));
+        await yieldToRenderer();
       }
       if (token.kind !== "name" || [".", "?."].includes(previous?.text)) { previous = token; continue; }
       if (peek()?.text === ":") { previous = token; continue; }
@@ -367,6 +523,20 @@
     return parts.join("");
   }
 
+  // Optional quota compatibility must not disable a fully validated speed
+  // integration. Restart from the original module, never a partial quota edit.
+  function prepareFastOnly(source, url, quotaReason) {
+    if ((!enabled() && !predictionsEnabled()) || !quotaModuleEnabled() || !localAsset(url)
+      || typeof source !== 'string' || source.length > LIMIT
+      || source.includes('__cockpitQuotaCompat') || !validQuotaReason(quotaReason))
+      return failure(source, 'fast-only-unavailable');
+    if (!enabled()) return { ok: true, patchedSource: source, url, mode: 'prediction-only', quotaReason };
+    const installed = (source.match(/window\.__cockpitNativeFast\?\.allow\(/g) || []).length === 4;
+    const fast = installed ? { ok: true, patchedSource: source } : transform(source);
+    if (!fast.ok) return fast;
+    return { ...fast, url, mode: 'fast-only', quotaReason };
+  }
+
   function prepareLive(source, url) {
     if (!localAsset(url) || typeof source !== "string" || source.length > LIMIT) return failure(source, "unsupported-module");
     let result = { ok: true, patchedSource: source };
@@ -375,9 +545,10 @@
     if (enabled() && !fastInstalled) result = transform(result.patchedSource);
     if (result.ok && quotaModuleEnabled() && !quotaInstalled) {
       result = root.__cockpitQuotaCompat?.transform(result.patchedSource, url) || failure(source, "quota-unavailable");
+      if (!result.ok && (enabled() || predictionsEnabled())) return prepareFastOnly(source, url, result.diagnostics?.reason || 'quota-unavailable');
     }
     if (!result.ok) return failure(source, result.diagnostics?.reason || "unsupported-gates");
-    if (!enabled() && !quotaModuleEnabled()) return failure(source, "disabled");
+    if (!enabled() && !quotaModuleEnabled() && !predictionsEnabled()) return failure(source, "disabled");
     return { ok: true, patchedSource: result.patchedSource, url, mode: 'full' };
   }
 
@@ -390,9 +561,80 @@
     } catch { return failure(source, "unsupported-module-syntax"); }
   }
 
+  // Companion routes are lazy. Discover only known native graph families and
+  // commit all prediction edits together, preserving the canonical module URLs.
+  function predictionState(state, reason) {
+    const config = root.__cockpitEnhancements;
+    if (config) { config.nativePredictionPatchState = state; config.nativePredictionPatchReason = reason; }
+    if (state !== 'ready') root.__cockpitNativePredictions?.setReady?.(false);
+  }
+
+  function* predictionGraph(source, url, seeds = []) {
+    if (!predictionsEnabled()) return { ok: false, reason: 'disabled' };
+    const adapter = root.__cockpitNativePredictions;
+    if (typeof adapter?.transform !== 'function') return { ok: false, reason: 'prediction-runtime-unavailable' };
+    const cache = new Map([[url, source], ...seeds.map(item => [item.url, item.source])]);
+    const candidates = { composer: new Set(), host: new Set(), settings: new Set() };
+    const queue = [...cache.keys()], visited = new Set();
+    const families = { 'composer-content': 'composer', 'initialize-app-host-services': 'host', 'general-settings': 'settings' };
+    let bytes = [...cache.values()].reduce((sum, item) => sum + item.length, 0);
+    while (queue.length) {
+      const current = queue.shift();
+      if (visited.has(current)) continue;
+      if (visited.size >= 16 || bytes > 64 * 1024 * 1024) return { ok: false, reason: 'prediction-graph-limit' };
+      visited.add(current);
+      let text = cache.get(current);
+      if (text == null) {
+        text = yield current;
+        if (typeof text !== 'string' || text.length > LIMIT) return { ok: false, reason: 'prediction-source-limit' };
+        bytes += text.length; cache.set(current, text);
+      }
+      const pattern = /["'`]\.\/((?:app-main|app-runtime|settings-lazy-routes|composer-content|initialize-app-host-services|general-settings)-[A-Za-z0-9_-]+\.js)["'`]/g;
+      for (const match of text.matchAll(pattern)) {
+        const target = new URL(match[1], current).href;
+        if (!target.startsWith(url.slice(0, url.lastIndexOf('/') + 1))) continue;
+        const kind = Object.entries(families).find(([prefix]) => match[1].startsWith(prefix + '-'))?.[1];
+        if (kind) candidates[kind].add(target);
+        else if (!visited.has(target)) queue.push(target);
+      }
+    }
+    const initial = adapter.transform(source, url);
+    if (!initial?.ok) return { ok: false, reason: initial?.diagnostics?.reason || 'prediction-initial-contract' };
+    const modules = [];
+    for (const kind of ['composer', 'host', 'settings']) {
+      const values = [...candidates[kind]];
+      if (!values.length || values.length > 4) return { ok: false, reason: 'prediction-module-not-unique' };
+      const matched = [];
+      for (const target of values) {
+        let text = cache.get(target);
+        if (text == null) { text = yield target; cache.set(target, text); bytes += typeof text === 'string' ? text.length : 0; }
+        if (bytes > 64 * 1024 * 1024) return { ok: false, reason: 'prediction-graph-limit' };
+        if (typeof text !== 'string' || text.length > LIMIT) return { ok: false, reason: 'prediction-source-limit' };
+        const result = adapter.transform(text, target);
+        if (result?.ok) matched.push({ url: target, source: result.patchedSource, predictionKind: kind });
+      }
+      if (matched.length !== 1) return { ok: false, reason: 'prediction-module-not-unique' };
+      modules.push(matched[0]);
+    }
+    return { ok: true, patchedSource: initial.patchedSource + '\n' + PREDICTION_MARKER, modules };
+  }
+
+  function preparePredictionGraphSync(source, url, read, seeds = []) {
+    const iterator = predictionGraph(source, url, seeds);
+    let step = iterator.next();
+    while (!step.done) step = iterator.next(read(step.value));
+    return step.value;
+  }
+
+  async function preparePredictionGraph(source, url, read, seeds = []) {
+    const iterator = predictionGraph(source, url, seeds);
+    let step = iterator.next();
+    while (!step.done) step = iterator.next(await read(step.value));
+    return step.value;
+  }
+
   async function prepareDocument() {
     const document = root.document;
-    const candidates = new Set();
     const entries = [...document.scripts].map(script => script.src).filter(url => localAsset(url, true));
     if (!entries.length || entries.length > 4) return { ok: false, reason: "unsupported-entry" };
     const read = async url => {
@@ -403,16 +645,12 @@
       return source;
     };
     try {
-      for (const entry of entries) {
-        for (const match of (await read(entry)).matchAll(/["'`]\.\/app-initial-[A-Za-z0-9_-]+\.js["'`]/g)) {
-          const url = new URL(match[0].slice(1, -1), entry).href;
-          if (localAsset(url)) candidates.add(url);
-        }
-      }
-      if (candidates.size !== 1) return { ok: false, reason: "ambiguous-module" };
-      const url = [...candidates][0];
+      const discovered = await resolveInitialModule(entries, read);
+      if (!discovered.ok) return discovered;
+      const url = discovered.url;
+      const predictionSeeds = await Promise.all(entries.map(async entry => ({url: entry, source: await read(entry)})));
       const source = await read(url);
-      const result = await prepareModule(source, url);
+      let result = await prepareModule(source, url);
       if (!result.ok) return { ok: false, reason: result.diagnostics?.reason || "unsupported-module" };
       const modules = [];
       if (quotaModuleEnabled() && result.mode === 'full') {
@@ -424,13 +662,42 @@
           const contract = root.__cockpitQuotaCompat.transform(source, url);
           const primary = root.__cockpitQuotaCompat.transformComposer(await read(primaryUrl), primaryUrl, url, contract.diagnostics?.bindings);
           if (!contract.ok || !primary.ok) throw Error(primary.diagnostics?.reason || 'quota-contract-mismatch');
+          const currentLayout = contract.diagnostics?.bindings?.layout === 'adapter-v1';
           const prepared = await rewriteModule(primary.patchedSource, primaryUrl);
-          modules.push({ url: primaryUrl, source: `${prepared}\n;window.__cockpitNativeFastComplete?.("quota");\n//# sourceURL=${primaryUrl}\n` });
+          const primaryKind = currentLayout ? 'quota-primary' : 'quota';
+          modules.push({ url: primaryUrl, source: `${prepared}\n;window.__cockpitNativeFastComplete?.(${JSON.stringify(primaryKind)});\n//# sourceURL=${primaryUrl}\n` });
+          if (currentLayout) {
+            const adapterUrl = new URL(contract.diagnostics.bindings.adapterPath, url).href;
+            if (!localAdapter(adapterUrl, url)) throw Error('quota-adapter-url-invalid');
+            const adapter = root.__cockpitQuotaCompat.transformAdapter(
+              await read(adapterUrl), adapterUrl, url, primaryUrl, primary.diagnostics?.bindings,
+            );
+            if (!adapter.ok) throw Error(adapter.diagnostics?.reason || 'quota-adapter-contract-mismatch');
+            const preparedAdapter = await rewriteModule(adapter.patchedSource, adapterUrl);
+            modules.push({ url: adapterUrl, source: `${preparedAdapter}\n;window.__cockpitNativeFastComplete?.("quota");\n//# sourceURL=${adapterUrl}\n` });
+          }
         } catch (error) {
-          return failure(source, error.message || 'quota-primary-unavailable');
+          const quotaReason = validQuotaReason(error.message) ? error.message : 'quota-primary-unavailable';
+          const fastOnly = prepareFastOnly(source, url, quotaReason);
+          if (!fastOnly.ok) return failure(source, quotaReason);
+          const prepared = await rewriteModule(fastOnly.patchedSource, url);
+          result = { ...fastOnly, patchedSource: `${prepared}\n;window.__cockpitNativeFastComplete?.();\n//# sourceURL=${url}\n` };
+          modules.length = 0;
         }
       }
-      if (!validModules(result.patchedSource, url, modules, result.mode)) return { ok: false, reason: 'module-source-limit' };
+      if (predictionsEnabled()) {
+        try {
+          const prediction = await preparePredictionGraph(result.patchedSource, url, read, [{url,source}, ...predictionSeeds]);
+          if (!prediction.ok) throw Error(prediction.reason);
+          const preparedInitial = await rewriteModule(prediction.patchedSource, url);
+          const preparedModules = await Promise.all(prediction.modules.map(async module => ({...module,
+            source: `${await rewriteModule(module.source,module.url)}\n${PREDICTION_MARKER}\n//# sourceURL=${module.url}\n`})));
+          result.patchedSource = preparedInitial;
+          modules.push(...preparedModules);
+          predictionState('ready', 'prediction-graph-prepared');
+        } catch (error) { predictionState('unsupported', validQuotaReason(error?.message) ? error.message : 'prediction-graph-failed'); }
+      }
+      if (!validModules(result.patchedSource, url, modules, result.mode, result.quotaReason)) return { ok: false, reason: 'module-source-limit' };
       return { ...result, modules };
     } catch { return { ok: false, reason: "asset-unavailable" }; }
   }
@@ -438,8 +705,12 @@
   const HANDOFF_PREFIX = "cockpit-native-handoff-v1:";
   let handoff = null, unloadHandler = null, restoreTimer = null, staged = null, preparationEpoch = 0;
   const configurationMask = config => [config?.nativeFast, config?.quotaCompat, config?.apiKeyAuthVerified, config?.apiService]
-    .map(flag => flag === true ? "1" : "0").join("");
-  const featureMask = (config, mode = 'full') => mode === 'full' ? configurationMask(config) : 'invalid';
+    .map(flag => flag === true ? "1" : "0").join("") + (config?.nativePredictions === true ? '1' : '');
+  const featureMask = (config, mode = 'full') => mode === 'full' ? configurationMask(config)
+    : mode === 'fast-only' && config?.nativeFast === true
+      ? `10${config.apiKeyAuthVerified === true ? '1' : '0'}0${config.nativePredictions === true ? '1' : ''}`
+      : mode === 'prediction-only' && config?.nativePredictions === true
+        ? `00${config.apiKeyAuthVerified === true ? '1' : '0'}01` : 'invalid';
   const validNonce = nonce => typeof nonce === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(nonce);
   const localPage = () => root.location?.protocol === "app:" && root.location?.hostname === "-";
   const setState = (value, reason) => {
@@ -457,14 +728,14 @@
   // A host-initiated reload may snapshot the name before beforeunload, then
   // deliver the old document's late write to the new context. That context has
   // no local staged record; cleanup must still restore only our own handoff.
-  function restoreInheritedName(nonce) {
+  function restoreInheritedName(nonce, expectedOwner = root.__cockpitEnhancements?.owner) {
     const raw = String(root.name ?? "");
     if (nonce !== undefined && !validNonce(nonce) || !localPage() || !raw.startsWith(HANDOFF_PREFIX)
       || raw.length > LIMIT * 2 + 131072) return;
     try {
       const value = JSON.parse(raw.slice(HANDOFF_PREFIX.length));
       if (validNonce(value.nonce) && (nonce === undefined || value.nonce === nonce)
-        && value.owner === root.__cockpitEnhancements?.owner
+        && value.owner === expectedOwner
         && typeof value.previousName === "string" && value.previousName.length <= 65536
         && !value.previousName.startsWith(HANDOFF_PREFIX)) root.name = value.previousName;
     } catch { /* Preserve names that cannot be attributed to this handoff. */ }
@@ -525,17 +796,19 @@
       return { ok: false, reason: "handoff-canceled" };
     if (!result.ok) return result;
     retainHandoff({ nonce, owner: config?.owner, requestedFeatures: configurationMask(config),
-      features: featureMask(config, result.mode), mode: result.mode,
+      features: featureMask(config, result.mode), mode: result.mode, quotaReason: result.quotaReason,
       url: result.url, source: result.patchedSource, modules: result.modules });
     return { ok: true, url: result.url, sourceLength: sourceLength(handoff), mode: handoff.mode };
   }
 
-  function installModule(source, url, modules = [], mode = 'full') {
+  function installModule(source, url, modules = [], mode = 'full', quotaReason = null) {
     const doc = root.document;
-    if (!localAsset(url) || !doc || doc.documentElement || !validModules(source, url, modules, mode)) {
+    if (root.__cockpitNativeInstallStarted) return { ok: false, reason: 'installation-already-started' };
+    if (!localAsset(url) || !doc || doc.documentElement || !validModules(source, url, modules, mode, quotaReason)) {
       setState("unsupported", "document-start-required");
       return { ok: false, reason: "document-start-required" };
     }
+    root.__cockpitNativeInstallStarted = true;
     let container;
     const blobs = [], preloads = [];
     try {
@@ -554,41 +827,55 @@
       const requestedFeatures = configurationMask(root.__cockpitEnhancements);
       const evaluated = new Set();
       let completed = false, timer;
-      const detach = () => {
+      const detach = (preservePredictions = false) => {
         if (timer) root.clearTimeout(timer);
         doc.removeEventListener("DOMContentLoaded", watch);
-        preloads.forEach(preload => { preload.onerror = null; });
-        blobs.forEach(blob => root.URL.revokeObjectURL(blob));
+        preloads.forEach((preload,index) => {
+          if (!preservePredictions || index === 0 || !modules[index - 1]?.predictionKind) preload.onerror = null;
+        });
+        // A lazy native route may not have evaluated yet. Its canonical import
+        // map URL must remain resolvable until the document/runtime is disposed.
+        blobs.forEach((blob,index) => {
+          if (!preservePredictions || index === 0 || !modules[index - 1]?.predictionKind) root.URL.revokeObjectURL(blob);
+        });
       };
       const fail = () => {
         if (completed) return;
         completed = true; detach(); cancelHandoff(handoff?.nonce);
+        root.__cockpitNativePredictions?.setReady?.(false);
         setState("unsupported", "module-preload-failed");
       };
       const watch = () => { if (!completed) timer = root.setTimeout(fail, 30000); };
       root.__cockpitNativeFastComplete = (kind = 'initial') => {
         const config = root.__cockpitEnhancements;
         if (completed || !config || config.owner !== owner || featureMask(config, mode) !== features || configurationMask(config) !== requestedFeatures) return;
-        if (kind !== 'initial' && !(modules.length && kind === 'quota')) return;
+        if (kind !== 'initial' && !completionKinds(modules).includes(kind)) return;
         evaluated.add(kind);
-        if (evaluated.size !== 1 + modules.length) return;
-        completed = true; detach();
+        if (evaluated.size !== 1 + quotaModules(modules).length) return;
+        completed = true; detach(true);
         config.nativePatchMode = mode;
         config.nativePatchFeatures = features;
         config.nativePatchRequestedFeatures = requestedFeatures;
-        setState('active', 'module-evaluated');
+        config.nativeQuotaPatchState = mode !== 'full' ? 'unsupported' : quotaModuleEnabled() ? 'active' : 'disabled';
+        config.nativeQuotaPatchReason = mode !== 'full' ? quotaReason : undefined;
+        setState('active', mode === 'full' ? 'module-evaluated' : `${mode}-quota-unsupported`);
       };
-      preloads.forEach(preload => { preload.onerror = fail; });
+      preloads.forEach((preload,index) => { preload.onerror = index > 0 && modules[index - 1]?.predictionKind
+        ? () => predictionState('unsupported','prediction-module-preload-failed') : fail; });
       container = doc.createElement("html"); doc.appendChild(container);
-      container.appendChild(map); preloads.forEach(preload => container.appendChild(preload));
+      container.appendChild(map);
+      root.__cockpitNativePredictions?.setReady?.(source.includes(PREDICTION_MARKER));
+      preloads.forEach(preload => container.appendChild(preload));
       setState("preloading", "module-preloaded");
       doc.addEventListener("DOMContentLoaded", watch, { once: true });
       root.__cockpitNativeFastDispose = () => {
         completed = true; detach(); cancelHandoff(handoff?.nonce);
+        root.__cockpitNativePredictions?.setReady?.(false);
         delete root.__cockpitNativeFastComplete;
       };
       return { ok: true };
     } catch {
+      root.__cockpitNativePredictions?.setReady?.(false);
       blobs.forEach(blob => root.URL.revokeObjectURL(blob));
       cancelHandoff(handoff?.nonce); setState("unsupported", "module-preload-failed");
       return { ok: false, reason: "module-preload-failed" };
@@ -614,11 +901,11 @@
     if (value.owner !== config?.owner || value.features !== featureMask(config, value.mode)
       || value.requestedFeatures !== configurationMask(config)
       || !Number.isFinite(age) || age < 0 || age > 30000 || !localAsset(value.url)
-      || !validModules(value.source, value.url, value.modules || [], value.mode)
+      || !validModules(value.source, value.url, value.modules || [], value.mode, value.quotaReason)
       || !value.source.includes("window.__cockpitNativeFastComplete?.()")) return fail("handoff-invalid");
     retainHandoff({ nonce, owner: value.owner, features: value.features, requestedFeatures: value.requestedFeatures,
-      mode: value.mode, url: value.url, source: value.source, modules: value.modules });
-    return installModule(value.source, value.url, value.modules || [], value.mode);
+      mode: value.mode, quotaReason: value.quotaReason, url: value.url, source: value.source, modules: value.modules });
+    return installModule(value.source, value.url, value.modules || [], value.mode, value.quotaReason);
   }
 
   function reloadPreparedDocument(nonce) {
@@ -633,7 +920,7 @@
     return result;
   }
 
-  const api = { allow, transform, localAsset, functionRange, rewriteModule, rewriteModuleSync, prepareLive, prepareModule, prepareDocument, installModule, prepareHandoff, consumeHandoff, cancelHandoff, reloadPreparedDocument,
+  const api = { resolveInitialModule, resolveInitialModuleSync, discardHandoff: restoreInheritedName, allow, transform, localAsset, localAdapter, functionRange, rewriteModule, rewriteModuleSync, prepareFastOnly, prepareLive, prepareModule, prepareDocument, installModule, prepareHandoff, consumeHandoff, cancelHandoff, reloadPreparedDocument,
     inspectStartupReload: () => {
       const guard = root.__cockpitStartupGuard;
       if (!guard) return { ok: false, reason: "startup-guard-unavailable" };
@@ -641,6 +928,10 @@
       return reason ? { ok: false, reason, ...(reason === 'draft-present' ? { draft: guard.snapshotDraft?.() } : {}) }
         : { ok: true, reason: "clean-startup" };
     } };
+  api.includeUltra = includeUltra;
+  api.preparePredictionGraphSync = preparePredictionGraphSync;
+  api.predictionState = predictionState;
+  api.predictionMarker = PREDICTION_MARKER;
   root.__cockpitNativeFast = api;
   if (typeof module === "object" && module.exports) module.exports = api;
 })();

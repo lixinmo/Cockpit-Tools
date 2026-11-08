@@ -1,5 +1,62 @@
 # Auto Consume Reset
 
+## v1.3.80 upstream replacement, 2026-11-08
+
+This section supersedes the implementation descriptions and historical local
+build commands below. Compilation and runtime verification now run only in
+GitHub Actions, as required by `docs/cloud-builds.md`.
+
+The sole Reset worker, settings UI, account/public-rule editor, history, and
+redemption journal are now upstream `codex_reset_automation`. The local
+`codex_auto_reset_monitor`, its startup hook, automatic consumption during quota
+refresh, old account-settings commands, and `CodexAutoConsumeResetSettings` UI
+have been removed. Normal activity/manual quota refresh can observe recovery but
+never initiates a Reset. There is one automatic consumption path.
+
+Compatibility is deliberately limited to existing user choices and outstanding
+consumption safety:
+
+- On the first settings read or worker startup, legacy per-account settings are
+  copied atomically to upstream custom rules. Valid enabled/threshold values are
+  preserved exactly, quota triggering remains enabled, and the new expiry
+  trigger remains disabled for migrated accounts. Legacy global flags are still
+  ignored. Existing upstream rules and pending journal entries are not replaced.
+  A persisted migration marker prevents old preferences from overwriting future
+  edits. The old map remains readable for migration, with no active old editor.
+- Existing `codex_auto_reset/<SHA256-account-id>.json` barriers and separate
+  `.lock` files are kept in place. Upstream manual/automatic actions acquire this
+  same lock before quota reads, so a running old build cannot race a new build
+  into spending twice. Invalid or inaccessible barriers fail closed.
+- New upstream redemptions write this durable barrier before POST as well. A
+  cached or failed quota response cannot release it. Recovery must exceed both
+  the recorded and current threshold, and the observation that releases the
+  latch never spends a second card. Turning a rule off/on or reducing its
+  threshold cannot bypass an unresolved low-quota episode. Explicit manual
+  actions can continue only after the fresh-query phase.
+- The upstream journal and POST implementation are reused, including identity
+  checking and the `reset`/`already_redeemed` response outcomes. The chosen earliest
+  eligible credit and stable request ID are persisted together; token retries
+  keep both. Rule/identity checks run again at the POST boundary. No second
+  reset-response parser or consumption implementation remains.
+- Weekly-only accounts whose seven-day window appears in primary remain
+  supported; five-hour/daily windows and invalid quota are not weekly triggers.
+  API-key and read-only Web Session accounts remain ineligible. Existing Agent
+  Identity opt-ins retain their backend support.
+
+The small `codex_auto_reset` module now contains only legacy serialization,
+barrier/lock compatibility, weekly-window identification and selected-credit
+helpers. The isolated `tests/codex-auto-reset` harness imports this compatibility
+code and the real upstream automation module, with synthetic account/runtime
+adapters that cannot reach HTTP or real accounts. Tests cover one-time migration,
+independent opt-ins/thresholds, journal persistence, ambiguous request IDs,
+selected credits, weekly-only primary windows, and legacy barriers across restart.
+The retired worker tests are removed rather than used as evidence for the new
+runtime. No live Reset or quota was consumed during this merge.
+
+Cloud verification for this integration is recorded with the merge's successful
+GitHub Actions run; local source/JSON checks alone are not compilation evidence.
+
+
 Local addition on upstream `4434c32e` (Cockpit Tools v1.3.64), 2026-10-01.
 
 The v1.3.70 integration on 2026-10-16 retains this policy and background worker.

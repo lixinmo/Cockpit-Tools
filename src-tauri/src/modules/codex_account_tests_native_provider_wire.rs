@@ -144,6 +144,7 @@ async fn native_provider_wire_projection_current_credential_edit_and_provider_sy
         None,
         Some("Edited StepFun".into()),
         None,
+        None,
     )
     .await
     .unwrap();
@@ -166,6 +167,7 @@ async fn native_provider_wire_projection_current_credential_edit_and_provider_sy
         false,
         true,
         Default::default(),
+        None,
         None,
         None,
     )
@@ -266,6 +268,7 @@ async fn native_provider_wire_projection_failed_current_edits_leave_client_confi
         None,
         None,
         None,
+        None,
     )
     .await;
     assert!(edited.is_err());
@@ -286,6 +289,7 @@ async fn native_provider_wire_projection_failed_current_edits_leave_client_confi
         false,
         false,
         Default::default(),
+        None,
         None,
         None,
     )
@@ -409,6 +413,7 @@ async fn native_provider_wire_projection_export_codex_profile() {
         None,
         Some("Edited fixture".into()),
         None,
+        None,
     )
     .await
     .unwrap();
@@ -424,6 +429,7 @@ async fn native_provider_wire_projection_export_codex_profile() {
         false,
         false,
         Default::default(),
+        None,
         None,
         None,
     )

@@ -27,6 +27,7 @@ import {
   EyeOff,
   BookOpen,
 } from 'lucide-react';
+import { AccountLastUsed } from '../components/AccountLastUsed';
 import { useGitHubCopilotAccountStore } from '../stores/useGitHubCopilotAccountStore';
 import * as githubCopilotService from '../services/githubCopilotService';
 import { TagEditModal } from '../components/TagEditModal';
@@ -537,7 +538,7 @@ export function GitHubCopilotAccountsPage() {
           </div>
 
           <div className="card-footer">
-            <span className="card-date">{formatDate(account.created_at)}</span>
+            <AccountLastUsed accountId={account.id} lastSwitchedAt={account.last_switched_at} createdAt={account.created_at} formatDate={formatDate} />
             <div className="card-actions">
               <button
                 className="card-action-btn success"
@@ -913,7 +914,7 @@ export function GitHubCopilotAccountsPage() {
               { value: 'created_at', label: t('common.shared.sort.createdAt', '按创建时间') },
               { value: 'weekly', label: t('githubCopilot.sort.weekly', '按 Chat messages 使用量') },
               { value: 'hourly', label: t('githubCopilot.sort.hourly', '按 Inline Suggestions 使用量') },
-              { value: 'premium', label: t('githubCopilot.sort.premium', '按 Premium requests 使用量') },
+              { value: 'premium', label: t('common.shared.quota.usage') },
               { value: 'weekly_reset', label: t('githubCopilot.sort.weeklyReset', '按 Chat messages 重置时间') },
               { value: 'hourly_reset', label: t('githubCopilot.sort.hourlyReset', '按 Inline Suggestions 重置时间') },
             ]}
@@ -1078,7 +1079,7 @@ export function GitHubCopilotAccountsPage() {
                 <th style={{ width: 140 }}>{t('common.shared.columns.plan', '订阅')}</th>
                 <th>{t('githubCopilot.columns.hourly', 'Inline Suggestions')}</th>
                 <th>{t('githubCopilot.columns.weekly', 'Chat messages')}</th>
-                <th>{t('githubCopilot.columns.premium', 'Premium requests')}</th>
+                <th>{t('common.shared.quota.usage')}</th>
                 <th className="sticky-action-header table-action-header">{t('common.shared.columns.actions', '操作')}</th>
               </tr>
             </thead>
@@ -1115,7 +1116,7 @@ export function GitHubCopilotAccountsPage() {
                 <th style={{ width: 140 }}>{t('common.shared.columns.plan', '订阅')}</th>
                 <th>{t('githubCopilot.columns.hourly', 'Inline Suggestions')}</th>
                 <th>{t('githubCopilot.columns.weekly', 'Chat messages')}</th>
-                <th>{t('githubCopilot.columns.premium', 'Premium requests')}</th>
+                <th>{t('common.shared.quota.usage')}</th>
                 <th className="sticky-action-header table-action-header">{t('common.shared.columns.actions', '操作')}</th>
               </tr>
             </thead>

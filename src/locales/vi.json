@@ -158,6 +158,58 @@
     "providerClear": "Bỏ chọn"
   },
   "common": {
+    "profileRestoreBusy": "Đang khôi phục phiên đăng nhập. Vui lòng thử lại sau.",
+    "profileRestoreInvalid": "Đường dẫn bản lưu phiên đăng nhập không hợp lệ. Hãy nhập lại tài khoản.",
+    "profileRestoreRecoveryFailed": "Không thể khôi phục phiên đăng nhập. Bản sao lưu đã được giữ lại: {{detail}}",
+    "dataQueryBusy": "Dữ liệu đang được xử lý. Vui lòng thử lại sau ít phút.",
+    "apiBudget": {
+      "keyScope": "Khóa này",
+      "upgradeRequired": "Cập nhật Cockpit Tools trên máy tính cổng để xem thống kê và lịch sử yêu cầu.",
+      "gatewayName": "Cổng Cockpit",
+      "accountingNote": "Khoản trừ đã ghi không đổi khi tính lại giá; ước tính có thể khác. Ngân sách đặt lại theo UTC.",
+      "preparing": "Đang chuẩn bị thống kê lịch sử trong nền. Hãy thử lại sau.",
+      "settled": "Khoản trừ đã ghi",
+      "unrecorded": "Chưa ghi nhận",
+      "unmeteredShort": "Chưa đo lường",
+      "rangeLimit": "Chọn ngày hợp lệ đến hôm nay, tối đa 93 ngày.",
+      "partialCharges": "{{count}} yêu cầu thiếu khoản trừ hoặc đo lường. Thống kê khoản trừ chỉ gồm tiền đã ghi.",
+      "retention": "Lịch sử từ {{time}}; chỉ gồm nhật ký được cổng lưu giữ.",
+      "logFiltersNote": "Bộ lọc chỉ áp dụng cho chi tiết bên dưới. Thống kê và biểu đồ dùng ngày đã chọn.",
+      "timeout": "Hết thời gian",
+      "textRequests": "Văn bản",
+      "imageEdits": "Sửa ảnh",
+      "budget": "Ngân sách sử dụng",
+      "period": "Chu kỳ",
+      "lifetime": "Một lần",
+      "daily": "Hằng ngày",
+      "weekly": "Hằng tuần",
+      "monthly": "Hằng tháng",
+      "dailyLimit": "Giới hạn ngày",
+      "concurrency": "Yêu cầu đồng thời",
+      "dailyImages": "Yêu cầu ảnh/ngày",
+      "invalid": "Nhập số dương trong phạm vi cho phép.",
+      "hint": "Tính theo giá đã cấu hình. Mô hình chưa có giá không dùng được. Đặt lại theo UTC, không cộng dồn. Yêu cầu đang chạy có thể vượt giới hạn.",
+      "unmetered": "Yêu cầu thiếu dữ liệu sử dụng hoặc giá không được tính vào số tiền.",
+      "remote": "Cockpit từ xa",
+      "active": "Khả dụng",
+      "disabled": "Đã tắt",
+      "service_disabled": "Dịch vụ đã dừng",
+      "token_limit_reached": "Hết hạn mức token",
+      "budget_limit_reached": "Hết ngân sách",
+      "images": "Tạo ảnh",
+      "consumed": "Đã dùng",
+      "resetsAt": "Đặt lại",
+      "offline": "Ngoại tuyến · dữ liệu đã lưu"
+    },
+    "networkErrors": {
+      "upstream": "dịch vụ thượng nguồn",
+      "proxyConnection": "Không thể kết nối đến {{target}} qua proxy “{{proxy}}”. Có thể do proxy hoặc mạng. Hãy kiểm tra proxy hoặc thử nút khác.",
+      "proxyTimeout": "Kết nối đến {{target}} qua proxy “{{proxy}}” đã hết thời gian chờ. Có thể do proxy hoặc mạng. Hãy kiểm tra proxy hoặc thử nút khác.",
+      "proxyAuth": "Xác thực proxy “{{proxy}}” thất bại. Hãy kiểm tra tên người dùng hoặc mật khẩu proxy.",
+      "localProxyUnavailable": "Không thể kết nối đến proxy cục bộ “{{proxy}}”. Hãy kiểm tra dịch vụ proxy có đang chạy không.",
+      "directConnection": "Không thể kết nối đến {{target}}. Hãy kiểm tra mạng và thử lại.",
+      "directTimeout": "Kết nối đến {{target}} đã hết thời gian chờ. Hãy kiểm tra mạng và thử lại."
+    },
     "codexUsage": {
       "title": "Hạn mức và sử dụng",
       "session": "Cuộc trò chuyện này",
@@ -238,6 +290,7 @@
     "failureTime": "Thời điểm lỗi",
     "clearRecord": "Xóa bản ghi",
     "clearingRecord": "Đang xóa…",
+    "to": "đến",
     "dragSortHint": "Kéo tay nắm bên trái để đổi thứ tự. Thay đổi tự động lưu khi thả.",
     "dragSortFilteredHint": "Xóa nội dung tìm kiếm để đổi thứ tự.",
     "recycleBin": {
@@ -378,7 +431,11 @@
           "statusSkipped": "Đã bỏ qua",
           "statusPending": "Đang chờ nhập"
         },
-        "invalidJson": "JSON không hợp lệ. Kiểm tra tệp hoặc nội dung đã dán."
+        "invalidJson": "JSON không hợp lệ. Kiểm tra tệp hoặc nội dung đã dán.",
+        "empty": "Dữ liệu nhập trống.",
+        "sizeLimit": "Tệp không được vượt quá {{limit}} MiB.",
+        "countLimit": "Mỗi lần chỉ được nhập tối đa {{count}} tài khoản.",
+        "itemFailed": "Mục {{index}}: {{error}}"
       },
       "externalImport": {
         "bundleInvalidJson": "Gói nhập không phải JSON hợp lệ",
@@ -489,6 +546,8 @@
         "title": "Tổng quan tài khoản"
       },
       "quota": {
+        "usageWithUnit": "Mức sử dụng ({{unit}})",
+        "usage": "Mức sử dụng",
         "noData": "Không có dữ liệu hạn mức",
         "queryFailed": "Truy vấn hạn mức thất bại",
         "resetDone": "Đã đặt lại",
@@ -582,6 +641,29 @@
         "missingTiming": "Chưa ghi nhận thời gian đầu ra hợp lệ.",
         "shortWindow": "Khoảng quan sát đầu ra dưới 100 ms."
       }
+    },
+    "deviceRestriction": {
+      "title": "Nhật ký giới hạn thiết bị",
+      "badge": "Thiết bị bị giới hạn",
+      "paused": "Đã ghi nhận giới hạn thiết bị rõ ràng. Các lần thử tự động cho thao tác này đã tạm dừng. Hãy xem bản ghi tại trang tài khoản.",
+      "note": "Đây là quan sát cục bộ, không phải suất thiết bị của OpenAI. Xóa tài khoản hoặc thông tin đăng nhập cục bộ không đảm bảo giải phóng giới hạn trên máy chủ.",
+      "retryNote": "Cho phép thử lại không đánh dấu giới hạn là đã gỡ. Khi nhận từ chối rõ ràng lần nữa, các lần thử sẽ lại tạm dừng.",
+      "desktop": "Đăng nhập máy tính",
+      "quota": "Tra cứu hạn mức",
+      "api": "Yêu cầu API",
+      "oauth": "Đăng nhập OAuth",
+      "token": "Làm mới mã truy cập",
+      "recovered": "Thao tác đã khôi phục",
+      "pausedLabel": "Đã dừng thử",
+      "retryEnabled": "Đã cho phép thử lại",
+      "observed": "Đầu tiên: {{first}} · Gần nhất: {{last}} · {{count}} lần ghi nhận",
+      "check": "Kiểm tra lại",
+      "allowRetry": "Cho phép thử lại",
+      "help": "Trợ giúp chính thức",
+      "support": "Liên hệ hỗ trợ",
+      "failed": "Không thể hoàn tất thao tác. Trạng thái gần nhất được giữ lại. Vui lòng thử lại.",
+      "loginAttempt": "Lần đăng nhập chưa xác định tài khoản",
+      "removed": "Tài khoản cục bộ đã xóa"
     }
   },
   "nav": {
@@ -608,6 +690,7 @@
     "traeCn": "Trae CN​",
     "traeSoloCn": "TRAE SOLO CN​",
     "codebuddyCn": "CodeBuddy CN​",
+    "minimaxcode": "MiniMax Code",
     "zed": "Nền tảng Zed",
     "expandSidebar": "Mở rộng thanh bên",
     "collapseSidebar": "Thu gọn thanh bên",
@@ -675,7 +758,12 @@
     "setAsDefaultInGroup": "Đặt làm nền tảng mặc định trong nhóm này",
     "removeFromGroup": "Xóa khỏi nhóm",
     "sidebarSelectedUnlimited": "Đã chọn ({count})",
-    "tipWithGroupsUnlimited": "Sắp xếp thủ công các nền tảng và nhóm đã chọn"
+    "tipWithGroupsUnlimited": "Sắp xếp thủ công các nền tảng và nhóm đã chọn",
+    "enabledToggle": "Bật",
+    "groupEnabledHint": "Bật hoặc tắt tất cả nền tảng trong nhóm",
+    "disabledHint": "Tắt sẽ dừng tác vụ tự động và ẩn phần cài đặt nền tảng. Việc hiển thị mục được thiết lập riêng",
+    "enableAll": "Bật tất cả",
+    "disableAll": "Tắt tất cả"
   },
   "privacy": {
     "hideSensitive": "Ẩn email",
@@ -1162,6 +1250,12 @@
       "workbuddyAppPathPlaceholder": "Đường dẫn mặc định",
       "workbuddyPathSelect": "Chọn",
       "workbuddyPathReset": "Đặt lại mặc định",
+      "minimaxCodeAppPath": "Đường dẫn khởi động MiniMax Code",
+      "minimaxCodeAppPathDesc": "Để trống để dùng đường dẫn mặc định",
+      "minimaxCodeAppPathPlaceholder": "Đường dẫn mặc định",
+      "minimaxCodePathSelect": "Chọn",
+      "minimaxCodeAppPathPathSelect": "Chọn",
+      "minimaxCodePathReset": "Đặt lại mặc định",
       "openclawAuthOverwrite": "Ghi đè đăng nhập OpenClaw khi chuyển đổi Codex",
       "openclawAuthOverwriteDesc": "Khi tắt, chỉ Codex được chuyển đổi và OpenClaw giữ trạng thái đăng nhập hiện tại",
       "ghcpOpencodeAuthOverwrite": "Ghi đè đăng nhập OpenCode khi chuyển đổi GitHub Copilot",
@@ -1233,6 +1327,8 @@
       "qoderPathSelect": "Chọn",
       "workbuddyAutoRefresh": "Tự động làm mới hạn ngạch WorkBuddy",
       "workbuddyAutoRefreshDesc": "Tần suất tự động làm mới nền",
+      "minimaxCodeAutoRefresh": "Tự động làm mới hạn ngạch MiniMax Code",
+      "minimaxCodeAutoRefreshDesc": "Tần suất tự động làm mới nền",
       "codexLocalAccessEntryVisible": "Hiển thị mục Dịch vụ API",
       "codexLocalAccessEntryVisibleDesc": "Chỉ kiểm soát việc mục Dịch vụ API có hiển thị trong tổng quan Codex hay không. Thao tác này không dừng dịch vụ API cục bộ; bạn có thể bật lại tại đây hoặc trong Cài đặt nhanh.",
       "codexLocalAccessEnabled": "Bật Dịch vụ API",
@@ -1320,13 +1416,15 @@
       "codexPreserveExternalBridge": "Giữ cầu nối ngoài",
       "codexPreserveExternalBridgeDesc": "Giữ cầu nối Codex Web GPT đã xác minh bằng bản ghi cục bộ khi đổi tài khoản OAuth. Mặc định tắt.",
       "codexEnhancements": {
-        "nativeFast": "Bộ chọn Fast gốc",
-        "nativeFastDesc": "Bật menu tốc độ gốc của ứng dụng cho tài khoản API Key, hiển thị các mức mà mô hình hỗ trợ. Khả năng sử dụng và mức phí tùy nhà cung cấp API.",
         "quotaCompat": "Hạn mức chế độ kết hợp",
         "quotaCompatDesc": "Khi đăng nhập OAuth thật và dùng tuyến API bên ngoài, hạn mức gói đăng ký không chặn tin nhắn API cục bộ. Không đổi mức dùng thực tế hay hạn mức hình ảnh.",
-        "restartHint": "Mặc định bật. Khởi động lại các phiên bản Codex liên quan sau khi đổi và giữ Cockpit Tools chạy. Tính năng nhập giọng nói gốc phụ thuộc vào khả năng và cài đặt của ứng dụng; Cockpit không thay thế hay ép bật tính năng này.",
-        "configFailed": "Không thể đọc hoặc lưu cài đặt: {{error}}"
-      }
+        "restartHint": "Dự đoán gốc mặc định tắt. Khởi động lại các phiên bản Codex liên quan sau khi đổi và giữ Cockpit Tools chạy. Tính năng nhập giọng nói gốc phụ thuộc vào khả năng và cài đặt của ứng dụng; Cockpit không thay thế hay ép bật tính năng này.",
+        "configFailed": "Không thể đọc hoặc lưu cài đặt: {{error}}",
+        "nativePredictions": "Dự đoán bước tiếp theo gốc (Tab)",
+        "nativePredictionsDesc": "Tạo gợi ý tin nhắn tiếp theo bằng nhà cung cấp API và mô hình của cuộc trò chuyện hiện tại. Tiêu tốn thêm tín dụng API; khởi động lại Codex sau khi lưu."
+      },
+      "timeDisplayMode": "Hiển thị thời gian",
+      "timeDisplayModeDesc": "Thời gian trên thẻ và danh sách tài khoản. Mặc định là thời gian chuyển tài khoản"
     },
     "network": {
       "apiTitle": "API Antigravity Cockpit",
@@ -1629,6 +1727,42 @@
       "refreshed": "Đã làm mới usage",
       "usage": "Lượng dùng",
       "tierOther": "Khác"
+    },
+    "background": {
+      "title": "Nền",
+      "description": "Chỉ đổi nền ứng dụng. Thẻ tài khoản và nút điều khiển giữ nguyên giao diện.",
+      "presets": "Mẫu nền",
+      "default": "Mặc định",
+      "mist": "Sương",
+      "forest": "Rừng",
+      "dusk": "Hoàng hôn",
+      "sand": "Cát",
+      "custom": "Tùy chỉnh",
+      "chooseImage": "Chọn ảnh",
+      "replaceImage": "Đổi ảnh",
+      "imageHint": "JPG, PNG hoặc WebP, tối đa 10 MB. Ảnh lớn được thu nhỏ ngay trên thiết bị.",
+      "preview": "Xem trước",
+      "strength": "Độ đậm",
+      "blur": "Độ mờ",
+      "pixels": "{{count}} điểm ảnh",
+      "position": "Vị trí ảnh",
+      "center": "Giữa",
+      "top": "Trên",
+      "bottom": "Dưới",
+      "localHint": "Thay đổi có hiệu lực ngay. Ảnh và thiết lập của mỗi giao diện được lưu riêng trên thiết bị này; ảnh không được tải lên. Khôi phục mặc định vẫn giữ các giao diện của bạn.",
+      "restore": "Khôi phục",
+      "imageType": "Hãy chọn ảnh JPG, PNG hoặc WebP.",
+      "imageSize": "Hãy chọn ảnh nhỏ hơn 10 MB.",
+      "imageRead": "Không đọc được ảnh. Hãy thử tệp khác.",
+      "storage": "Không tải hoặc lưu được nền. Hãy thử lại; nền đã lưu vẫn được giữ.",
+      "saveFailed": "Thay đổi đang hiển thị nhưng chưa lưu được. Hãy thử lại; các giao diện đã lưu trước đó vẫn được giữ lại.",
+      "builtInSkins": "Giao diện có sẵn",
+      "mySkins": "Giao diện của tôi",
+      "addSkin": "Thêm",
+      "rename": "Đổi tên",
+      "skinName": "Tên giao diện",
+      "manageSkin": "Quản lý giao diện: {{name}}",
+      "deleteSkinConfirm": "Xóa “{{name}}”? Xóa giao diện đang dùng sẽ khôi phục nền mặc định."
     }
   },
   "appPath": {
@@ -1974,7 +2108,13 @@
     "tagUpdated": "Thẻ đã được cập nhật",
     "plan": {
       "personal": "Cá nhân"
-    }
+    },
+    "lastSwitchTime": "Lần chuyển",
+    "neverSwitched": "Chưa từng chuyển",
+    "refreshTime": "Lần làm mới",
+    "lastSwitchTimeFull": "Lần chuyển: {{time}}",
+    "refreshTimeFull": "Lần làm mới: {{time}}",
+    "toggleTimeMode": "Hiển thị thời gian chuyển hoặc làm mới"
   },
   "overview": {
     "title": "Tổng quan tài khoản",
@@ -2338,6 +2478,74 @@
     "other_group": "Mô hình khác"
   },
   "codex": {
+    "resetAutomation": {
+      "nothingToReset": "Hiện không có kỳ hạn mức nào cần đặt lại.",
+      "unknownOutcome": "Không thể xác nhận kết quả đặt lại. Hãy thử lại.",
+      "applyAllHint": "Khi bật, thao tác Lưu sẽ sao chép quy tắc này cho mọi tài khoản, ghi đè các thiết lập tùy chỉnh và đã tắt.",
+      "applyAll": "Lưu cho mọi tài khoản",
+      "accountHint": "Tài khoản chưa có thiết lập riêng dùng quy tắc chung. Lưu chỉ áp dụng cho tài khoản này.",
+      "title": "Tự dùng thẻ đặt lại",
+      "accountTab": "Tài khoản này",
+      "publicTab": "Quy tắc chung",
+      "inherit": "Theo quy tắc chung",
+      "custom": "Quy tắc riêng",
+      "off": "Tắt",
+      "entryDefault": "Cài đặt tự động",
+      "noCredits": "Không có thẻ",
+      "publicHint": "Quy tắc mặc định cho tài khoản chưa có thiết lập riêng. Giữ nguyên các thiết lập tùy chỉnh hoặc đã tắt.",
+      "before": "Trước khi hết hạn",
+      "expiry": "Dùng trước khi hết hạn",
+      "minutes": "phút",
+      "hours": "giờ",
+      "days": "ngày",
+      "hostHint": "Chạy khi Cockpit Tools đang mở. Máy chủ quyết định thẻ được dùng.",
+      "invalidTime": "Nhập thời gian dương với số giây nguyên.",
+      "invalidPercent": "Nhập phần trăm nguyên từ 0 đến 100.",
+      "loadFailed": "Không tải được quy tắc: {{error}}",
+      "saveFailed": "Không lưu được quy tắc: {{error}}",
+      "conflict": "Quy tắc đã thay đổi ở nơi khác. Hãy tải lại.",
+      "busy": "Tài khoản này đang được đặt lại.",
+      "storageError": "Không đọc hoặc lưu được quy tắc đặt lại.",
+      "timeout": "Yêu cầu hết thời gian. Mã yêu cầu đã lưu sẽ được dùng lại để tránh trừ thẻ hai lần.",
+      "history": "Hoạt động gần đây",
+      "reasonExpiry": "Sắp hết hạn",
+      "reasonQuota": "Hạn mức thấp",
+      "reasonManual": "Đặt lại thủ công",
+      "reasonCheck": "Kiểm tra nền",
+      "pending": "Đang chờ kết quả",
+      "editPublic": "Sửa quy tắc chung",
+      "accountMissing": "Tài khoản không còn tồn tại.",
+      "masterLabel": "Tự động dùng thẻ đặt lại",
+      "ruleSource": "Nguồn quy tắc",
+      "weeklyTrigger": "Ngưỡng hằng tuần",
+      "weeklyRemaining": "Hạn mức tuần còn ≤",
+      "previewTitle": "Xem trước điều kiện",
+      "previewAny": "Dùng một thẻ khi đáp ứng bất kỳ điều kiện đang bật nào:",
+      "previewExpiry": "Thẻ sẽ hết hạn trong vòng {{value}} {{unit}}",
+      "previewWeekly": "Hạn mức tuần còn lại không quá {{percent}}%",
+      "previewOff": "Đã tắt tự động dùng thẻ. Các quy tắc bên dưới chưa có hiệu lực.",
+      "previewEmpty": "Chưa bật điều kiện nào. Thẻ sẽ không được dùng tự động.",
+      "cardOn": "Tự động",
+      "cardOff": "Tắt",
+      "orSeparator": " hoặc ",
+      "inheritHint": "Đang dùng quy tắc chung. Hãy sửa quy tắc chung hoặc chuyển sang tùy chỉnh."
+    },
+    "overload": {
+      "setting": "Thử lại khi quá tải",
+      "settingHint": "Áp dụng cho yêu cầu mới của dịch vụ API Codex cục bộ. Yêu cầu có thể thử lại an toàn sẽ chờ mô hình hoạt động trở lại.",
+      "retrying": "Mô hình đang bận, đang thử lại ({{count}})",
+      "count": "Quá tải: {{count}}",
+      "countHint": "Đếm số lần thử tới nhà cung cấp, gồm cả lần thử tự động. Lịch sử lưu tối đa 7 ngày.",
+      "history": "Lịch sử quá tải",
+      "empty": "Không có lỗi quá tải trong khoảng này.",
+      "attempt": "Lần thử {{number}}",
+      "sameAccount": "Khôi phục trên cùng tài khoản",
+      "otherAccount": "Khôi phục sau khi đổi tài khoản",
+      "pending": "Đang chờ kết quả",
+      "cancelled": "Đã hủy",
+      "failed": "Yêu cầu thất bại",
+      "countUnavailable": "Không thể tải thống kê quá tải"
+    },
     "instance": {
       "errors": {
         "threadSyncWorkerFailed": "Tác vụ đồng bộ phiên thất bại: {{error}}",
@@ -2364,6 +2572,14 @@
       "description": "Chế độ mặc định giữ nguyên cách định tuyến hiện tại. Ưu tiên hạn mức thông thường chỉ cho phép dùng credit sau khi mọi tài khoản Codex trong nhóm của khóa API hiện tại đã dùng hết hạn mức thông thường. Chỉ dùng hạn mức thông thường sẽ chặn credit. Việc tắt credit cho từng tài khoản luôn được ưu tiên.",
       "boundary": "Ảnh chụp trạng thái hạn mức có hiệu lực trong 5 phút. Hạn mức của tài khoản bị hạn chế được tự động cập nhật trước khi chọn nếu chưa rõ, đã cũ hoặc vừa đặt lại (tối đa 9 giây, gộp các lượt đọc đồng thời). Nếu cập nhật thất bại, tài khoản sẽ được tạm dừng an toàn; xem chẩn đoán nhóm tài khoản để biết chi tiết. Không thể thu hồi yêu cầu đang xử lý. Yêu cầu vượt qua ranh giới hạn mức hoặc việc các ứng dụng khác sử dụng đồng thời vẫn có thể tiêu tốn credit ở nhà cung cấp; cần đặt giới hạn chi tiêu tuyệt đối tại nhà cung cấp.",
       "strictHint": "Chế độ Chỉ dùng hạn mức thông thường chặn credit cho mọi tài khoản. Các công tắc của từng tài khoản được giữ lại cho các chính sách khác."
+    },
+    "launchConfirmation": {
+      "title": "Chưa xác nhận khởi chạy",
+      "description": "Đã gửi yêu cầu khởi chạy nhưng chưa xác nhận được trạng thái ứng dụng. Có thể ứng dụng đã mở. Vui lòng không khởi chạy lại.",
+      "check": "Kiểm tra",
+      "notRunning": "Chưa phát hiện phiên bản đích. Hãy kiểm tra lại sau hoặc đóng hộp thoại này trước khi thử khởi chạy lại.",
+      "checkFailed": "Không thể đọc trạng thái hoạt động. Vui lòng kiểm tra lại sau.",
+      "maintenanceDeferred": "Một số tác vụ bảo trì chưa hoàn tất. Lịch sử được giữ nguyên; có thể thử lại trong quản lý phiên."
     },
     "launchErrors": {
       "sessionRestoreFailed": "Sửa phiên thất bại và khôi phục bản sao lưu chưa hoàn tất. Đã dừng khởi chạy; hãy kiểm tra nhật ký và bản sao lưu trước khi thử lại.",
@@ -2594,14 +2810,8 @@
       "unsupportedCountryRegion": "Khu vực mạng hiện tại không hỗ trợ làm mới ủy quyền Codex. Dịch vụ ủy quyền OpenAI đã từ chối lối ra mạng này. Hãy chuyển sang khu vực được hỗ trợ rồi thử lại."
     },
     "switchAuth": {
-      "apiOnlyTitle": "Ứng dụng cần đăng nhập",
       "reauthorizeTitle": "Ủy quyền Codex đã hết hạn",
-      "apiOnlyDescription": "Ứng dụng hiện tại đã chuyển đến trang đăng nhập. Hãy cấp quyền lại để khôi phục ứng dụng; bạn vẫn có thể tiếp tục dùng Dịch vụ API trong lúc này.",
-      "observationStatus": "Đã phát hiện chuyển hướng đến trang đăng nhập",
-      "observationTime": "Lần kiểm tra gần nhất: {{time}}",
-      "loginRedirectTime": "Lần chuyển hướng gần nhất đến trang đăng nhập: {{time}}",
       "observationInstance": "Phiên bản được kiểm tra: {{instance}}",
-      "launchTime": "Thời điểm khởi chạy phiên bản: {{time}}",
       "reauthorizeDescription": "Không thể làm mới thông tin đăng nhập và access_token không còn dùng được cho dịch vụ API. Hãy ủy quyền lại tài khoản để tiếp tục.",
       "idTokenUnavailable": "Danh tính ứng dụng đã hết hạn và quá trình làm mới tự động không trả về id_token hợp lệ.",
       "reasonLabel": "Lý do",
@@ -2614,10 +2824,7 @@
       "startingInstanceAfterReauth": "Đã cập nhật ủy quyền. Đang khởi động lại phiên...",
       "startInstanceAfterReauthFailed": "Đã cập nhật ủy quyền nhưng không thể khởi động phiên: {{error}}",
       "reauthorizedAndStartedInstance": "Đã ủy quyền lại và khởi động phiên",
-      "apiOnlyBadge": "Cần đăng nhập",
-      "clearClientAuth": "Xóa cảnh báo",
-      "clearClientAuthSuccess": "Đã xóa cảnh báo ứng dụng",
-      "clearClientAuthFailed": "Không thể xóa cảnh báo ứng dụng: {{error}}"
+      "apiTokenUsableDescription": "Một số thông tin đăng nhập cần được cấp quyền lại. Mã truy cập hiện tại vẫn có thể dùng cho dịch vụ API."
     },
     "current": "Hiện tại",
     "empty": {
@@ -2687,6 +2894,16 @@
       "savedPath": "Đường dẫn đã lưu"
     },
     "localAccess": {
+      "gatewayEngineNative": "Rust gốc",
+      "gatewayEngineSidecar": "Go (hiện tại)",
+      "gatewayEngineHint": "Rust là bộ máy mặc định. Lần nâng cấp đầu tiên sẽ chuyển sang Rust; các lựa chọn sau đó được giữ lại. Chuyển đổi sẽ khởi động lại dịch vụ API và có thể ngắt yêu cầu đang chạy; cửa sổ Codex vẫn mở.",
+      "gatewayEngineSwitching": "Đang chuyển bộ máy…",
+      "gatewayEngineSwitchFailed": "Không thể chuyển bộ máy: {{error}}",
+      "gatewayEngineReadbackFailed": "Chưa xác nhận được bộ máy hiện tại. Hãy làm mới trước khi thử lại: {{error}}",
+      "gatewayEngineReadbackTimeout": "Làm mới trạng thái đã hết thời gian",
+      "gatewayEngineOperationBusy": "Dịch vụ đang thực hiện thao tác khác. Hãy thử lại sau ít phút.",
+      "gatewayEngineSwitchRestored": "Chuyển đổi thất bại. Đã khôi phục bộ máy trước đó.",
+      "gatewayEngineRestoreFailed": "Chuyển đổi thất bại và không thể khôi phục bộ máy trước đó. Hãy kiểm tra trạng thái dịch vụ trước khi thử lại.",
       "title": "Dịch vụ API",
       "accountCount": "{{count}} tài khoản",
       "baseUrl": "Địa chỉ",
@@ -2933,7 +3150,6 @@
         "quotaReserveInvalid": "Nhập số nguyên từ 1 đến 100.",
         "strictReserve": "Bảo vệ nghiêm ngặt",
         "strictReserveDesc": "Hạn mức dự trữ tự động được bảo vệ bằng biên an toàn. Gần ngưỡng, mỗi tài khoản chỉ gửi một yêu cầu rồi xác nhận hạn mức mới sau khi hoàn tất. Việc sử dụng của ứng dụng khác không bị giới hạn.",
-        "strictNativeOnly": "Bảo vệ nghiêm ngặt cần bộ máy Rust. Hãy tắt trước khi chuyển sang Go.",
         "safetyMargin": "Biên an toàn",
         "safetyMarginUnit": "điểm phần trăm",
         "safetyMarginInvalid": "Nhập số nguyên từ 1 đến 20.",
@@ -3016,17 +3232,7 @@
       "gatewayModeNewLabel": "Dich vu API-Moi",
       "gatewayModeOldLabel": "Dich vu API-Cu",
       "gatewayModeSaveSuccess": "Da cap nhat che do cong cua dich vu API",
-      "gatewayEngineNative": "Rust gốc",
-      "gatewayEngineSidecar": "Go (hiện tại)",
-      "gatewayEngineHint": "Rust là bộ máy mặc định. Lần nâng cấp đầu tiên sẽ chuyển sang Rust; các lựa chọn sau đó được giữ lại. Chuyển đổi sẽ khởi động lại dịch vụ API và có thể ngắt yêu cầu đang chạy; cửa sổ Codex vẫn mở.",
-      "gatewayEngineSwitching": "Đang chuyển bộ máy…",
-      "gatewayEngineSwitchFailed": "Không thể chuyển bộ máy: {{error}}",
-      "gatewayEngineReadbackFailed": "Chưa xác nhận được bộ máy hiện tại. Hãy làm mới trước khi thử lại: {{error}}",
-      "gatewayEngineReadbackTimeout": "Làm mới trạng thái đã hết thời gian",
       "gatewayEngineRequestsBusy": "Vẫn có yêu cầu đang chạy. Hãy thử lại sau khi hoàn tất.",
-      "gatewayEngineOperationBusy": "Dịch vụ đang thực hiện thao tác khác. Hãy thử lại sau ít phút.",
-      "gatewayEngineSwitchRestored": "Chuyển đổi thất bại. Đã khôi phục bộ máy trước đó.",
-      "gatewayEngineRestoreFailed": "Chuyển đổi thất bại và không thể khôi phục bộ máy trước đó. Hãy kiểm tra trạng thái dịch vụ trước khi thử lại.",
       "gatewayEngineStopped": "Dịch vụ API đã dừng. Hãy khởi động lại trước khi thử lại.",
       "gatewayGuideTitle": "Đổi cổng tại đây",
       "gatewayGuideDesc": "Mặc định dùng cổng mới. Nếu gặp vấn đề tương thích hoặc lỗi yêu cầu từ client, bạn có thể chuyển về cổng cũ tại đây.",
@@ -3118,7 +3324,7 @@
       "imageGenerationMainModel": {
         "label": "Mô hình chính tạo ảnh",
         "notice": "Không đổi mô hình chính tạo ảnh khi sử dụng thông thường.",
-        "hint": "Chỉ dùng để chuyển tiếp yêu cầu đến dịch vụ ảnh chính thức, không dùng để chọn mô hình tạo ảnh. Chỉ cập nhật thủ công khi mô hình chính của dịch vụ thay đổi. Để trống để dùng gpt-5.6-luna.",
+        "hint": "Chỉ dùng để tạo ảnh trong Responses, không áp dụng cho API ảnh độc lập. Để trống: gpt-5.6-luna.",
         "invalid": "Nhập ID mô hình không có khoảng trắng, tối đa 200 ký tự."
       },
       "requestDetail": {
@@ -3184,7 +3390,7 @@
       "resetCreditDialogDesc": "Đặt lại giới hạn tốc độ để tiếp tục làm việc không gián đoạn. Lượt đặt lại còn lại: {{count}}.",
       "resetCreditDialogAction": "Đặt lại mức dùng",
       "resetCreditNoCredits": "Không còn lượt đặt lại",
-      "resetCreditConsumed": "Đã đặt lại hạn mức 5 giờ",
+      "resetCreditConsumed": "Đã đặt lại hạn mức",
       "resetCreditFailed": "Đặt lại thất bại: {{error}}",
       "resetCreditRefreshAfterConsumeFailed": "Đã gửi đặt lại nhưng làm mới hạn mức thất bại: {{error}}",
       "resetCreditsTitleWithExpiry": "Lượt đặt lại còn lại cho cửa sổ 5 giờ: {{count}}. Hết hạn gần nhất: {{time}}",
@@ -3193,7 +3399,7 @@
       "resetCreditStatusRedeemed": "Đã dùng",
       "resetCreditStatusExpired": "Hết hạn",
       "resetCreditStatusUnknown": "Không rõ",
-      "resetCreditNextExpiry": "Hết hạn gần nhất: {{time}}",
+      "resetCreditNextExpiry": "Lần đặt lại hết hạn gần nhất {{time}}",
       "resetCreditDetailsTitle": "Chi tiết lượt đặt lại",
       "resetCreditNoRecords": "Chưa có bản ghi đặt lại",
       "resetCreditRecordsLoadFailed": "Không tải được bản ghi đặt lại: {{error}}",
@@ -3209,7 +3415,12 @@
       "codeReview": "Rà soát mã",
       "codeReviewShort": "Rà soát",
       "monthlyCreditsHint": "Tín dụng tháng còn lại",
-      "monthlyCreditsInline": "Tín dụng: {{value}}"
+      "monthlyCreditsInline": "Tín dụng: {{value}}",
+      "resetCreditExpiryHours": "{{hours}} giờ {{minutes}} phút",
+      "resetCreditExpiryMinutes": "{{minutes}} phút",
+      "resetCreditExpiryExpired": "Đã hết hạn · chi tiết",
+      "resetCreditExpiryUrgent": "Sắp hết hạn: {{time}} · {{duration}}",
+      "resetCreditExpiryNormal": "Hết hạn {{time}} · {{duration}}"
     },
     "quotaError": {
       "badge": "Lỗi quota",
@@ -3486,6 +3697,7 @@
         "expand": "Mở rộng",
         "collapse": "Thu gọn",
         "repairVisibility": "Sửa hiển thị",
+        "repairIndex": "Sửa chỉ mục trò chuyện",
         "restoreSessions": "Khôi phục phiên",
         "exportSessions": "Xuất phiên",
         "importSessions": "Nhập phiên",
@@ -3518,6 +3730,10 @@
         "clear": "Xóa"
       },
       "messages": {
+        "deleteNotConfirmed": "Ứng dụng chưa xác nhận xóa xong. Đã dừng dọn dẹp cục bộ và giữ lại bản sao lưu: {{error}}",
+        "historyReadFailed": "Không thể đọc lịch sử trò chuyện một cách an toàn: {{error}}",
+        "restoreIndexRetry": "Tệp trò chuyện được giữ lại nhưng không cập nhật được danh sách. Bản gốc vẫn ở trong Thùng rác. Hãy khắc phục sự cố rồi thử lại: {{error}}",
+        "importIndexRetry": "Đã nhập các tệp trò chuyện nhưng không cập nhật được danh sách. Các tệp và gói nhập được giữ lại. Hãy khắc phục sự cố rồi thử lại: {{error}}",
         "pickOne": "Vui lòng chọn ít nhất một phiên",
         "syncNeedTwo": "Cần ít nhất hai phiên bản để đồng bộ phiên",
         "pickRestoreOne": "Hãy chọn ít nhất một phiên để khôi phục",
@@ -3592,9 +3808,9 @@
         "providerLoadFailed": "Không tải được provider: {{error}}",
         "modeTitle": "Chế độ sửa",
         "modeQuick": "Sửa nhanh",
-        "modeQuickDesc": "Chuẩn hóa nhà cung cấp trong cơ sở dữ liệu chính thức và chỉ mục phiên. Giữ nguyên tệp rollout. Phù hợp khi đổi tài khoản thông thường.",
+        "modeQuickDesc": "Sửa chỉ mục và liên kết hiện tại trong thời gian ngắn. Thoát phiên bản đích để ghi siêu dữ liệu dự án.",
         "modeDeep": "Sửa đầy đủ",
-        "modeDeepDesc": "Sửa nhà cung cấp cũ, danh mục, không gian làm việc và chỉ mục tác nhân con. Giữ nguyên tệp rollout. Hãy đóng phiên bản đích trước.",
+        "modeDeepDesc": "Gồm sửa nhanh, khôi phục dự án từ bản lưu và sửa chỉ mục hội thoại. Thoát phiên bản đích trước khi áp dụng.",
         "scopeTitle": "Phạm vi phiên",
         "scopeAll": "Tất cả phiên",
         "scopeAllDesc": "Sửa {{count}} phiên trong danh sách hiện tại.",
@@ -3626,9 +3842,26 @@
         "previewFailedWithError": "Xem trước sửa phiên thất bại: {{error}}",
         "confirmRepair": "Xác nhận sửa",
         "title": "Sửa lịch sử",
-        "description": "Chuẩn hóa nhà cung cấp trong chỉ mục SQLite, danh mục phiên và không gian làm việc. Giữ nguyên từng byte của tệp rollout; chỉ sửa thời gian tệp. Tạo bản sao lưu cục bộ trước khi sửa.",
+        "description": "Sửa nhanh khôi phục chỉ mục hiển thị và liên kết dự án hiện tại. Sửa đầy đủ còn dùng bản lưu cũ và sửa chỉ mục hội thoại. Tạo bản sao cục bộ trước khi ghi và giữ nguyên nội dung nhật ký.",
         "stopInstanceHint": "Hãy thoát hoàn toàn phiên bản Codex App/ChatGPT đã chọn trước khi sửa đầy đủ. Bạn vẫn có thể xem trước thay đổi.",
-        "encryptedContentWarning": "Đã phát hiện lịch sử được mã hóa bởi nhà cung cấp hoặc tài khoản khác. Có thể di chuyển siêu dữ liệu, nhưng việc tiếp tục hoặc nén các phiên đó vẫn có thể thất bại; hãy quay lại nhà cung cấp/tài khoản gốc hoặc mở phiên mới."
+        "encryptedContentWarning": "Đã phát hiện lịch sử được mã hóa bởi nhà cung cấp hoặc tài khoản khác. Có thể di chuyển siêu dữ liệu, nhưng việc tiếp tục hoặc nén các phiên đó vẫn có thể thất bại; hãy quay lại nhà cung cấp/tài khoản gốc hoặc mở phiên mới.",
+        "modeHistory": "Sửa chỉnh sửa/nhánh",
+        "modeHistoryDesc": "Khắc phục lỗi sửa tin nhắn và tạo nhánh trò chuyện do chỉ mục không hợp lệ.",
+        "historyLiveHint": "Có thể sửa khi ứng dụng khách đang chạy. Sau đó, hãy khởi động lại ứng dụng khách và mở lại các cuộc trò chuyện.",
+        "historyDescription": "Kiểm tra các cuộc trò chuyện đã chọn và lịch sử gốc, chỉ đặt lại các chỉ mục phân trang không hợp lệ. Tin nhắn, tài khoản và cài đặt Provider được giữ nguyên. Có thể sửa khi ứng dụng khách đang chạy; sau đó khởi động lại để tải lại chỉ mục.",
+        "historyPreview": "Tìm thấy {{count}} chỉ mục lịch sử bị lỗi có thể tạo lại. Bản ghi trò chuyện được giữ nguyên.",
+        "historySuccess": "Đã đặt lại {{count}} chỉ mục lịch sử không hợp lệ. Hãy khởi động lại ứng dụng khách và mở lại các cuộc trò chuyện để tạo lại chỉ mục. Các bản sao lưu đã được giữ lại.",
+        "historyNoChanges": "Không tìm thấy chỉ mục lịch sử bị lỗi nào có thể tạo lại an toàn.",
+        "historyFailed": "Chưa hoàn tất sửa chỉ mục lịch sử: {{error}}",
+        "historyChanged": "Dữ liệu trò chuyện đã thay đổi trong lúc sửa. Lần sửa này chưa được áp dụng. Hãy thử lại sau ít phút.",
+        "historyScan": "Đang kiểm tra chỉ mục lịch sử ({{current}}/{{total}})…",
+        "historyReset": "Đang sao lưu và đặt lại chỉ mục bị lỗi…",
+        "projectsChanged": "Dữ liệu dự án đã thay đổi. Hãy xem trước lại rồi thử lại.",
+        "projectsFailed": "Không thể khôi phục dự án cục bộ: {{error}}",
+        "projectsPreview": "Xem trước: {{projects}} dự án, {{assignments}} liên kết; bỏ qua {{skipped}} dự án và {{ambiguous}} hội thoại không rõ liên kết.",
+        "projectsSuccess": "Đã khôi phục: {{projects}} dự án, {{assignments}} liên kết; bỏ qua {{skipped}} dự án và {{ambiguous}} hội thoại không rõ liên kết.",
+        "projectsPending": "Lần khôi phục trước bị gián đoạn. Thoát phiên bản đích và chạy sửa đầy đủ để khôi phục các thao tác ghi chưa hoàn tất.",
+        "projectsDeferred": "Một số siêu dữ liệu đã được hoãn. Thoát phiên bản đích rồi thử sửa nhanh lại hoặc dùng sửa đầy đủ."
       },
       "importModal": {
         "title": "Nhập phiên",
@@ -4028,7 +4261,7 @@
         "apiKeyUrlInvalid": "Dùng URL quản lý HTTP(S) không chứa thông tin xác thực; nhập khóa API vào trường khóa."
       },
       "saveSuccess": "Đã lưu nhà cung cấp mô hình.",
-      "deleteBlocked": "Nhà cung cấp này đang được liên kết với {{count}} tài khoản nên không thể xóa.",
+      "confirmDeleteWithAccounts": "Xóa nhà cung cấp “{{name}}” và {{count}} tài khoản liên kết?",
       "confirmDelete": "Xóa nhà cung cấp \"{{name}}\"?",
       "deleteFailed": "Không thể xóa nhà cung cấp: {{error}}",
       "deleteApiKeyFailed": "Không thể xóa API Key: {{error}}",
@@ -4052,7 +4285,9 @@
         "chatCompletions": "Giao thức Chat Completions",
         "deepseekResponsesHint": "Khởi động DeepSeek để chọn cổng kết nối hoặc kết nối trực tiếp chính thức, sau đó chọn Flash hoặc Pro. Cổng kết nối liệt kê mô hình trong Codex; kết nối trực tiếp bỏ qua cổng.",
         "deepseekChatHint": "DeepSeek Chat Completions dùng cầu cổng cục bộ cho các đường dẫn cũ. Chọn Responses khi bạn cần hành vi công cụ chính thức của Codex.",
-        "deepseekThirdPartyHint": "Địa chỉ này không phải điểm cuối DeepSeek chính thức nên sẽ được xử lý như điểm cuối tương thích của bên thứ ba; hãy nhập ID mô hình thật từ upstream thay vì tên mô hình chính thức."
+        "deepseekThirdPartyHint": "Địa chỉ này không phải điểm cuối DeepSeek chính thức nên sẽ được xử lý như điểm cuối tương thích của bên thứ ba; hãy nhập ID mô hình thật từ upstream thay vì tên mô hình chính thức.",
+        "anthropic": "Giao thức Anthropic",
+        "gatewayRequired": "Giao thức này cần cổng cục bộ. Chọn mô hình khởi chạy tại đây."
       },
       "selectSavedProvider": "Nhà cung cấp đã lưu",
       "selectSavedApiKey": "API Key đã lưu",
@@ -4156,7 +4391,7 @@
         "selectVisible": "Chọn mục đang hiển thị",
         "resultSelectedCount": "Đã chọn {{count}}",
         "selectFailed": "Chọn lỗi",
-        "deleteConfirm": "Xóa {{providerCount}} nhà cung cấp đã chọn? Thao tác này cũng xóa {{accountCount}} tài khoản Codex API Key được liên kết chính xác.",
+        "deleteConfirm": "Xóa {{providerCount}} nhà cung cấp đã chọn và {{accountCount}} tài khoản liên kết?",
         "deleteSuccess": "Đã xóa {{providerCount}} nhà cung cấp và {{accountCount}} tài khoản liên kết.",
         "deleteFailed": "Không thể xóa các mục đã chọn: {{error}}",
         "protocolSummary": "{{protocol}} · {{mode}} · {{model}}",
@@ -4285,7 +4520,22 @@
       "importConfigPlaceholder": "Dùng Sao chép cấu hình trên thẻ rồi dán nội dung vào đây",
       "importConfigAction": "Nhập cấu hình",
       "importConfigFromClipboard": "Đọc clipboard",
-      "settingsRestartHint": "Đã cập nhật cài đặt nhà cung cấp. Hãy khởi động lại phiên Codex hoặc dịch vụ API đang dùng nhà cung cấp này để áp dụng."
+      "settingsRestartHint": "Đã cập nhật cài đặt nhà cung cấp. Hãy khởi động lại phiên Codex hoặc dịch vụ API đang dùng nhà cung cấp này để áp dụng.",
+      "anthropic": {
+        "auth": "Xác thực",
+        "hint": "Kết nối cổng Anthropic Messages. Lấy danh sách hoặc nhập mô hình thủ công.",
+        "fetch": "Lấy mô hình",
+        "fetching": "Đang lấy…",
+        "fetchFailed": "Không lấy được mô hình. Hãy thử lại hoặc nhập mã mô hình thủ công.",
+        "import": "Nhập cấu hình",
+        "importFailed": "Không tìm thấy cấu hình Claude Code hoặc Desktop Gateway hợp lệ."
+      },
+      "editor": {
+        "modelScope": "Phạm vi mô hình",
+        "providerDefault": "Mặc định nhà cung cấp",
+        "sharedSettings": "Danh sách và khả năng của mô hình áp dụng cho phạm vi đã chọn. Giao thức, xác thực và địa chỉ là cài đặt chung của nhà cung cấp.",
+        "saveScope": "Lưu sẽ cập nhật nhà cung cấp và các tài khoản liên kết. Nếu tài khoản hiện tại bị ảnh hưởng, cấu hình và thông tin xác thực Codex cục bộ cũng được cập nhật. Ứng dụng khách không tự khởi chạy."
+      }
     },
     "quickSwitch": {
       "action": "Chuyển nhanh nhà cung cấp",
@@ -4614,6 +4864,11 @@
       },
       "routing": {
         "optionsTitle": "Tùy chọn định tuyến",
+        "sessionIdentityMapping": "Ánh xạ ID phiên",
+        "sessionIdentityMappingEnableHint": "Khi bật ánh xạ, mỗi tài khoản dịch vụ đầu nguồn sử dụng Session-Id và Thread-Id riêng khi chuyển tài khoản. Điều này tăng tính tách biệt của mã định danh nhưng có thể giảm khả năng tái sử dụng bộ nhớ đệm giữa các tài khoản. Trong cùng một tài khoản, các ánh xạ hiện có vẫn được tái sử dụng.",
+        "sessionIdentityMappingDisableHint": "Khi tắt ánh xạ, Session-Id và Thread-Id gốc của máy khách được giữ nguyên. Các tài khoản dịch vụ đầu nguồn khác nhau có thể dùng chung mã định danh, làm giảm tính tách biệt nhưng có thể tăng khả năng tái sử dụng bộ nhớ đệm giữa các tài khoản.",
+        "sessionIdentityMappingCacheNote": "Tỷ lệ trúng bộ nhớ đệm còn phụ thuộc vào quy tắc dịch vụ đầu nguồn, phạm vi tài khoản và nội dung yêu cầu. Thay đổi cài đặt này không bảo đảm tỷ lệ sẽ tăng hoặc giảm.",
+        "sessionIdentityMappingSaveNote": "Sau khi xác nhận, hãy lưu cài đặt để áp dụng thay đổi.",
         "sessionAffinity": "Gắn phiên",
         "sessionAffinityTtl": "Thời gian hết hạn (giây)",
         "responsesWebsockets": "Responses qua WebSocket",
@@ -4634,6 +4889,8 @@
         "allKinds": "Mọi loại",
         "allStatuses": "Mọi trạng thái",
         "allGatewayModes": "Tat ca che do",
+        "sessionFilter": "Phiên",
+        "sessionPlaceholder": "ID phiên",
         "modelFilter": "Mô hình",
         "modelPlaceholder": "ID mô hình",
         "accountFilter": "Tài khoản",
@@ -5001,7 +5258,7 @@
       "boundProxyUnavailable": "Tài khoản đã liên kết không có proxy khả dụng. Hãy chọn lại.",
       "sourceUnavailable": "Nguồn proxy hoặc nút không khả dụng. Hãy chọn lại.",
       "operationTimeout": "Thao tác proxy đã hết thời gian chờ. Vui lòng thử lại.",
-      "cardScopeHint": "Proxy của thẻ này được dùng cho ứng dụng Codex trên máy tính được khởi chạy. Kết nối của cổng mô hình đến nhà cung cấp vẫn giữ tuyến riêng.",
+      "cardScopeHint": "Proxy của tài khoản API Key áp dụng cho cả ứng dụng máy tính và yêu cầu từ dịch vụ API đến nhà cung cấp. Proxy của thẻ dịch vụ API chỉ áp dụng cho ứng dụng máy tính. Không thay đổi proxy hệ thống.",
       "display": {
         "title": "Hiển thị proxy",
         "compact": "Gọn",
@@ -5302,7 +5559,7 @@
       "modeDefaultHint": "Tài khoản này không dùng proxy và giữ lối ra mặc định trước đó.",
       "modeStaleHint": "Nguồn hoặc nút đã liên kết không còn khả dụng. Hãy chọn lại.",
       "management": "Quản lý proxy",
-      "managementHint": "Thiết lập proxy cho thẻ tài khoản OAuth, API và dịch vụ API mà không đổi proxy hệ thống. Với thẻ API, proxy áp dụng cho ứng dụng máy tính được khởi chạy; cổng mô hình giữ tuyến riêng.",
+      "managementHint": "Proxy của tài khoản API Key áp dụng cho cả ứng dụng máy tính và yêu cầu từ dịch vụ API đến nhà cung cấp. Proxy của thẻ dịch vụ API chỉ áp dụng cho ứng dụng máy tính. Không thay đổi proxy hệ thống.",
       "emptyTitle": "Kết nối riêng cho tài khoản",
       "emptyDescription": "Chưa có thẻ tài khoản được hỗ trợ. Thêm tài khoản OAuth hoặc API, hoặc bật thẻ dịch vụ API, rồi chọn proxy tại đây.",
       "search": "Tìm tài khoản",
@@ -5416,7 +5673,7 @@
         "subscriptionUrl": "URL đăng ký",
         "nodeLinks": "Liên kết nút hoặc cấu hình",
         "import": "Nhập",
-        "importNotice": "URL và thông tin xác thực được mã hóa cục bộ. Yêu cầu đăng ký gửi tới nhà cung cấp không kèm Token tài khoản.",
+        "importNotice": "Bản chụp cấu hình và tài nguyên được lưu mã hóa, rồi giải mã trong thư mục chạy riêng. Yêu cầu đăng ký và tài nguyên không kèm mã thông báo tài khoản.",
         "intro": "Nhập và kiểm tra gói đăng ký hoặc nút, sau đó chọn và liên kết từ danh sách tài khoản.",
         "emptyTitle": "Thêm proxy đầu tiên",
         "emptyHint": "Hỗ trợ đăng ký, liên kết nút và HTTP / SOCKS5. Có thể nhập và kiểm tra khi chưa có tài khoản.",
@@ -5461,7 +5718,7 @@
         "unsupported": "Chưa hỗ trợ",
         "invalidInput": "Nhập tên và URL, liên kết nút hoặc cấu hình proxy hợp lệ.",
         "downloadFailed": "Không tải được đăng ký. Kiểm tra mạng và cài đặt proxy rồi thử lại.",
-        "downloadRedirect": "Đã dừng tải đăng ký do chuyển hướng khác nguồn hoặc quá nhiều lần chuyển hướng.",
+        "downloadRedirect": "Chuyển hướng đăng ký không hợp lệ hoặc vượt quá giới hạn cho phép.",
         "downloadDenied": "Máy chủ đăng ký từ chối truy cập (HTTP 401/403). Kiểm tra liên kết và thời hạn hiệu lực.",
         "downloadTls": "Bắt tay TLS hoặc xác minh chứng chỉ của kết nối đăng ký thất bại. Kiểm tra mạng và cài đặt proxy.",
         "timeout": "Thao tác quá hạn. Làm mới để xác nhận kết quả trước khi thử lại.",
@@ -5479,6 +5736,7 @@
         "loadBalanceGroup": "Cân bằng tải",
         "reasonStrategy": "Chưa hỗ trợ chiến lược nhóm này. Mở rộng để chọn nút khả dụng.",
         "reasonOptions": "Chứa giao thức hoặc tùy chọn cấu hình chưa được hỗ trợ.",
+        "reasonProviderConfig": "Nguồn, bộ lọc hoặc cấu hình chuyển đổi của nhà cung cấp này chưa được hỗ trợ.",
         "reasonProvider": "Nhóm này cần các nhà cung cấp nút bên ngoài chưa được tải.",
         "reasonMembers": "Thành viên nhóm không vượt qua xác thực. Hãy xem lý do cụ thể.",
         "reasonInvalid": "Thiếu cài đặt bắt buộc hoặc cài đặt không hợp lệ.",
@@ -5500,6 +5758,14 @@
         "defaultProtocol": "Giao thức khi bỏ trống",
         "credentialFormat": "Định dạng đăng nhập",
         "recognizing": "Đang nhận diện…",
+        "nativePreview": "Khi nhập, Mihomo xử lý trực tiếp cấu hình và tải tài nguyên. Bản xem trước không truy cập tệp hoặc mạng.",
+        "resourceDirectory": "Thư mục tài nguyên",
+        "browseResources": "Chọn thư mục",
+        "resourceDirectoryHint": "Nếu có tệp cục bộ, hãy chọn thư mục tài nguyên của đăng ký. Nội dung được sao chép vào thư mục chạy riêng và lưu dưới dạng bản chụp mã hóa.",
+        "resourceDirectoryRequired": "Chọn thư mục tài nguyên cục bộ của đăng ký này.",
+        "resourceMissing": "Tài nguyên cục bộ không khả dụng. Kiểm tra thư mục hoặc nhập lại.",
+        "rulesName": "Quy tắc đăng ký",
+        "pendingProviders": "Khi nhập sẽ tải {{count}} nguồn nút từ xa. Bản xem trước không tải chúng xuống.",
         "previewCount": "Hợp lệ {{valid}} · Cần kiểm tra {{invalid}} · Trùng {{duplicates}}",
         "line": "Dòng {{line}}",
         "ambiguous": "Định dạng không rõ ràng. Chọn định dạng đăng nhập hoặc dùng URL proxy đầy đủ.",
@@ -5601,7 +5867,7 @@
         "assign": "Chỉ định proxy",
         "specific": "Tài khoản đã chọn",
         "shared": "Proxy dùng chung",
-        "sharedHint": "Các thẻ được hỗ trợ không có proxy riêng sẽ dùng proxy này, kể cả thẻ mới. Cài đặt riêng và Không dùng proxy được ưu tiên. Thẻ API dùng cho ứng dụng máy tính; cổng mô hình giữ tuyến riêng.",
+        "sharedHint": "Các tài khoản không có proxy riêng sẽ kế thừa proxy này, kể cả tài khoản mới. Proxy riêng và Không dùng proxy được ưu tiên. Tài khoản API Key dùng cho cả ứng dụng máy tính và yêu cầu API; thẻ dịch vụ API chỉ dùng cho ứng dụng máy tính.",
         "apply": "Chỉ định"
       },
       "managerResources": {
@@ -5711,6 +5977,14 @@
       }
     },
     "requestDiagnostics": {
+      "requestSizeTitle": "Kích thước yêu cầu",
+      "requestSizeHint": "Kích thước JSON máy khách sau giải nén; các trường tính bằng byte JSON thu gọn. Chỉ ghi kích thước.",
+      "requestBytes": "Yêu cầu",
+      "historyBytes": "Lịch sử",
+      "toolsBytes": "Công cụ",
+      "instructionsBytes": "Chỉ dẫn",
+      "overloadRetry": "Thử lại khi quá tải",
+      "overloadRecovery": "Thời gian khôi phục",
       "recordPayloads": "Ghi nội dung yêu cầu",
       "recordPayloadsHint": "Mặc định tắt. Lưu cục bộ bản chụp có giới hạn của yêu cầu từ máy khách và gửi lên máy chủ. Tắt sẽ ngừng ghi mới; nội dung đã lưu có thể xóa riêng.",
       "privacyHint": "Các trường xác thực được che, nhưng bí mật trong hội thoại có thể vẫn còn. Kiểm tra trước khi sao chép hoặc chia sẻ.",
@@ -5720,7 +5994,7 @@
       "title": "Chi tiết yêu cầu",
       "totalLatency": "Tổng thời gian",
       "firstResponse": "Phản hồi đầu",
-      "firstResponseHint": "Thời gian từ lúc bắt đầu yêu cầu đến đoạn phản hồi đầu tiên của máy chủ, không nhất thiết là token đầu tiên được tạo.",
+      "firstResponseHint": "Với yêu cầu Responses phát trực tuyến mới, thời gian được tính từ khi cổng xử lý xong nội dung yêu cầu đến sự kiện phản hồi đầu tiên từ máy chủ nguồn, bỏ qua tín hiệu duy trì kết nối và thông báo giới hạn tốc độ.",
       "unavailable": "Chưa có chẩn đoán. Hãy làm mới sau. Yêu cầu cũ không được ghi bổ sung.",
       "attempts": "Các lần thử",
       "noAttempts": "Không có lịch sử thử được ghi lại.",
@@ -5885,6 +6159,54 @@
       "label": "Đồng bộ hạn mức",
       "description": "Không cần chạy dịch vụ API. Tài khoản cục bộ đang hoạt động được cập nhật mỗi 5–30 giây; thay đổi tệp phiên sẽ kích hoạt kiểm tra bổ sung. Chỉ kiểm tra siêu dữ liệu tệp gần đây, không đọc nội dung hội thoại. Giữ nguyên loại trừ tài khoản, bộ lọc gói và quy tắc nhóm. Mặc định tắt.",
       "error": "Không thể tải hoặc lưu cài đặt. Vui lòng thử lại."
+    },
+    "pathRecovery": {
+      "title": "Đặt đường dẫn mở Codex",
+      "description": "Không tìm thấy đường dẫn ứng dụng Codex hợp lệ. Hãy chọn ứng dụng hoặc mở Codex thủ công rồi dò tìm.",
+      "reload": "Tải lại",
+      "timeout": "Thao tác đã hết thời gian chờ. Hãy thử lại; quá trình khởi động sẽ không tự tiếp tục.",
+      "noCandidates": "Không phát hiện Codex. Hãy mở ứng dụng thủ công rồi dò lại, hoặc chọn đường dẫn.",
+      "pathRequired": "Hãy chọn hoặc nhập đường dẫn ứng dụng Codex.",
+      "invalidPath": "Đường dẫn này không trỏ đến ứng dụng Codex trên máy tính hợp lệ. Hãy chọn lại ứng dụng.",
+      "candidates": "Ứng dụng được phát hiện",
+      "autoLaunchHint": "Tắt tùy chọn này nếu chỉ cần đổi tài khoản mà không mở ứng dụng trên máy tính. Bạn vẫn có thể mở thủ công.",
+      "manualLaunchHint": "Tắt tự khởi động không hoàn tất lần mở thủ công này. Chỉ lưu cài đặt sẽ hủy lần khởi động này.",
+      "saveAndRetry": "Lưu và thử lại",
+      "saveWithoutLaunch": "Lưu và tiếp tục",
+      "saveOnly": "Chỉ lưu cài đặt",
+      "validationBusy": "Đường dẫn trước vẫn đang được kiểm tra. Vui lòng thử lại sau giây lát."
+    },
+    "openaiUsage": {
+      "monthCost": "Chi phí tháng",
+      "scope": "Chi phí tổ chức; yêu cầu và token chỉ gồm API văn bản. Thống kê theo UTC.",
+      "loading": "Đang tải mức dùng OpenAI…",
+      "pending": "Đang chờ mức dùng OpenAI",
+      "permissionRequired": "Khóa này không có quyền đọc mức dùng của tổ chức (api.usage.read).",
+      "permissionGuide": "Dùng khóa quản trị: Admin keys → Restricted → Usage API Scope → Read. Truy vấn chi phí và mức dùng, không cung cấp số dư còn lại.",
+      "openAdminKeys": "Tạo khóa quản trị",
+      "invalidKey": "Khóa tra cứu không hợp lệ hoặc đã hết hạn. Hãy kiểm tra khóa API quản trị.",
+      "networkFailed": "Không thể kết nối dịch vụ mức dùng OpenAI. Hãy làm mới sau.",
+      "queryFailed": "Không truy vấn được mức dùng OpenAI. Hãy thử lại sau.",
+      "organization": "Mức dùng tổ chức",
+      "configure": "Thiết lập tra cứu",
+      "settings": "Cài đặt tra cứu",
+      "title": "Thiết lập tra cứu mức dùng",
+      "optional": "Tra cứu mức dùng (tùy chọn)",
+      "queryKey": "Khóa API quản trị",
+      "callKey": "Khóa API mô hình",
+      "notConfigured": "Thêm khóa quản trị để xem chi phí và mức dùng của tổ chức.",
+      "purpose": "Dùng khóa quản trị cùng tổ chức với khóa mô hình. Khóa này chỉ dùng để tra cứu mức dùng, không thay thế khóa mô hình.",
+      "saveVerify": "Lưu và kiểm tra",
+      "remove": "Xóa cấu hình",
+      "keyRequired": "Nhập khóa API quản trị.",
+      "saveFailed": "Không thể lưu cài đặt tra cứu. Vui lòng thử lại.",
+      "configChanged": "Tài khoản hoặc khóa tra cứu đã thay đổi. Hãy mở lại cài đặt.",
+      "openFailed": "Không thể mở trang khóa. Vui lòng thử lại.",
+      "costUnavailable": "Chưa có",
+      "costUnavailableHint": "API chi phí chính thức chưa trả về số tiền cho khoảng thời gian này. Số yêu cầu và token đến từ API mức dùng riêng; không có số tiền không có nghĩa là chi phí bằng không."
+    },
+    "officialApi": {
+      "hint": "Tài khoản dùng khóa API chính thức của OpenAI, được xác định theo địa chỉ kết nối thực tế."
     }
   },
   "githubCopilot": {
@@ -6151,6 +6473,10 @@
       "title": "Cài đặt WorkBuddy",
       "appPath": "Đường dẫn WorkBuddy"
     },
+    "minimaxCode": {
+      "title": "Cài đặt MiniMax Code",
+      "appPath": "Đường dẫn MiniMax Code"
+    },
     "zcode": {
       "title": "Cài đặt ZCode",
       "appPath": "Đường dẫn ZCode"
@@ -6375,8 +6701,9 @@
       "desc": "Dán mã thông báo truy cập Kiro của bạn hoặc dữ liệu JSON đã xuất."
     },
     "import": {
-      "localDesc": "Nhập dữ liệu tài khoản Kiro từ ứng dụng khách Kiro cục bộ hoặc tệp JSON.",
-      "localClient": "Nhập khẩu từ Kiro địa phương"
+      "localDesc": "Nhập từ ứng dụng cục bộ hoặc JSON. Tài khoản JSON được lưu trước, sau đó trạng thái đăng nhập và hạn mức được cập nhật trong nền.",
+      "localClient": "Nhập khẩu từ Kiro địa phương",
+      "invalidCredentials": "Thiếu trường thông tin xác thực hoặc trường không được hỗ trợ. Hãy xuất lại tài khoản."
     },
     "injectToVSCode": "Chuyển sang Kiro"
   },
@@ -6890,6 +7217,17 @@
       "resetUnknown": "Khong ro thoi gian dat lai",
       "statusUnknown": "Trang thai: chua ro",
       "statusNormal": "Trang thai: binh thuong",
+      "statusSynced": "Trạng thái: đã đồng bộ",
+      "statusSyncedPending": "Trạng thái: đã đồng bộ, còn lại chưa xác nhận",
+      "fastAvailable": "Nhanh còn {{times}}",
+      "fastTimes": "{{count}} lần",
+      "fastUnlimited": "Không giới hạn",
+      "fastPerMonth": "Nhanh/tháng: {{count}}",
+      "fastChannelPerMonth": "Express: {{count}}/tháng",
+      "fastChannelStatus": "Kênh nhanh: {{status}}",
+      "freeRemainingUnknown": "Free còn: --",
+      "timesRemainingUnknown": "Còn lại: --",
+      "soloParallel": "Gói: Solo ×{{count}}",
       "statusExhaustedFree": "Trang thai: da het muc dung, nen nang cap goi",
       "statusExhaustedPro": "Trang thai: da het muc dung, hay nang cap goi hoac bat thanh toan theo muc dung",
       "bonusUsed": "Thuong them: +{{amount}}",
@@ -6902,17 +7240,8 @@
       "payAsYouGoEnabled": "Thanh toan theo muc dung: da bat",
       "payAsYouGoEmpty": "Thanh toan theo muc dung: --",
       "payAsYouGoLabel": "Su dung theo nhu cau",
-      "statusSynced": "Trạng thái: đã đồng bộ",
-      "statusSyncedPending": "Trạng thái: đã đồng bộ, còn lại chưa xác nhận",
-      "fastAvailable": "Nhanh còn {{times}}",
-      "fastTimes": "{{count}} lần",
-      "fastUnlimited": "Không giới hạn",
-      "fastPerMonth": "Nhanh/tháng: {{count}}",
-      "fastChannelPerMonth": "Express: {{count}}/tháng",
-      "fastChannelStatus": "Kênh nhanh: {{status}}",
-      "freeRemainingUnknown": "Free còn: --",
-      "timesRemainingUnknown": "Còn lại: --",
-      "soloParallel": "Gói: Solo ×{{count}}"
+      "creditsMember": "Tín dụng thành viên",
+      "creditsBonus": "Tín dụng thưởng"
     },
     "flowNotice": {
       "title": "Huong dan tai khoan Trae (nhan de mo rong/thu gon)",
@@ -6928,6 +7257,18 @@
     "token": {
       "jsonOnlyDesc": "Dán JSON tài khoản Trae CN đầy đủ. Không hỗ trợ token thô.",
       "jsonOnlyPlaceholder": "JSON Trae CN đầy đủ..."
+    },
+    "checkin": {
+      "modalTitle": "Điểm danh hàng ngày",
+      "durationMs": "{{ms}} ms",
+      "durationSeconds": "{{seconds}} giây",
+      "durationTitle": "Tổng thời gian check-in",
+      "logSuccess": "Thành công ({{done}}/{{total}})",
+      "logPartial": "Một phần ({{done}}/{{total}})",
+      "logIncomplete": "Chưa hoàn tất",
+      "detailSuccess": "Check-in thành công",
+      "detailAlreadyClaimed": "Đã nhận hôm nay",
+      "detailError": "Lỗi check-in"
     }
   },
   "codebuddyCn": {
@@ -6957,6 +7298,35 @@
     "syncToWorkbuddy": "Đồng bộ tới WorkBuddy"
   },
   "workbuddy": {
+    "credits": {
+      "planBase": "Điểm cơ bản của gói",
+      "planBonus": "Điểm tặng kèm gói",
+      "benefit": "Điểm thưởng nền tảng",
+      "addon": "Điểm đã mua",
+      "total": "Tổng điểm còn lại",
+      "details": "Chi tiết điểm",
+      "usedOf": "Đã dùng {{used}}/{{total}}",
+      "remainingPercent": "Còn {{percent}}%",
+      "nearestExpiry": "Hết hạn gần nhất {{time}}",
+      "nextRefresh": "Lần làm mới tiếp theo {{time}}",
+      "expiring": "Có điểm sắp hết hạn",
+      "valid": "Còn hạn",
+      "expired": "Hết hạn",
+      "expiresAt": "Hết hạn lúc {{time}}",
+      "expiryHours": "Hết hạn trong 24 giờ",
+      "expiryDays": "Hết hạn trong 3 ngày",
+      "empty": "Không có dữ liệu",
+      "loadFailed": "Không tải được ({{error}})",
+      "overview": "Tổng quan",
+      "remaining": "Còn {{amount}}",
+      "loadMore": "Tải thêm",
+      "usage": "Chi tiết tiêu hao",
+      "requestAndTime": "Yêu cầu và thời gian",
+      "creditUsed": "Điểm đã dùng",
+      "model": "Mô hình",
+      "recentUsage": "5 mục gần nhất",
+      "viewMore": "Xem thêm"
+    },
     "title": "Quản lý tài khoản WorkBuddy",
     "noAccounts": "Chưa có tài khoản WorkBuddy",
     "addAccount": "Thêm tài khoản WorkBuddy",
@@ -6964,7 +7334,7 @@
       "title": "Hướng dẫn quản lý tài khoản WorkBuddy (bấm để mở rộng/thu gọn)",
       "desc": "Khi chuyển tài khoản, ứng dụng ghi tệp đăng nhập cục bộ theo bố cục mới nhất của ứng dụng WorkBuddy chính thức; nhập cục bộ đọc cùng tệp đó. Dữ liệu chỉ được xử lý cục bộ.",
       "permission": "Phạm vi quyền: đọc và ghi tệp đăng nhập WorkBuddy (CodeBuddyExtension/Data/Public/auth/workbuddy-desktop.info) để nhập cục bộ và chuyển tài khoản; state.vscdb cũ không còn được đọc hoặc sửa đổi.",
-      "network": "Phạm vi mạng: đăng nhập OAuth và làm mới Token cần gửi yêu cầu đến WorkBuddy; truy vấn hạn ngạch sẽ gọi API tính phí. Không tải lên tệp đăng nhập cục bộ hoặc thông tin xác thực thô."
+      "network": "Đăng nhập OAuth và làm mới mã thông báo cần kết nối với WorkBuddy. Số dư và chi tiết điểm được truy vấn từ dịch vụ thanh toán bằng mã thông báo của tài khoản. Tệp đăng nhập và khóa hệ thống được giữ trên thiết bị."
     },
     "nickname": "Biệt danh",
     "enterprise": "Doanh nghiệp",
@@ -6981,8 +7351,8 @@
       "oauth": {
         "title": "Chỉ ủy quyền thông tin đăng nhập IDE",
         "item1": "Sau khi hoàn tất OAuth trong trình duyệt, bạn có thể thêm tài khoản và dùng để chuyển IDE.",
-        "item2": "Tham số truy vấn hạn ngạch sẽ không được liên kết tự động.",
-        "item3": "Nếu cần hiển thị hạn ngạch, hãy chạy thủ công \"Truy vấn hạn ngạch\" trên thẻ tài khoản."
+        "item2": "Số dư điểm được truy vấn tự động sau khi cấp quyền.",
+        "item3": "Thẻ tài khoản hiển thị tổng quan điểm. Mở chi tiết để xem từng khoản điểm và ngày hết hạn."
       }
     },
     "oauthWebviewTab": "Xác thực WebView",
@@ -7098,8 +7468,172 @@
       "startTime": "Thời gian bắt đầu",
       "endTime": "Thời gian kết thúc",
       "timeRangeHint": "Tự động chọn một thời điểm ngẫu nhiên mỗi ngày trong khoảng này để điểm danh chạy ngầm.",
+      "errors": "Lỗi",
+      "tabSettings": "Cài đặt điểm danh tự động",
+      "tabHistory": "Lịch sử điểm danh tự động",
+      "manualTest": "Chạy thử",
+      "clearLogs": "Xóa",
+      "clearLogsFailed": "Xóa lịch sử điểm danh thất bại: {{message}}",
+      "historyLoading": "Đang đọc lịch sử điểm danh tự động...",
+      "historyLoadFailed": "Đọc lịch sử điểm danh tự động thất bại: {{message}}",
+      "totalCredits": "{{credits}} điểm",
+      "historyRangeHint": "Chỉ giữ lại lịch sử điểm danh tự động trong 30 ngày gần đây (tổng cộng {{count}})",
+      "noHistory": "Không có lịch sử điểm danh tự động trong 30 ngày gần đây",
+      "saveFailed": "Lưu cài đặt điểm danh tự động thất bại: {{message}}",
+      "manualTestPartialFailure": "Điểm danh thất bại cho một số tài khoản. Xem lịch sử; hệ thống sẽ tự động thử lại sau.",
+      "manualTestAlreadyRunning": "Tác vụ điểm danh tự động đang chạy. Vui lòng xem lịch sử sau.",
+      "manualTestFailed": "Chạy thử thất bại: {{message}}",
       "timeRangeError": "Thời gian bắt đầu không thể sau thời gian kết thúc"
     }
+  },
+  "minimaxCode": {
+    "title": "Quản lý tài khoản MiniMax Code",
+    "noAccounts": "Chưa có tài khoản MiniMax Code",
+    "addAccount": "Thêm tài khoản MiniMax Code",
+    "flowNotice": {
+      "title": "Hướng dẫn quản lý tài khoản MiniMax Code (bấm để mở rộng/thu gọn)",
+      "desc": "Quản lý đăng nhập cục bộ và chuyển tài khoản MiniMax Code.",
+      "permission": "Đọc và ghi tệp đăng nhập chính thức. Mỗi phiên bản MiniMax Code dùng thư mục dữ liệu riêng.",
+      "network": "Chỉ gọi API chính thức của MiniMax để xác thực và lấy thông tin tài khoản, gói, điểm. Không tải lên tệp đăng nhập cục bộ."
+    },
+    "nickname": "Biệt danh",
+    "enterprise": "Doanh nghiệp",
+    "usage": "Trạng thái sử dụng",
+    "creditsBalance": "Số dư tín dụng",
+    "usageNormal": "Bình thường",
+    "usageAbnormal": "Bất thường",
+    "usageViewDetail": "Xem chi tiết",
+    "usageDetailTitle": "Chi tiết trạng thái sử dụng",
+    "oauthWaiting": "Đang chờ hoàn tất ủy quyền...",
+    "oauthDesc": "Bấm nút bên dưới để mở trang ủy quyền MiniMax Code trong trình duyệt.",
+    "oauthDescWebview": "Bấm nút bên dưới để mở trang ủy quyền MiniMax Code trong WebView tích hợp.",
+    "oauthFeature": {
+      "oauth": {
+        "title": "Chỉ ủy quyền thông tin đăng nhập IDE",
+        "item1": "Sau khi hoàn tất OAuth trong trình duyệt, bạn có thể thêm tài khoản và dùng để chuyển IDE.",
+        "item2": "Số dư tín dụng",
+        "item3": "Điểm đã mua · Điểm được tặng"
+      }
+    },
+    "oauthWebviewTab": "Xác thực WebView",
+    "oauthOpenWebview": "Mở trong WebView",
+    "oauthOpenWebviewIncognito": "Mở trong WebView ẩn danh",
+    "oauthOpenWebviewFailed": "Mở WebView thất bại: {{error}}",
+    "oauthOpenBrowserFallback": "Mở trong trình duyệt (dự phòng)",
+    "oauthOpenBrowserFailed": "Mở trình duyệt thất bại: {{error}}",
+    "oauthWebviewProgressHint": "Thanh bước ngang sẽ hiển thị ở đầu WebView để dễ xác định bước bị kẹt.",
+    "oauthFlow": {
+      "prepare": "Chuẩn bị liên kết ủy quyền",
+      "authorize": "Mở liên kết ủy quyền và xác nhận",
+      "bind": "Thăm dò kết quả ủy quyền và liên kết tài khoản",
+      "retryPrepare": "Tạo lại liên kết ủy quyền",
+      "retryAuthorize": "Yêu cầu lại liên kết ủy quyền",
+      "retryBind": "Thử lại thăm dò ủy quyền",
+      "error": "Lỗi quy trình: {{error}}"
+    },
+    "tokenDesc": "Dán access token của MiniMax Code:",
+    "jsonDesc": "Chọn tệp JSON chứa tài khoản MiniMax Code:",
+    "import": {
+      "localDesc": "Hỗ trợ nhập dữ liệu tài khoản từ ứng dụng MiniMax Code cục bộ hoặc từ tệp JSON.",
+      "localClient": "Nhập từ MiniMax Code cục bộ"
+    },
+    "search": "Tìm kiếm tài khoản MiniMax Code...",
+    "quotaQuery": {
+      "failedRefreshCompact": "Làm mới hạn ngạch thất bại",
+      "sectionTitle": "Truy vấn hạn ngạch",
+      "empty": "Chưa có thông tin truy vấn hạn ngạch được liên kết",
+      "packageUnknown": "Không rõ gói",
+      "quotaLabel": "Hạn ngạch còn lại",
+      "updatedAt": "Lần truy vấn gần nhất: {{time}}",
+      "cycleRange": "Chu kỳ: {{start}} - {{end}}",
+      "cycleUnknown": "Chưa có thông tin chu kỳ",
+      "expireAt": "Hết hạn lúc: {{time}}",
+      "expireUnknown": "Hết hạn: chưa có",
+      "packageTitle": {
+        "base": "Gói trải nghiệm cơ bản",
+        "activity": "Gói quà tặng sự kiện"
+      }
+    },
+    "extraCredit": {
+      "title": "Gói cộng thêm"
+    },
+    "oauthUrlInputPlaceholder": "Có thể nhập URL ủy quyền thủ công",
+    "oauthInvalidUrl": "Định dạng liên kết ủy quyền không đúng. Vui lòng nhập URL đầy đủ.",
+    "oauthGotoWebview": "Điều hướng WebView đã mở tới URL đã nhập",
+    "oauthGotoWebviewSuccess": "Đã yêu cầu WebView điều hướng tới URL đã nhập.",
+    "oauthGotoWebviewFailed": "Điều hướng WebView thất bại: {{error}}",
+    "oauthWebviewInlineUrlPlaceholder": "Nhập URL để điều hướng ngay trong WebView này",
+    "oauthWebviewInlineGo": "Đi",
+    "oauthSuccessClosePrompt": "Đã thêm tài khoản thành công. Đóng WebView này ngay bây giờ?\nChọn \"Đóng WebView\" để đóng ngay hoặc \"Để sau\" để giữ nguyên cửa sổ.",
+    "oauthSuccessCloseTitle": "Đã thêm tài khoản",
+    "oauthSuccessCloseNowLabel": "Đóng WebView",
+    "oauthSuccessCloseLaterLabel": "Để sau",
+    "oauthSuccessCloseNowStatus": "✅ Đã thêm tài khoản. Đang đóng cửa sổ...",
+    "oauthSuccessCloseLaterStatus": "✅ Đã thêm tài khoản. WebView này sẽ vẫn mở.",
+    "oauthWebviewOverlay": {
+      "steps": {
+        "prepare": "1 Chuẩn bị liên kết ủy quyền",
+        "authorize": "2 Mở liên kết ủy quyền và xác nhận",
+        "bind": "3 Thăm dò kết quả ủy quyền và liên kết tài khoản",
+        "complete": "5 Hoàn tất (đóng thủ công)"
+      },
+      "status": {
+        "loginConfirm": "Vui lòng hoàn tất đăng nhập và ủy quyền trên trang này."
+      }
+    },
+    "instances": {
+      "unsupported": {
+        "descPlatform": "Phiên bản đa phiên bản MiniMax Code chỉ được hỗ trợ trên macOS, Windows và Linux."
+      }
+    },
+    "quota": {
+      "usedOfTotal": "{{used}} / {{total}}​",
+      "noPlan": "Chưa đăng ký M Plan",
+      "purchased": "Điểm đã mua",
+      "gifted": "Điểm được tặng"
+    },
+    "checkin": {
+      "title": "Điểm danh hằng ngày",
+      "modalTitle": "Điểm danh hằng ngày",
+      "status": "Trạng thái điểm danh",
+      "checkedIn": "Đã điểm danh",
+      "notCheckedIn": "Chưa điểm danh",
+      "button": "Điểm danh",
+      "button.loading": "Đang điểm danh...",
+      "done": "Hoàn tất",
+      "success": "Điểm danh thành công! Chuỗi {{days}} ngày",
+      "failure": "Điểm danh thất bại: {{message}}",
+      "failure.network": "Lỗi mạng, vui lòng thử lại sau",
+      "lastCheckin": "Lần điểm danh gần nhất: {{time}}",
+      "streak": "Chuỗi {{days}} ngày",
+      "reward": "Phần thưởng: {{reward}}",
+      "refreshStatus": "Làm mới",
+      "checkAll": "Điểm danh tất cả",
+      "noAccounts": "Không có tài khoản",
+      "querying": "Đang tải...",
+      "streakDays": "{{days}} ngày",
+      "streakRewardCountdown": "Còn {{days}} ngày nữa để nhận thưởng bonus",
+      "streakRewardToday": "Hôm nay có thể nhận thưởng bonus!",
+      "recentDates": "Gần đây: ",
+      "claimed": "Đã nhận",
+      "queryFailed": "Truy vấn thất bại",
+      "retry": "Thử lại",
+      "inactive": "Không khả dụng",
+      "inactiveHint": "Check-in không hoạt động với tài khoản này",
+      "autoCheckinSettings": "Cài đặt điểm danh tự động",
+      "autoCheckinLabel": "Điểm danh tự động",
+      "autoCheckinOff": "Điểm danh tự động tắt",
+      "autoCheckinEnabledHint": "Điểm danh tự động bật: Điểm danh ngẫu nhiên từ {{start}} đến {{end}}",
+      "autoCheckinDisabledHint": "Điểm danh tự động tắt",
+      "enableAutoCheckin": "Bật điểm danh tự động",
+      "enableAutoCheckinDesc": "Tự động điểm danh ngẫu nhiên mỗi ngày trong khoảng thời gian quy định",
+      "randomTimeRange": "Khoảng thời gian điểm danh ngẫu nhiên",
+      "startTime": "Thời gian bắt đầu",
+      "endTime": "Thời gian kết thúc",
+      "timeRangeHint": "Tự động chọn một thời điểm ngẫu nhiên mỗi ngày trong khoảng này để điểm danh chạy ngầm.",
+      "timeRangeError": "Thời gian bắt đầu không thể sau thời gian kết thúc"
+    },
+    "placeholder": "Quản lý tài khoản MiniMax Code sẽ sớm ra mắt."
   },
   "zcode": {
     "search": "Tìm tài khoản ZCode...",
@@ -7357,7 +7891,29 @@
     "continueMigrationScan": "Tiếp tục quét",
     "savePartialMigrationBatch": "Lưu một phần",
     "saveCompleteMigrationBatch": "Lưu toàn bộ",
-    "clearMigrationBatch": "Xóa lô"
+    "clearMigrationBatch": "Xóa lô",
+    "searchPlaceholder": "Tìm tài khoản hoặc loại",
+    "noSearchResults": "Không có tài khoản hoặc loại phù hợp",
+    "exportMigrationQr": "Xuất mã QR chuyển tài khoản",
+    "exportBackup": "Xuất bản sao lưu",
+    "importBackup": "Nhập bản sao lưu",
+    "batchDelete": "Xóa mục đã chọn",
+    "exportBackupHint": "Xuất bản sao lưu JSON của tất cả bản ghi đã lưu, không phụ thuộc vào tìm kiếm hay lựa chọn.",
+    "editAccountHint": "Dùng định dạng Loại:tài khoản, ví dụ OpenAI:alice@example.com",
+    "migrationTitle": "Xuất mã QR chuyển tài khoản",
+    "migrationSelectedSummary": "Xuất {{count}} tài khoản đã chọn.",
+    "migrationAllSummary": "Xuất toàn bộ {{count}} tài khoản đã lưu, không phụ thuộc vào tìm kiếm.",
+    "migrationWarning": "Các mã QR này chứa khóa bí mật 2FA. Hãy bảo quản an toàn.",
+    "migrationPage": "Mã QR {{current}} / {{total}} · Mã này chứa {{count}} tài khoản",
+    "migrationPrevious": "Trước",
+    "migrationNext": "Tiếp",
+    "migrationSaveImage": "Lưu mã QR",
+    "migrationImageAlt": "Mã QR chuyển tài khoản {{current}} / {{total}}",
+    "migrationInvalidRecord": "Một số bản ghi chứa khóa bí mật không hợp lệ. Hãy kiểm tra trước khi xuất mã QR chuyển tài khoản.",
+    "migrationRecordTooLarge": "Thông tin tài khoản quá dài để chứa trong mã QR chuyển tài khoản. Hãy rút ngắn tên tài khoản rồi thử lại.",
+    "migrationUnsupportedParameters": "Tính năng xuất chuyển tài khoản hiện chỉ hỗ trợ mã SHA1, 6 chữ số, 30 giây; một số tài khoản dùng tham số không được hỗ trợ.",
+    "migrationQrFailed": "Không thể tạo mã QR chuyển tài khoản. Vui lòng thử lại.",
+    "exportFailed": "Xuất thất bại. Hãy kiểm tra vị trí lưu rồi thử lại."
   },
   "logViewer": {
     "fileLabel": "Tệp nhật ký",
@@ -7559,6 +8115,17 @@
       "family": "Nhóm",
       "platform": "Hệ thống hiện tại",
       "unsupportedGroup": "Nhóm này chưa có ứng dụng khách ghi bằng một cú nhấp."
+    },
+    "campaign": {
+      "badge": "11.11",
+      "title": "Nạp tiền nhận thêm 11,11%",
+      "description": "Dành cho cả người dùng mới và hiện tại.",
+      "period": "Thời gian: 1–11 tháng 11 năm 2026 (UTC+8)",
+      "terms": "Xem điều kiện trên trang ưu đãi.",
+      "action": "Xem ưu đãi",
+      "inactive": "Ưu đãi hiện không có hiệu lực.",
+      "label": "Ưu đãi 11.11 có thời hạn",
+      "promotionDescription": "Đón 11.11 cùng đối tác trung chuyển API chính thức của Cockpit. Người dùng mới và hiện tại đều được tặng thêm 11,11% khi nạp tiền trong thời gian ưu đãi. Hỗ trợ Claude, ChatGPT, Gemini và các mô hình hàng đầu khác."
     }
   },
   "grok": {
@@ -7957,7 +8524,7 @@
     "model": "Mô hình kiểm tra",
     "selectModel": "Chọn mô hình",
     "verifyHint": "Mô hình được chọn chỉ dùng để thử kết nối, không giới hạn các mô hình khác có thể sử dụng. Việc xác minh gửi một yêu cầu ngắn và tiêu tốn một ít hạn mức gói.",
-    "serviceHint": "Thêm vào nhóm hiện tại không khởi động dịch vụ API. Phiên bản này yêu cầu bộ máy gốc.",
+    "serviceHint": "Thêm tài khoản vào nhóm hiện tại không khởi động dịch vụ API.",
     "verify": "Chỉ kiểm tra",
     "verifyAndJoin": "Kiểm tra và thêm",
     "remove": "Gỡ khỏi dịch vụ",
@@ -8017,8 +8584,6 @@
       "verify": "Yêu cầu đến mô hình chưa hoàn tất. Hãy kiểm tra lại.",
       "usage": "Mức dùng của gói hoặc ứng dụng bị giới hạn. Kiểm tra mức dùng trong cài đặt ChatGPT.",
       "usageUnavailable": "Dịch vụ chính thức tạm thời không thể xác nhận mức dùng. Hãy thử lại sau; điều này không có nghĩa hạn mức gói đã hết.",
-      "native": "Quyền truy cập gói yêu cầu bộ máy gốc. Hãy chuyển bộ máy trong dịch vụ API trước.",
-      "nativeSwitch": "Gỡ tài khoản dùng gói khỏi dịch vụ API trước khi chuyển sang bộ máy khác.",
       "browser": "Không thể mở trình duyệt. Sao chép liên kết đăng nhập rồi mở thủ công.",
       "configuration": "Thông tin đăng ký cấp quyền không khớp. Hãy đăng nhập lại hoặc kết nối lại gói.",
       "notVerified": "Hãy xác minh gói trước khi thêm vào dịch vụ API.",
@@ -8198,7 +8763,6 @@
     "title": "Dự phòng tính năng",
     "hint": "Khi tài khoản không hỗ trợ tính năng cần thiết, thử tài khoản dự phòng theo thứ tự này với ánh xạ mô hình hiện có.",
     "consent": "Chuyển đổi sẽ gửi cuộc trò chuyện này đến tài khoản dự phòng và dùng hạn mức hoặc phát sinh phí tương ứng.",
-    "nativeOnly": "Bộ máy này không thực hiện dự phòng tính năng. Chuyển sang bộ máy gốc để bật; vẫn có thể tắt cấu hình đã lưu.",
     "backups": "Tài khoản dự phòng",
     "addBackup": "Thêm dự phòng",
     "backupEmpty": "Chọn tài khoản dự phòng từ nhóm dịch vụ API hiện tại trước khi bật.",
