@@ -312,6 +312,9 @@ fn member_switch_revision_blocks_stale_disk_and_runtime_publications_and_default
     assert!(original.chatgpt_plan_codex_image_policies.is_empty());
     let mut official = switch(&original, true);
     migrate_legacy_gateway_mode(&mut official);
+    // Compare an initialized runtime snapshot with its persisted bytes. Credits
+    // migration is tested separately; the save marks this field as migrated.
+    official.native_credits_policy_migrated = true;
     save_collection_to_path(&path, &official).unwrap();
     let bytes = fs::read(&path).unwrap();
     assert_eq!(

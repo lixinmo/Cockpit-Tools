@@ -1,7 +1,9 @@
-> Current scope (2026-11-08): runtime is Native-only. Go and its selector are retired.
+> Current scope (2026-11-09): runtime is Native-only. Go and its selector are retired.
 > Credits admission, per-account permissions, quota evidence and final-identity
 > send guards remain. Historical Go/Auto Reset verification below is not an active
 > compatibility requirement; see [Native-only cleanup](native-only-cleanup.md).
+> Personal builds and targeted checks run locally by default; cloud builds are
+> manual alternatives under [the current build policy](../cloud-builds.md).
 
 # Codex API service credits policy
 
@@ -15,6 +17,10 @@ check immediately before sending a selected request. Existing queued routes
 observe policy changes; a previously admitted in-flight request cannot be undone.
 
 ## Rust Native migration — v1.3.73, 2026-10-22
+
+The engine-selection behavior in this dated migration record is historical.
+Current runtime loading and saves migrate retired modes to Native while keeping
+Credits settings; there is no Go selector or Go-only admission guard.
 
 The local Go implementation has been retired. The Native implementation reuses
 upstream routing, account permissions, concurrency, OAuth reserves, official
@@ -74,7 +80,11 @@ upstream spending limit for that guarantee. The UI explains this limitation and
 explains automatic bounded quota refresh and safe rejection if it fails. Tests use synthetic accounts and do
 not consume real quota or credits.
 
-## Verification
+## Current verification
+
+Use the existing local toolchain and checks targeted to the changed behavior.
+The commands below do not require a cloud build; manual Cloud Build remains an
+alternative, and its successful source/artifact checks still gate publication.
 
 - Native policy/configuration/refresh tests:
   `cargo test --offline --manifest-path tests/codex-credits-policy/Cargo.toml
@@ -82,8 +92,10 @@ not consume real quota or credits.
 - `node --import tsx --test src/components/codex/CodexCreditsSettings.test.ts`.
 - Main-library `native_credits`, `admission`, and `native_gateway_credits` tests
   exercise the production host, route lifecycle and localhost transports.
-- Native `scripts/verify-cockpit-connect-retry.sh` (includes outer sidecar suite).
-- `npm run build:app:local` for this Mac's app and matching sidecar.
+- `scripts/verify-native-connect-retry.sh` for the retained Native retry contract.
+- `npm run build:app` or `npm run build:app:local` for this Mac's Native-only App.
+  Use `npm run build:app:cloud` only when selecting the manual cloud alternative.
+  No Go engine, Go verifier or matching sidecar is required.
 
 The fixed CT-CONNECT-RETRY-001 transport implementation and retry budget are
 unchanged. This feature does not add network retries or request replay.
@@ -269,7 +281,12 @@ later policy tightening, and Grok/API-key exemptions. App-bundle verification is
 recorded in the historical `native-engine-migration.md` in Git; it is not inferred from
 these source tests.
 
-## v1.3.80 budget and lifecycle integration (2026-11-08)
+## Historical v1.3.80 budget and lifecycle integration (2026-11-08)
+
+The following records the earlier integration before Go retirement. The
+Native/Go selection guards and `KEY_BUDGET_REQUIRES_NATIVE` path described below
+were subsequently removed with that engine; the Native Credits admission and
+upstream caller budgets remain active.
 
 The upstream API-key budget is retained: it accounts for USD by period and
 limits caller concurrency and daily image requests. It does not decide whether

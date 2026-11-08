@@ -82,8 +82,10 @@ repeated `Close` calls remain idempotent.
 
 ## Current verification and upstream review
 
-Run `scripts/verify-native-connect-retry.sh` in GitHub Actions on standard hosted
-runners. The Native suite covers exact transient classification, cancellation,
+Run `scripts/verify-native-connect-retry.sh` with the existing local toolchain by
+default. A manually selected Cloud Build on standard GitHub-hosted runners is
+also available under the [current build policy](../cloud-builds.md); full cloud
+builds are not the default for each repair. The Native suite covers exact transient classification, cancellation,
 shared deadline/backoff, H2 readiness, one send/body ownership and permanent-error
 precedence. The application uses the narrowly patched reqwest 0.12.28 and
 hyper-util 0.1.20 hooks; no request replay loop is added above them.

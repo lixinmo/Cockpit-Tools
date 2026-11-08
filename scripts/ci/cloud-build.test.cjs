@@ -8,6 +8,35 @@ const test = require('node:test');
 const { buildPlan, platforms, tauriArgs, nativeRegressionArgs, nativeProbeExecutable, releaseDirectory } = require('./cloud-build.cjs');
 const { verifyBuild } = require('./cloud-publish.cjs');
 
+test('personal commands build locally and cloud dispatch remains an explicit alternative', () => {
+  const root = path.resolve(__dirname, '../..');
+  const scripts = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).scripts;
+  assert.equal(scripts['build:app'], 'node scripts/build-local-app.cjs');
+  assert.equal(scripts['build:app:local'], scripts['build:app']);
+  assert.equal(scripts['build:app:cloud'], 'node scripts/build-cloud.cjs');
+  const launcher = path.join(root, 'scripts/build-cloud.cjs');
+  const help = spawnSync(process.execPath, [launcher, '--help'], { encoding: 'utf8' });
+  assert.equal(help.status, 0, help.stderr);
+  assert.match(help.stdout, /npm run build:app:cloud --/);
+  assert.match(help.stdout, /Pushes and pull requests do not start Cloud Build automatically/);
+  assert.doesNotMatch(help.stdout, /build:app:local command dispatches|push to main already starts/);
+  const dryRun = spawnSync(process.execPath, [launcher, '--dry-run', '--repo', 'example/cockpit', '--platform', 'macos-x86_64'], { encoding: 'utf8' });
+  assert.equal(dryRun.status, 0, dryRun.stderr);
+  const plan = JSON.parse(dryRun.stdout);
+  assert.equal(plan.localCompilation, false);
+  assert.deepEqual(plan.command, ['gh', 'workflow', 'run', 'build-matrix.yml', '--repo', 'example/cockpit', '--ref', 'main', '-f', 'platform=macos-x86_64']);
+});
+
+test('full Cloud Build is manual while formal signed releases keep their tag trigger', () => {
+  const root = path.resolve(__dirname, '../..');
+  const workflow = fs.readFileSync(path.join(root, '.github/workflows/build-matrix.yml'), 'utf8');
+  const events = workflow.slice(workflow.indexOf('on:\n'), workflow.indexOf('\npermissions:'));
+  assert.deepEqual([...events.matchAll(/^  ([a-z_]+):$/gm)].map(match => match[1]), ['workflow_dispatch']);
+  const release = fs.readFileSync(path.join(root, '.github/workflows/release.yml'), 'utf8');
+  assert.match(release, /on:\s+push:\s+tags:\s+- "v\*"/);
+  assert.match(release, /TAURI_SIGNING_PRIVATE_KEY/);
+});
+
 test('default selects only this Mac architecture on its native standard runner', () => {
   const plan = buildPlan();
   assert.equal(plan.universal, false);
@@ -99,7 +128,7 @@ test('cloud compilation state survives failed validation without publishing fail
   assert.doesNotMatch(build, /actions: write|local-app\.toml/);
   const prune = workflow.slice(workflow.indexOf('  prune-compilation-state:\n'), workflow.indexOf('  universal:\n'));
   assert.match(prune, /always\(\) && !cancelled\(\) && needs\.plan\.result == 'success'/);
-  assert.match(prune, /github\.event_name == 'push'.*github\.event_name == 'workflow_dispatch'/);
+  assert.match(prune, /github\.event_name == 'workflow_dispatch'/);
   assert.match(prune, /startsWith\(github\.ref, 'refs\/heads\/'\)/);
   assert.match(prune, /actions: write/);
   const release = fs.readFileSync(path.join(__dirname, '../../.github/workflows/release.yml'), 'utf8');

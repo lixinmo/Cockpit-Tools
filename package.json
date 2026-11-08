@@ -15,7 +15,7 @@
     "test:codex-api-key-scope": "tsx --test src/utils/codexApiKeyAccountScope.test.ts",
     "typecheck": "tsc --noEmit",
     "build": "npm run sync-version && tsc && vite build",
-    "build:app": "node scripts/build-cloud.cjs",
+    "build:app": "node scripts/build-local-app.cjs",
     "build:app:cloud": "node scripts/build-cloud.cjs",
     "build:app:local": "node scripts/build-local-app.cjs",
     "release:preflight": "node scripts/release/preflight.cjs",

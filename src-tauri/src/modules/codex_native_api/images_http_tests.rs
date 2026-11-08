@@ -866,49 +866,74 @@ fn oauth_image_completion() -> axum::response::Response {
 
 #[tokio::test]
 async fn image_headers_use_image_open_timeout_instead_of_text_timeout() {
-    let calls = Arc::new(AtomicUsize::new(0));
+    struct HeaderGate {
+        calls: AtomicUsize,
+        entered: tokio::sync::mpsc::UnboundedSender<()>,
+        release: tokio::sync::Notify,
+    }
+    let (entered, mut received) = tokio::sync::mpsc::unbounded_channel();
+    let gate = Arc::new(HeaderGate {
+        calls: AtomicUsize::new(0),
+        entered,
+        release: tokio::sync::Notify::new(),
+    });
     let app = Router::new()
         .route(
             "/v1/responses",
-            post(|State(calls): State<Arc<AtomicUsize>>| async move {
-                calls.fetch_add(1, Ordering::SeqCst);
-                tokio::time::sleep(Duration::from_millis(90)).await;
+            post(|State(gate): State<Arc<HeaderGate>>| async move {
+                gate.calls.fetch_add(1, Ordering::SeqCst);
+                gate.entered.send(()).expect("observe upstream header wait");
+                gate.release.notified().await;
                 oauth_image_completion()
             }),
         )
-        .with_state(calls.clone());
+        .with_state(gate.clone());
     let (handle, host, upstream, root) = fixture(app, true, false).await;
-    {
-        let mut policy = host.policy.lock().unwrap();
-        policy.open_timeout = Duration::from_millis(20);
-        policy.image_open_timeout = Duration::from_millis(300);
+    for (text_seconds, advance_seconds, expected_status) in [(1, 2, 200), (120, 31, 504)] {
+        {
+            let mut policy = host.policy.lock().unwrap();
+            policy.open_timeout = Duration::from_secs(text_seconds);
+            policy.image_open_timeout = Duration::from_secs(30);
+        }
+        let url = format!("http://{}/v1/images/generations", handle.addr);
+        let pending = tokio::spawn(async move {
+            client()
+                .post(url)
+                .bearer_auth("local-image-key")
+                .json(&json!({"prompt":"draw"}))
+                .send()
+                .await
+        });
+        // Preparation shares the image opening budget and performs SQLite work.
+        // Wait for an actual upstream request before advancing time, so this
+        // test isolates response headers rather than a 25ms filesystem race.
+        tokio::time::timeout(Duration::from_secs(10), received.recv())
+            .await
+            .expect("image request should reach upstream before the opening deadline")
+            .expect("upstream gate remains open");
+        tokio::time::pause();
+        tokio::time::advance(Duration::from_secs(advance_seconds)).await;
+        tokio::task::yield_now().await;
+        tokio::time::resume();
+        if expected_status == 200 {
+            // The text timeout has elapsed, but the image opening budget has not.
+            gate.release.notify_one();
+        }
+        let response = tokio::time::timeout(Duration::from_secs(5), pending)
+            .await
+            .expect("image opening result must not wait for the text timeout")
+            .expect("request task completed")
+            .expect("gateway HTTP response");
+        let status = response.status().as_u16();
+        let body: Value = response.json().await.unwrap();
+        assert_eq!(status, expected_status, "image opening response: {body}");
+        if expected_status == 504 {
+            assert_eq!(body["error"]["code"], "upstream_connect_timeout");
+        }
     }
-    let response = client()
-        .post(format!("http://{}/v1/images/generations", handle.addr))
-        .bearer_auth("local-image-key")
-        .json(&json!({"prompt":"draw"}))
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(response.status(), 200);
-    let _: Value = response.json().await.unwrap();
-    {
-        let mut policy = host.policy.lock().unwrap();
-        policy.open_timeout = Duration::from_secs(1);
-        policy.image_open_timeout = Duration::from_millis(25);
-    }
-    let response = client()
-        .post(format!("http://{}/v1/images/generations", handle.addr))
-        .bearer_auth("local-image-key")
-        .json(&json!({"prompt":"draw"}))
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(response.status(), 504);
-    let error: Value = response.json().await.unwrap();
-    assert_eq!(error["error"]["code"], "upstream_connect_timeout");
-    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    assert_eq!(gate.calls.load(Ordering::SeqCst), 2);
     assert_eq!(host.capacity.available_permits(), 1);
+    gate.release.notify_one();
     cleanup(handle, upstream, root).await;
 }
 

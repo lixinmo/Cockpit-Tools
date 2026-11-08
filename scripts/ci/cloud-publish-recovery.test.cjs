@@ -16,7 +16,7 @@ test('recovery and normal publishing share one concurrency lock', () => {
 function fixture() {
   const repository = 'example/cockpit';
   const run = { id: 1234, head_repository: { full_name: repository }, head_branch: 'main',
-    event: 'push', path: '.github/workflows/build-matrix.yml', status: 'completed',
+    event: 'workflow_dispatch', path: '.github/workflows/build-matrix.yml', status: 'completed',
     conclusion: 'failure', head_sha: 'a'.repeat(40) };
   const jobs = ['plan', 'frontend', 'Native contracts'].map(name => ({ name, conclusion: 'success' }));
   jobs.push({ name: 'Build macos-x86_64', conclusion: 'success', steps: [
@@ -31,6 +31,13 @@ function fixture() {
 test('recovers a publication failure only after every required build check passed', () => {
   const f = fixture();
   assert.deepEqual(validateSourceRun(f.run, f.jobs, ['scripts/ci/cloud-publish.cjs'], f.repository),
+    { commit: 'a'.repeat(40), runId: '1234' });
+});
+
+test('historical push builds remain recoverable without enabling automatic new builds', () => {
+  const f = fixture();
+  f.run.event = 'push';
+  assert.deepEqual(validateSourceRun(f.run, f.jobs, [], f.repository),
     { commit: 'a'.repeat(40), runId: '1234' });
 });
 

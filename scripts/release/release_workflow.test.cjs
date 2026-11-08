@@ -110,10 +110,11 @@ test("Universal consumes this run's verified thin inputs and does not recompile"
   }
 });
 
-test("trusted main CI and release jobs share caches, with correct platform separation", () => {
+test("manual cloud builds and formal releases share caches with correct platform separation", () => {
   const ci = fs.readFileSync(path.join(__dirname, "../../.github/workflows/build-matrix.yml"), "utf8");
   const cache = fs.readFileSync(path.join(__dirname, "../../.github/actions/host-build-cache/action.yml"), "utf8");
-  assert.match(ci, /push:\s+branches:[\s\S]*?- "main"/);
+  assert.match(ci, /on:\s+workflow_dispatch:/);
+  assert.doesNotMatch(ci, /^  (?:push|pull_request):/m);
   assert.match(ci, /uses: \.\/.github\/actions\/host-build-cache\s+with:\s+target: \$\{\{ matrix.cache_target \}\}/);
   const { buildPlan } = require('../ci/cloud-build.cjs');
   for (const target of ["windows", "macos-aarch64", "macos-x86_64", "linux-x86_64", "linux-aarch64"]) {

@@ -78,3 +78,6 @@ sidecars/mihomo/bin/
 /cloud-assets/
 /downloaded-builds/
 /universal-inputs/
+
+# Verified personal local App (build caches are removed after success).
+/.local-app-output/

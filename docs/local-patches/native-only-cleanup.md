@@ -6,7 +6,8 @@ The user narrowed this fork on 2026-11-08 to three maintained additions:
    200/400 ms, shared-deadline and no-post-send-replay contract.
 2. Native OpenAI Credits admission, per-account permissions, quota evidence and
    final-identity send guards. This remains distinct from upstream API-key budgets.
-3. Standard-hosted cloud builds, platform selection, dependency/incremental caches,
+3. Build tooling: local personal App builds by default (updated 2026-11-09),
+   with optional manual standard-hosted cloud builds, platform selection,
    verified publication and rolling development downloads.
 
 ## Retired additions
@@ -51,8 +52,17 @@ Private scans, tools and any migration report stay outside the public repository
 
 ## Validation status
 
-Source cleanup and private history inventory are in progress. Before delivery,
-run the Native retry and Credits harnesses, upstream Native/tool-call/Reset
-integration checks, frontend checks and the Intel App build in GitHub Actions.
-Record the verified source and cloud run here after they pass. No local Rust/Go
-compilation or real-account history is used by the cloud jobs.
+Source cleanup and the one-time private history/settings cleanup are complete.
+The Native retry and Credits harnesses passed in standard GitHub-hosted run
+[42499629901](https://github.com/lixinmo/Cockpit-Tools/actions/runs/42499629901).
+Its Native integration run passed 2,757 tests, with 13 ignored, and exposed two
+test-fixture issues: an uninitialized Credits migration flag in a persisted
+snapshot, and a 25 ms image-header budget racing SQLite preparation. Those test
+fixtures have been corrected without changing the production paths.
+
+Both affected tests passed locally on 2026-11-09 (2 passed, 0 failed), using
+synthetic fixtures and an isolated data directory. The frontend build and 42
+local/build-workflow tests also passed. The final Intel App is being built under
+the current policy in [cloud-builds.md](../cloud-builds.md). No App from the failed
+cloud run was published. Real account data and the private repair tooling are
+never part of the public build inputs.

@@ -23,19 +23,6 @@ on:
         description: Validate and package only the Native acceptance driver (thin macOS, no App publication)
         type: boolean
         default: false
-  push:
-    branches:
-      - "main"
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
-      - 'LICENSE*'
-  pull_request:
-    branches: [main]
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
-      - 'LICENSE*'
 
 permissions:
   contents: read
@@ -254,7 +241,7 @@ jobs:
     needs: [plan, build]
     if: >-
       always() && !cancelled() && needs.plan.result == 'success' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.event_name == 'workflow_dispatch' &&
       startsWith(github.ref, 'refs/heads/')
     runs-on: ubuntu-24.04
     timeout-minutes: 5

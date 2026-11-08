@@ -17,10 +17,10 @@ function hostPlatform() {
 }
 
 function help() {
-  console.log(`Dispatch a GitHub Actions build; no local dependencies or compiler required.
+  console.log(`Manually dispatch an optional GitHub Actions build; no local compiler required.
 
 Usage: node scripts/build-cloud.cjs [options]
-       npm run build:app -- [options]
+       npm run build:app:cloud -- [options]
 
   --platform <name>  ${platforms.join(', ')}
                      Default: this computer's platform (${hostPlatform() || 'specify explicitly'}).
@@ -30,9 +30,9 @@ Usage: node scripts/build-cloud.cjs [options]
   --help             Show this help.
 
 Builds use the remote ref, so commit and push changes first.
-A build-relevant push to main already starts the default Intel Mac build.
+Pushes and pull requests do not start Cloud Build automatically.
 Use --platform all for every supported platform. Downloads are linked on the run.
-The legacy build:app:local command dispatches this same cloud workflow.`);
+Personal local builds use npm run build:app or npm run build:app:local.`);
 }
 
 function parseArgs(args) {
@@ -51,7 +51,7 @@ function parseArgs(args) {
       }
       options[flag.slice(2)] = value;
     } else {
-      throw new Error(`Unknown option: ${flag}. Use --help. Local compilation and --full-opt are no longer supported by this entry point.`);
+      throw new Error(`Unknown option: ${flag}. Use --help. This entry point only dispatches cloud builds; use build:app for local compilation.`);
     }
   }
   return options;

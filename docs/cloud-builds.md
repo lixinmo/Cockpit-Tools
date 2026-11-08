@@ -1,12 +1,29 @@
-# GitHub Actions 构建与维护
+# 本机构建与手动云端备选
 
-本分支在公开仓库 [lixinmo/Cockpit-Tools](https://github.com/lixinmo/Cockpit-Tools) 使用 GitHub Actions 标准托管 runner 构建。日常使用只构建这台 Intel Mac 的版本；源码继续支持 macOS、Windows 和 Linux。运行时跟随上游，仅使用 Rust Native；不再打包 Go 引擎。上游 Git 历史保留。
+当前政策自 **2026-11-09** 起生效：个人 App 默认在本机构建，先做针对性检查，再构建、校验产物并清理项目生成物；安装后的旧 App 清理以新版启动成功为前提。此前“本机不得编译”“每次推送自动完整云端构建”及保留本地缓存的规定均已被本政策取代。旧构建记录保留为其对应提交的历史证据，Native 重试和 Credits 运行时合约不变。
 
-本机只负责编辑、Git 同步、触发云端工作流、下载和验证 App。这里的规则取代旧的本机构建、保留本地编译缓存和专用工具链要求；`docs/local-patches/` 中已有构建记录作为历史验证证据保留，运行时合约不变。不新增完整备份。
+源码和上游历史继续保留在公开仓库 [lixinmo/Cockpit-Tools](https://github.com/lixinmo/Cockpit-Tools)。日常只构建这台 Intel Mac 的版本；源码继续支持 macOS、Windows 和 Linux。运行时跟随上游，仅使用 Rust Native，不打包 Go 引擎。不新增完整备份。
 
-## 日常构建与下载
+## 日常本机构建
 
-打开 [Cloud Build](https://github.com/lixinmo/Cockpit-Tools/actions/workflows/build-matrix.yml)，选择 **Run workflow**，在 `platform` 中选择目标。`main` 上影响构建的推送也会自动构建 Intel Mac；已有自动运行时无需再次手动触发。
+```sh
+# 两个入口都在当前 Mac 构建，不触发 GitHub Actions。
+npm run build:app
+npm run build:app:local
+
+# 只查看本机构建计划。
+npm run build:app -- --dry-run
+```
+
+本地入口使用现有 Node/npm、Rust 和 macOS 开发工具链，目标为当前 Mac 的原生架构；这台 Intel Mac 为 `x86_64-apple-darwin`。前端只做一次 typecheck，生成 Native-only `.app` 并校验版本、架构和签名。个人构建采用 ad-hoc 签名，不代表 Apple 公证，也不代替正式签名发布。具体输出路径与执行步骤以启动器计划为准。
+
+先运行与改动直接相关的检查，例如相关 Node 测试、Rust 回归 filter；失败后只重跑相关检查。修改 Native transport 时运行 `scripts/verify-native-connect-retry.sh`，修改 Credits 时运行对应 `tests/codex-credits-policy` harness 及必要的 Native 集成检查。合并上游后仍需审查重试是否叠加。检查修复期间可复用项目编译输出，不为每次查错重新运行完整 Cloud Build。
+
+本地脚本只负责构建，不安装、停止或启动 App。产物通过版本、架构和签名校验后，即清理本项目 `target/`、`node_modules/`、`dist/` 和本轮 scratch，仅在 `.local-app-output/` 保留验证过的 App。当前已安装的旧 App 保持可用；安装新版并确认启动成功后，才删除旧 App 和重复成品。源码、`.git`、全部账号/配置/会话数据及共享工具链必须保留。失败时保留本次诊断及必要项目缓存，供定向修复。
+
+## 手动云端构建与下载
+
+云端是显式选择的备选。打开 [Cloud Build](https://github.com/lixinmo/Cockpit-Tools/actions/workflows/build-matrix.yml)，选择 **Run workflow** 和目标平台。该工作流只保留 `workflow_dispatch`；`main` 推送及 pull request 均不自动触发完整构建。
 
 | `platform` | 成品 |
 | --- | --- |
@@ -18,39 +35,31 @@
 | `windows` | Windows x86_64 |
 | `all` | 全部上述平台，包括 macOS Universal |
 
-也可以从源码目录执行以下命令。启动器只依赖 Node.js、Git 和已登录的 GitHub CLI，无需 `npm ci`、Rust、Go 或本地 `node_modules`。
+云端启动器只依赖 Node.js、Git 和已登录的 GitHub CLI，无需本地安装构建依赖。
 
 ```sh
-# 默认构建当前电脑对应的平台；这台 Mac 为 macos-x86_64。
-npm run build:app
-
-# 选择平台、远端分支，或只查看计划。
-node scripts/build-cloud.cjs --platform macos-x86_64 --ref main
+npm run build:app:cloud
+npm run build:app:cloud -- --platform macos-x86_64 --ref main
 node scripts/build-cloud.cjs --platform all
 node scripts/build-cloud.cjs --dry-run
 node scripts/build-cloud.cjs --help
 ```
 
-`npm run build:app:cloud` 等价；旧的 `npm run build:app:local` 也只触发云端构建。默认仓库来自 `origin`，默认远端 ref 为 `main`，可用 `--repo owner/repo` 和 `--ref branch-or-tag` 指定。云端读取已推送的提交，工作区未提交或未推送的修改不会进入构建。`--full-opt` 已移除，云端遵循仓库的 release 配置。
+默认仓库来自 `origin`，远端 ref 为 `main`；可用 `--repo owner/repo` 和 `--ref branch-or-tag` 指定。云端只读取已推送的提交，本地未提交或未推送的修改不会进入构建。`npm run build:app` 和 `build:app:local` 不再是云端别名。
 
-成功运行在 Actions 页面提供 `cockpit-tools-<platform>` artifact；Mac 包包含 `.app.tar.gz`、`SHA256SUMS.txt` 和 `provenance.json`。先校验归档的 SHA-256，再解压 App。当前平台的长期下载入口为 [Intel Mac 云端版本](https://github.com/lixinmo/Cockpit-Tools/releases/tag/cloud-macos-x86_64)；其他平台使用 `cloud-<platform>` 预发布标签，见 [Releases](https://github.com/lixinmo/Cockpit-Tools/releases)。`all` 会更新各平台各自的入口。
+成功运行提供 `cockpit-tools-<platform>` artifact；Mac 包包含 `.app.tar.gz`、`SHA256SUMS.txt` 和 `provenance.json`。校验 SHA-256 后再解压。受信任的手动 `main` 构建可更新 [Intel Mac 滚动下载](https://github.com/lixinmo/Cockpit-Tools/releases/tag/cloud-macos-x86_64)；其他平台使用 `cloud-<platform>` 预发布标签，见 [Releases](https://github.com/lixinmo/Cockpit-Tools/releases)。分支构建从对应运行的 artifacts 下载。
 
-只有受信任的 `main` 构建更新滚动下载。滚动预发布替换同平台旧文件，保留最近成功成品；临时 artifacts 保留 1 天，成功发布后删除本次临时副本。分支构建从对应运行的 artifacts 下载。下载后保留来源提交和校验结果即可，不需要在本机长期堆积压缩包。
-
-普通构建不需要上传开发者签名私钥。macOS 开发者签名与公证状态应以具体成品为准；SHA-256 和来源信息用于核对下载完整性与构建提交，不代表 Apple 公证。
+滚动预发布替换同平台旧文件；临时 artifacts 保留 1 天，成功发布后删除本次临时副本。安装与启动验证完成后清理本机下载归档及重复 App。普通云端包不需要开发者签名私钥，来源信息和 SHA-256 不代表 Apple 公证。
 
 若 App、前端、Native 集成与独立合约检查都已通过，仅滚动发布失败，可使用
 [Publish verified Cloud Build](https://github.com/lixinmo/Cockpit-Tools/actions/workflows/publish-cloud-build.yml)，
-填入原 Cloud Build 的 run ID。恢复流程仅在 `main` 上运行，并核验源仓库、分支、
-工作流、成功检查、Git 祖先关系和 App 输入未变化；验证后复用原 artifacts，
-保留原提交与构建来源，不重新编译。源构建之后只允许发布工具和维护文档变化。
-发布时只读取 GitHub compare 的状态，避免大型上游合并的补丁 JSON 超出缓冲区。
+填入原 Cloud Build 的 run ID。恢复流程核验受信任来源、成功检查、Git 祖先关系和 App 输入未变化后复用原 artifacts，不重新编译；也可恢复此前自动触发的历史构建。源构建之后只允许发布工具和维护文档变化，不能用恢复发布绕过源码验证。
 
 ## 云端验证、缓存与正式发布
 
 Cloud Build 在云端运行 TypeScript 检查及相关测试，并验证 Native 同账号连接重试、Credits 保护，以及上游账号、工具调用和重置卡功能。不得因为换到云端而省略 Native 验证，或跳过相关检查规避失败。变更影响的检查必须通过后才能交付。
 
-Rust、npm 缓存按平台、架构和依赖输入复用。macOS Universal 使用同一次运行已经生成的两个架构输入合并，避免额外重复编译。缓存只存放构建依赖和编译结果，不存放任何本机账号或运行配置。沿用 GitHub 默认的每仓库 10 GB 免费缓存容量；只使用公开仓库的免费标准托管 runner，不启用 larger runner、付费服务、付费缓存扩容或收费额度，不为构建设置付款方式。GitHub 自身的容量与保留策略仍适用。
+Rust、npm 缓存按平台、架构和依赖输入复用。macOS Universal 使用同一次运行已经生成的两个架构输入合并，避免额外重复编译。缓存只存放构建依赖和编译结果，不存放任何本机账号或运行配置。只使用公开仓库的免费标准托管 runner，不启用 larger runner、付费服务、付费缓存扩容或收费额度，不为构建设置付款方式。GitHub 自身的容量与保留策略仍适用。
 
 受信任分支的 Rust 依赖缓存也保留失败运行中已完成的依赖编译，方便修正源码后复用；
 仍不缓存 workspace App 成品或运行配置，也不会发布未通过验证的包。
@@ -58,7 +67,7 @@ Rust、npm 缓存按平台、架构和依赖输入复用。macOS Universal 使�
 普通 Mac 构建先执行 Native 集成回归，再优化和打包 App；测试使用相同目标与
 release 依赖，测试 crate 自身保持较低优化等级；回归检查不依赖已有 App。
 
-Cloud Build 额外为受信任分支的 `push` / `workflow_dispatch` 保留编译状态。
+手动 Cloud Build 为受信任分支的 `workflow_dispatch` 保留编译状态。
 既有 Rust 缓存继续提供依赖底座；新的状态缓存只包含 host 与目标架构 release
 目录下的 `incremental`，覆盖 App 和 Native 验收程序的增量数据，不重复保存
 整套依赖产物。它不包含打包后的 App、bundle、运行配置或测试临时 profile。
@@ -103,7 +112,7 @@ Fork 用户先在自己的仓库启用 Actions，再使用 Cloud Build 选择平
 - `~/Library/Application Support/cockpit-tools`、相关 WebKit/应用数据，以及各客户端原有账号目录。
 - SSH/GitHub 凭据、`.env`、签名私钥、导出的账号文件、应用生成的备份和任意自定义 `COCKPIT_TOOLS_DATA_DIR`。
 
-只有在云端构建成功、下载校验通过、确认 App 架构并完成启动验证后，才删除本机不再需要的 `target/`、`node_modules/`、`dist/`、专用工具链、旧归档、已确认干净且历史仍保留的旧源码副本和重复 App。记录删除前后大小；不把账号/配置目录当作构建缓存清理。全局 Rust/Go/npm 工具链与缓存如果被其他项目使用，应保留。仓库的 `.git`、补丁说明、源码以及当前使用的 App 必须保留。
+本地产物通过版本、架构和签名校验后，可以清理本项目 `target/`、`node_modules/`、`dist/` 和本次 scratch，保留验证过的 App。旧已安装 App 必须等替换版本安装并启动成功后再删除；云端下载归档和其他重复成品也在确认当前 App 可用后清理。记录删除范围及前后大小，不把账号/配置/会话目录当作构建缓存清理。共享 Rust、Node/npm、macOS 开发工具链及其共享缓存保持原状。仓库的 `.git`、补丁说明、源码以及当前 App 必须保留；不要为清理创建完整备份。
 
 ## 同步上游
 
@@ -119,6 +128,6 @@ git push origin main
 
 对于已经公开的分支，优先合并以保留历史。合并时逐项检查 `docs/local-patches/`，继续复用上游协议、continuation 和 quota-reserve 实现；不得增加第二套 plaintext marker 策略，或在切换引擎/身份时绕过 Credits。
 
-每次上游同步后，按照 `same-account-connect-retry.md` 和 `native-connect-retry.md` 检查连接建立重试，避免与上游应用层重试叠加。固定三次尝试、200/400 ms 间隔和禁止发送后重放的约定保持不变。云端运行 `scripts/verify-native-connect-retry.sh`、Credits harness 和上游 Native 集成检查。个人 Intel 构建不要求额外发布矩阵；其它平台的正式发布能力保持。最后审查相对 `upstream/main` 的差异，并记录基线与云端验证。
+每次上游同步后，按照 `same-account-connect-retry.md` 和 `native-connect-retry.md` 检查连接建立重试，避免与上游应用层重试叠加。固定三次尝试、200/400 ms 间隔和禁止发送后重放的约定保持不变。优先使用本机现有工具链运行 `scripts/verify-native-connect-retry.sh`、Credits harness 和改动影响的上游 Native 定向检查；需要完整跨平台验证时再手动选择 Cloud Build。个人 Intel 构建不要求额外发布矩阵，正式发布的所有平台能力保持。最后审查相对 `upstream/main` 的差异，并记录基线、实际检查和 App 验证结果。
 
 当前维护范围见 [Native-only 精简记录](local-patches/native-only-cleanup.md)。旧构建和已退役补丁记录可从 Git 历史读取。

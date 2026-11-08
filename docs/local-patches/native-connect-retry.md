@@ -6,8 +6,9 @@
 
 This integration preserves the fixed setup-only behavior of
 `same-account-connect-retry.md` for the requested native macOS application. The
-original Go implementation, T01–T22 tests and verifier remain the reference;
-the fixed v1.0 contract has not been silently revised or deleted.
+original Go implementation, T01–T22 tests and verifier remain a historical
+reference in Git; they are not built or required by current verification. The
+fixed v1.0 contract has not been silently revised or deleted.
 
 ## Runtime boundary
 
@@ -94,11 +95,17 @@ hyper 1.9.0, h2 0.4.13 and tokio 1.52.0 on 2026-10-22.
 
 The former Go implementation is retired; the original v1.0 reference remains in Git history.
 After any dependency/upstream refresh, inspect retry/pooling/handshake layers
-again before running the Native verifier. Builds and compilation-dependent checks run in standard GitHub-hosted Actions
-under `docs/cloud-builds.md`; `npm run build:app:local` is only a compatibility
-alias that dispatches the cloud workflow.
+again before running the Native verifier. Under the current
+[build policy](../cloud-builds.md), use the existing local toolchain and targeted
+checks by default. `npm run build:app` and `npm run build:app:local` build the
+personal Native-only App locally. `npm run build:app:cloud` is an explicit manual
+alternative using standard GitHub-hosted runners; do not dispatch a full cloud
+build for each test repair.
 
-## v1.3.80 integration review (2026-11-08)
+## Historical v1.3.80 integration review (2026-11-08)
+
+This review predates Go retirement. References below to two retry verifiers
+record that integration's validation; current verification uses the Native suite.
 
 The upstream client cache now remembers a scoped HTTP/1 fallback after repeated
 HTTP/2 TLS failures, and decodes response compression at the protocol boundary.
