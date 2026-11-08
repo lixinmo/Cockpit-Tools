@@ -1,0 +1,48 @@
+name: Publish verified Cloud Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: Completed main Cloud Build whose application and checks passed
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloud-development-publication
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check publication and source-validation regressions
+        run: node --test scripts/ci/cloud-publish*.test.cjs
+      - name: Verify prior build and unchanged application inputs
+        run: node scripts/ci/cloud-publish-recovery.cjs verify "$SOURCE_RUN_ID"
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.source_run_id }}
+          pattern: cockpit-tools-*
+          path: downloaded-builds
+          merge-multiple: false
+      - name: Publish verified artifacts without recompiling
+        run: node scripts/ci/cloud-publish-recovery.cjs publish "$SOURCE_RUN_ID"

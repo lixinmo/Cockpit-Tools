@@ -39,6 +39,13 @@ node scripts/build-cloud.cjs --help
 
 普通构建不需要上传开发者签名私钥。macOS 开发者签名与公证状态应以具体成品为准；SHA-256 和来源信息用于核对下载完整性与构建提交，不代表 Apple 公证。
 
+若 App、前端、Native 集成与独立合约检查都已通过，仅滚动发布失败，可使用
+[Publish verified Cloud Build](https://github.com/lixinmo/Cockpit-Tools/actions/workflows/publish-cloud-build.yml)，
+填入原 Cloud Build 的 run ID。恢复流程仅在 `main` 上运行，并核验源仓库、分支、
+工作流、成功检查、Git 祖先关系和 App 输入未变化；验证后复用原 artifacts，
+保留原提交与构建来源，不重新编译。源构建之后只允许发布工具和维护文档变化。
+发布时只读取 GitHub compare 的状态，避免大型上游合并的补丁 JSON 超出缓冲区。
+
 ## 云端验证、缓存与正式发布
 
 Cloud Build 在云端运行 TypeScript 检查及相关测试，并验证同账号重试、Native 重试、Credits 与 Auto Reset 合约。不得因为换到云端而省略 Native 验证，或切回旧引擎规避失败。变更影响的检查必须通过后才能交付。

@@ -31,11 +31,13 @@ function verifyBuild(directory, expected) {
   return { provenance, names };
 }
 
-function main() {
+// Recovery callers verify the completed source workflow before supplying its
+// identity. Artifact provenance is still checked against that exact commit here.
+function main({ commit = process.env.GITHUB_SHA, runId = process.env.GITHUB_RUN_ID } = {}) {
   if (process.env.GITHUB_ACTIONS !== 'true') throw new Error('Publishing runs only in GitHub Actions');
   const repository = process.env.GITHUB_REPOSITORY;
-  const commit = process.env.GITHUB_SHA;
-  if (!/^[\w.-]+\/[\w.-]+$/.test(repository || '') || !/^[a-f\d]{40}$/i.test(commit || '')) throw new Error('Missing GitHub repository or commit');
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repository || '') || typeof commit !== 'string' || !/^[a-f\d]{40}$/i.test(commit)) throw new Error('Missing GitHub repository or commit');
+  if (typeof runId !== 'string' || !/^\d+$/.test(runId)) throw new Error('Invalid GitHub source run ID');
   const targets = [...platforms, { label: 'macos-universal', target: 'universal-apple-darwin' }];
   const downloads = path.resolve('downloaded-builds');
   const artifacts = fs.readdirSync(downloads, { withFileTypes: true }).filter(e => e.isDirectory());
@@ -52,12 +54,14 @@ function main() {
       previous = JSON.parse(existing.stdout);
       if (!previous.isPrerelease || previous.isDraft) throw new Error(`Refusing to replace non-development release ${tag}`);
       const ref = JSON.parse(gh(['api', `repos/${repository}/git/ref/tags/${tag}`]));
-      const comparison = JSON.parse(gh(['api', `repos/${repository}/compare/${ref.object.sha}...${commit}`]));
-      if (comparison.status === 'behind') {
+      // Compare responses can contain thousands of files and patches. Project
+      // at the gh boundary so only the ancestry status crosses the pipe.
+      const comparison = gh(['api', `repos/${repository}/compare/${ref.object.sha}...${commit}`, '--jq', '.status']);
+      if (comparison === 'behind') {
         console.log(`Retaining newer development build: ${tag}`);
         continue;
       }
-      if (!['ahead', 'identical'].includes(comparison.status)) throw new Error(`Rolling release source diverged: ${tag}`);
+      if (!['ahead', 'identical'].includes(comparison)) throw new Error(`Rolling release source diverged: ${tag}`);
     } else if (!/release not found|not found|HTTP 404/i.test(existing.stderr || '')) {
       throw new Error(existing.stderr || 'Could not inspect the rolling release');
     }
@@ -79,7 +83,7 @@ function main() {
     if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `- [Download ${platform.label}](${url}) — ${provenance.version}, commit \`${commit}\`\n`);
   }
   // Once the durable public downloads exist, remove this run's temporary copies.
-  const transient = JSON.parse(gh(['api', `repos/${repository}/actions/runs/${process.env.GITHUB_RUN_ID}/artifacts`])).artifacts;
+  const transient = JSON.parse(gh(['api', `repos/${repository}/actions/runs/${runId}/artifacts`])).artifacts;
   for (const artifact of transient) {
     if (artifact.name.startsWith('cockpit-tools-') || artifact.name.startsWith('cloud-')) {
       gh(['api', `repos/${repository}/actions/artifacts/${artifact.id}`, '--method', 'DELETE']);
@@ -90,4 +94,4 @@ function main() {
 if (require.main === module) {
   try { main(); } catch (error) { console.error(error.message); process.exitCode = 1; }
 }
-module.exports = { verifyBuild };
+module.exports = { main, verifyBuild };
