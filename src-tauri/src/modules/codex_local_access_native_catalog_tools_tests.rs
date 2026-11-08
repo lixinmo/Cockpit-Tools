@@ -134,6 +134,56 @@ fn native_catalog_search_respects_key_account_grants_and_model_prefix() {
 }
 
 #[test]
+fn native_profile_catalog_resolves_raw_ids_under_key_prefix_before_remote_projection() {
+    let mut collection = collection();
+    collection.account_ids = vec!["chat".into()];
+    let key: CodexLocalAccessApiKey = serde_json::from_value(json!({
+        "id":"scoped","label":"scope","key":"synthetic-key",
+        "inheritAccountPool":false,"accountIds":["chat"],"modelPrefix":"team/"
+    })).unwrap();
+    let mut chat = account("chat", "chat_completions");
+    chat.api_model_catalog = vec!["custom-agent".into()];
+    chat.api_model_context_windows.insert("custom-agent".into(), 192000);
+    chat.api_model_vision_support.insert("custom-agent".into(), true);
+    let accounts = vec![chat];
+    let served = native_catalog(&collection, Some(&key), &accounts).unwrap();
+    let expected = entry(&served, "team/custom-agent");
+    assert_eq!(expected["supports_search_tool"], true);
+    assert_eq!(expected["use_responses_lite"], true);
+    assert_eq!(expected["context_window"], 192000);
+
+    for slug in ["custom-agent", "team/custom-agent"] {
+        let mut profile = json!({"models":[{
+            "slug":slug,"display_name":"Keep my label","priority":17,
+            "supports_search_tool":false,"use_responses_lite":false,
+            "context_window":12345,"supported_reasoning_levels":[]
+        }]});
+        native_apply_profile_catalog_capabilities(
+            &mut profile, &collection, Some(&key), &accounts,
+        ).unwrap();
+        let actual = entry(&profile, slug);
+        assert_eq!(actual["display_name"], "Keep my label");
+        assert_eq!(actual["priority"], 17);
+        for field in [
+            "supports_search_tool", "use_responses_lite", "multi_agent_version",
+            "context_window", "auto_compact_token_limit", "supported_reasoning_levels",
+            "default_reasoning_level", "input_modalities", "supports_image_detail_original",
+        ] {
+            assert_eq!(actual[field], expected[field], "{slug}: {field}");
+        }
+        if slug == "custom-agent" {
+            let public = project_public_model_catalog(
+                &profile, &["team/custom-agent".into()], "team/",
+            );
+            assert_eq!(public["models"].as_array().unwrap().len(), 1);
+            assert_eq!(public["models"][0]["slug"], "team/custom-agent");
+            assert_eq!(public["models"][0]["supports_search_tool"], true);
+            assert_eq!(public["models"][0]["context_window"], 192000);
+        }
+    }
+}
+
+#[test]
 fn native_catalog_search_keeps_plan_and_grok_adapters_and_ignores_other_models() {
     let mut collection = collection();
     let mut plan_account = account("plan", "chat_completions");

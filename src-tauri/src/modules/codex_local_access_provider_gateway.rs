@@ -1482,6 +1482,7 @@ fn validate_provider_gateway_template_mode() -> Result<(), String> {
         credits_compat::validate_mode(&template, collection_gateway_mode(&template))?;
     }
     Ok(())
+}
 
 fn apply_provider_gateway_template_settings(
     collection: &mut CodexLocalAccessCollection,

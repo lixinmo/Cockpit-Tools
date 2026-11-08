@@ -125,18 +125,22 @@ test('native gateway regressions reuse the thin application target and isolate s
   assert.throws(() => nativeRegressionArgs('x86_64-unknown-linux-gnu'), /thin macOS/);
 });
 
-test('native gateway regressions gate packaging after the application has built its sidecar', () => {
+test('native gateway regressions precede app optimization and gate packaging', () => {
   const workflow = fs.readFileSync(path.join(__dirname, '../../.github/workflows/build-matrix.yml'), 'utf8');
   const build = workflow.indexOf('run: node scripts/ci/cloud-build.cjs build');
   const regressions = workflow.indexOf('run: node scripts/ci/cloud-build.cjs native-regressions');
   const universal = workflow.indexOf('run: node scripts/ci/cloud-build.cjs stage-universal');
   const archive = workflow.indexOf('run: node scripts/ci/cloud-build.cjs package');
-  assert.ok(build >= 0 && regressions > build && universal > regressions && archive > regressions);
+  assert.ok(regressions >= 0 && build > regressions && universal > build && archive > build);
   const step = workflow.slice(workflow.lastIndexOf('      - name:', regressions), regressions);
   assert.match(step, /if: runner\.os == 'macOS'/);
   assert.match(step, /CLOUD_BUILD_TARGET: \$\{\{ matrix\.target \}\}/);
   assert.match(step, /COCKPIT_NATIVE_APP_BUILD: '1'/);
   assert.match(step, /COCKPIT_SKIP_CLIPROXY_BUILD: '1'/);
+  // The same build script supports probe-only runs: a missing sidecar is built,
+  // while an already prepared binary can be reused by the test target.
+  const buildScript = fs.readFileSync(path.join(__dirname, '../../src-tauri/build.rs'), 'utf8');
+  assert.match(buildScript, /COCKPIT_SKIP_CLIPROXY_BUILD[\s\S]*?output\.exists\(\)/);
   assert.match(step, /inputs\.native_probe != true/);
   const probeStart = workflow.indexOf('      - name: Package optional local Native acceptance driver');
   const probeEnd = workflow.indexOf('      - name:', probeStart + 10);

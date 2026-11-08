@@ -301,18 +301,31 @@ fn native_apply_profile_catalog_capabilities(
             let Some(slug) = model["slug"].as_str() else {
                 continue;
             };
+            // Remote catalog builders keep raw IDs until the public projection
+            // adds the key namespace. Managed profiles may already use exposed
+            // IDs, so prefer an exact match and then try the scoped raw ID.
+            let prefixed_slug = key
+                .and_then(|key| key.model_prefix.as_deref())
+                .filter(|prefix| !prefix.is_empty())
+                .map(|prefix| format!("{}/{slug}", prefix.trim_end_matches('/')));
             let Some(resolved) = authoritative["models"].as_array().and_then(|models| {
                 models
                     .iter()
                     .find(|entry| entry["slug"].as_str() == Some(slug))
+                    .or_else(|| {
+                        let exposed = prefixed_slug.as_deref()?;
+                        models.iter().find(|entry| entry["slug"].as_str() == Some(exposed))
+                    })
             }) else {
                 continue;
             };
-            // Retain only presentation/order chosen by the profile. Context,
+            // Preserve the caller's ID representation to avoid adding a remote
+            // namespace twice. Retain presentation/order chosen by the profile. Context,
             // reasoning and execution all come from the same resolved route as
             // /models. Explicit saved profile overrides are applied last by
             // the writer, never inferred from stale generated catalog values.
             let presentation = [
+                "slug",
                 "display_name",
                 "description",
                 "priority",

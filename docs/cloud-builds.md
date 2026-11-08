@@ -45,6 +45,13 @@ Cloud Build 在云端运行 TypeScript 检查及相关测试，并验证同账�
 
 Rust、Go、npm 缓存按平台、架构和依赖输入复用。macOS Universal 使用同一次运行已经生成的两个架构输入合并，避免额外重复编译。缓存只存放构建依赖和编译结果，不存放任何本机账号或运行配置。沿用 GitHub 默认的每仓库 10 GB 免费缓存容量；只使用公开仓库的免费标准托管 runner，不启用 larger runner、付费服务、付费缓存扩容或收费额度，不为构建设置付款方式。GitHub 自身的容量与保留策略仍适用。
 
+受信任分支的 Rust 依赖缓存也保留失败运行中已完成的依赖编译，方便修正源码后复用；
+仍不缓存 workspace App 成品或运行配置，也不会发布未通过验证的包。
+下述增量状态缓存继续在构建和验证完成后保存。
+普通 Mac 构建先执行 Native 集成回归，再优化和打包 App；测试使用相同目标与
+release 依赖，测试 crate 自身保持较低优化等级。构建脚本会在需要时准备匹配
+架构的 Go sidecar，因此也支持不依赖已有 App 的回归检查。
+
 Cloud Build 额外为受信任分支的 `push` / `workflow_dispatch` 保留编译状态。
 既有 Rust 缓存继续提供依赖底座；新的状态缓存只包含 host 与目标架构 release
 目录下的 `incremental`，覆盖 App 和 Native 验收程序的增量数据，不重复保存
