@@ -250,6 +250,7 @@ export function CodexLocalAccessModal({
   isOpen,
   mode,
   state,
+  onStateChange,
   addressKind,
   addressOptions,
   onAddressKindChange,
