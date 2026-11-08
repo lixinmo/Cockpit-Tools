@@ -62,7 +62,31 @@ fixtures have been corrected without changing the production paths.
 
 Both affected tests passed locally on 2026-11-09 (2 passed, 0 failed), using
 synthetic fixtures and an isolated data directory. The frontend build and 42
-local/build-workflow tests also passed. The final Intel App is being built under
-the current policy in [cloud-builds.md](../cloud-builds.md). No App from the failed
-cloud run was published. Real account data and the private repair tooling are
-never part of the public build inputs.
+local/build-workflow tests also passed.
+
+The final Intel App was built locally from
+`0939f36e82d191a801a991f55909617c0fc17c01`, installed and successfully launched:
+
+- Version: `1.3.80`; one thin `x86_64` Mach-O executable; ad-hoc signature verified.
+- No Go API executable in the App. The CLIProxyAPI license remains a legal resource.
+- Main executable SHA-256:
+  `dcedaba0e37bcee530e5fe141e14be272693728a051b7fad01f967d99dd71964`.
+- Local account inventory/current selections, credential storage key, API keys,
+  member selection and Credits policy passed before/after integrity checks.
+- Retired cache/configuration fields remained absent after startup.
+- Cold local test compilation took 21m 19s (the two tests ran in 0.10s);
+  the optimized App build took 27m 34s. Local builds avoid cloud dispatch and
+  publication overhead, but clearing build caches still makes subsequent builds
+  cold; this run is not evidence that local compilation is inherently faster.
+
+No live third-party inference request was sent as part of this verification.
+No App from the failed cloud run was published. Real account data and the private
+repair tooling are never part of the public build inputs. Build/install/cleanup
+follow the current policy in [cloud-builds.md](../cloud-builds.md).
+
+After successful installation and startup checks, project `target`,
+`node_modules`, `dist`, build scratch, the previous App, 32 obsolete cloud
+diagnostics and the private one-time repair workspace were removed (about
+3.78 GiB). Source/Git history/remotes, all runtime data, shared toolchains and the
+current installed App remain. No permanent history-repair tool or duplicate App
+was retained.
