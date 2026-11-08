@@ -66,6 +66,7 @@ fn native_gateway_models(gateway: &CodexLocalAccessProviderGateway) -> Vec<Strin
 fn native_gateway_model(
     gateway: &CodexLocalAccessProviderGateway,
     model: &str,
+    shells: bool,
 ) -> Result<String, native_contract::ServiceError> {
     let models = native_gateway_models(gateway);
     if model.is_empty() {
@@ -74,8 +75,14 @@ fn native_gateway_model(
     if models.iter().any(|candidate| candidate == model) {
         return Ok(model.to_owned());
     }
-    // Aliases are resolved once, from explicit/frozen bindings, before this
-    // allow-list check. Never reinterpret an old alias using current list order.
+    if shells && !crate::modules::codex_remote_service::is_known(&gateway.base_url,&gateway.api_key) {
+        if let Some(slot) = provider_gateway_model_slots(&models)
+            .into_iter()
+            .find(|slot| slot.client_model == model)
+        {
+            return Ok(slot.upstream_model);
+        }
+    }
     Err(native_error(
         404,
         "model_not_found",
@@ -164,7 +171,7 @@ fn native_model_route_plan(
                 } else {
                     model.to_owned()
                 };
-                plan.model = native_gateway_model(&route.provider_gateway, &base)?;
+                plan.model = native_gateway_model(&route.provider_gateway, &base, false)?;
             } else {
                 plan.model.clear();
             }
@@ -177,7 +184,7 @@ fn native_model_route_plan(
             plan.oauth_only = true;
         }
     } else if let Some(gateway) = &key.provider_gateway {
-        plan.model = native_gateway_model(gateway, model)?;
+        plan.model = native_gateway_model(gateway, model, true)?;
         plan.provider = true;
         plan.gateway = Some(gateway.clone());
     }
@@ -812,8 +819,11 @@ fn native_catalog(
     if let Some(gateway) = key.and_then(|key| key.provider_gateway.as_ref()) {
         let models = native_gateway_models(gateway);
         candidates.extend(models.iter().cloned());
-        candidates.extend(gateway.model_bindings.iter().flatten()
-            .map(|binding| binding.client_model.clone()));
+        if !crate::modules::codex_remote_service::is_known(&gateway.base_url,&gateway.api_key) {
+            candidates.extend(provider_gateway_model_slots(&models)
+                .into_iter()
+                .map(|slot| slot.client_model));
+        }
     } else if automatic {
         let scope = native_scoped_account_ids(collection, key);
         let scoped = accounts
@@ -873,8 +883,6 @@ fn native_catalog(
             .iter()
             .map(|alias| alias.alias.clone()),
     );
-    candidates.extend(key.and_then(|key| key.provider_model_bindings.as_ref())
-        .into_iter().flatten().map(|binding| binding.client_model.clone()));
     let mut ids = Vec::new();
     let mut selected = Vec::new();
     for candidate in candidates {
@@ -904,16 +912,6 @@ fn native_catalog(
     }
     let mut value = codex_protocol::build_codex_client_models_response(&ids);
     let remote_templates = native_catalog_remote_templates(accounts);
-    if let Some(models) = value["models"].as_array_mut() {
-        for (index, model) in models.iter_mut().enumerate() {
-            let (id, _, _, plan) = &selected[index];
-            let eligible = accounts.iter().filter(|account|
-                native_model_visible(collection, key, plan, account)).collect::<Vec<_>>();
-            if let Some(base) = native_provider_catalog_base(id, plan, &eligible, index) {
-                *model = base;
-            }
-        }
-    }
     if let Some(models) = value["models"].as_array_mut() {
         for model in models.iter_mut() {
             if let Some((_, upstream, account, plan)) = selected
@@ -1028,11 +1026,6 @@ async fn native_model_catalog_snapshot(host:&NativeHostBridge, caller:&native_co
             &raw_accounts
         },
     );
-    if let Some(profile) = host.profile_dir.as_deref() {
-        native_decorate_provider_models(profile, &collection, key, &accounts, &mut catalog)
-            .map_err(|_| native_error(400, "provider_reasoning_override_invalid",
-                "The profile model configuration is invalid"))?;
-    }
     Ok((catalog,accounts))
 }
 

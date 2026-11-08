@@ -1,3 +1,8 @@
+> Current scope (2026-11-08): runtime is Native-only. Go and its selector are retired.
+> Credits admission, per-account permissions, quota evidence and final-identity
+> send guards remain. Historical Go/Auto Reset verification below is not an active
+> compatibility requirement; see [Native-only cleanup](native-only-cleanup.md).
+
 # Codex API service credits policy
 
 The API service has a persisted `creditsPolicy` (`default`, `prefer_regular`,
@@ -261,7 +266,7 @@ passed with the 16 quota tests. Native HTTP, image, Responses WebSocket, Realtim
 and lifecycle admission tests passed with the Native API suite. Final credential
 identity tests cover workspace, organization and Agent changes, token rotation,
 later policy tightening, and Grok/API-key exemptions. App-bundle verification is
-recorded separately in `native-engine-migration.md`; it is not inferred from
+recorded in the historical `native-engine-migration.md` in Git; it is not inferred from
 these source tests.
 
 ## v1.3.80 budget and lifecycle integration (2026-11-08)

@@ -1,7 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { CODEX_PATH_RECOVERY_CANCELLED, codexPathRecoveryKey, withCodexPathRecovery } from "../stores/useCodexPathRecoveryStore";
 import type {
-  CodexLocalAccessGatewayMode,
   CodexLocalAccessChatMessage,
   CodexLocalAccessChatResult,
   CodexLocalAccessCustomRoutingRule,
@@ -312,12 +311,6 @@ export async function updateCodexLocalAccessUpstreamProxyConfig(
   });
 }
 
-
-export async function updateCodexLocalAccessGatewayMode(
-  gatewayMode: CodexLocalAccessGatewayMode,
-): Promise<CodexLocalAccessState> {
-  return await invoke("codex_local_access_update_gateway_mode", { gatewayMode });
-}
 
 export async function updateCodexLocalAccessDebugLogs(
   debugLogs: boolean,

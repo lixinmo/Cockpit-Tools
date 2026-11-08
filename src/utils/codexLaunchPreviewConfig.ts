@@ -25,7 +25,6 @@ export function codexLaunchPreviewQuickConfigKey(config: CodexQuickConfig): stri
       id: model.model_id,
       name: model.display_name,
       reasoning: model.reasoning_efforts ?? null,
-      defaultReasoning: model.default_reasoning_effort ?? null,
       context: model.context_window ?? null,
       compact: model.auto_compact_token_limit ?? null,
     })),

@@ -191,12 +191,11 @@ fn legacy_windows_keep_switches_and_values_and_serialize_without_window() {
 }
 #[test]
 fn account_lease_excludes_manual_and_automatic_overlap_but_not_other_accounts() {
-    let dir = tempfile::tempdir().unwrap();
-    let a = acquire_at(dir.path(), "reset-lease-a").unwrap();
-    assert!(acquire_at(dir.path(), "reset-lease-a").unwrap().is_none());
-    assert!(acquire_at(dir.path(), "reset-lease-b").unwrap().is_some());
+    let a = acquire("reset-lease-a").unwrap();
+    assert!(acquire("reset-lease-a").unwrap().is_none());
+    assert!(acquire("reset-lease-b").unwrap().is_some());
     drop(a);
-    assert!(acquire_at(dir.path(), "reset-lease-a").unwrap().is_some());
+    assert!(acquire("reset-lease-a").unwrap().is_some());
 }
 #[test]
 fn journal_survives_restart_and_malformed_storage_is_never_replaced() {
@@ -210,8 +209,6 @@ fn journal_survives_restart_and_malformed_storage_is_never_replaced() {
                 request_id: "stable-id".into(),
                 reason: "expiry".into(),
                 evidence: Some("old-cards".into()),
-                credit_id: None,
-                rule: None,
             },
         );
         Ok(())
@@ -416,70 +413,4 @@ fn confirmed_no_op_keeps_card_evidence_available_and_allows_a_new_attempt() {
         assert_eq!(d.records[0].status, "success");
         assert!(!d.pending.contains_key("a"));
     }
-}
-
-#[test]
-fn migration_preserves_each_opt_in_and_threshold_without_enabling_expiry() {
-    let old: codex_auto_reset::Preferences = serde_json::from_value(serde_json::json!({
-        "codex_auto_consume_reset_enabled": true,
-        "codex_auto_consume_reset_threshold": 90,
-        "codex_auto_consume_reset_accounts": {
-            "enabled": { "enabled": true, "threshold": 2 },
-            "disabled": { "enabled": false, "threshold": 17 }
-        }
-    })).unwrap();
-    let mut d = Document::default();
-    migrate_legacy_preferences(&mut d, &old);
-    let enabled = effective(&d, "enabled").unwrap();
-    assert_eq!(enabled.remaining_percent, 2);
-    assert!(!enabled.expiry_enabled);
-    assert!(enabled.quota_enabled);
-    assert!(effective(&d, "disabled").is_none());
-    assert!(matches!(&d.accounts["disabled"], AccountRule::Custom { rule } if rule.remaining_percent == 17 && !rule.enabled));
-    assert!(effective(&d, "unconfigured").is_none());
-    assert!(!d.public_rule.enabled);
-    let encoded = serde_json::to_vec(&d).unwrap();
-    let mut restored: Document = serde_json::from_slice(&encoded).unwrap();
-    restored.accounts.insert("enabled".into(), AccountRule::Off);
-    migrate_legacy_preferences(&mut restored, &old);
-    assert!(effective(&restored, "enabled").is_none());
-    assert!(restored.legacy_settings_migrated);
-}
-
-#[test]
-fn migration_preserves_existing_upstream_rules_and_pending_journal() {
-    let old: codex_auto_reset::Preferences = serde_json::from_value(serde_json::json!({
-        "codex_auto_consume_reset_accounts": { "a": { "enabled": true, "threshold": 2 } }
-    })).unwrap();
-    let mut d = Document::default();
-    d.accounts.insert("a".into(), AccountRule::Off);
-    let pending = begin_redemption(&mut d, "a", "owner", "quota", None);
-    migrate_legacy_preferences(&mut d, &old);
-    assert_eq!(d.accounts["a"], AccountRule::Off);
-    assert_eq!(d.pending["a"].request_id, pending.request_id);
-}
-
-#[test]
-fn weekly_only_primary_is_a_valid_trigger_and_daily_windows_are_not() {
-    let rule = Rule { enabled: true, expiry_enabled: false, remaining_percent: 2, ..Rule::default() };
-    let mut q = quota(0, 100);
-    q.hourly_window_minutes = Some(10080);
-    q.weekly_window_present = Some(false);
-    assert_eq!(trigger(&rule, Some(&q), &cards(Some(1), None), 1000), Some("quota"));
-    q.hourly_window_minutes = Some(1440);
-    assert_eq!(trigger(&rule, Some(&q), &cards(Some(1), None), 1000), None);
-}
-
-#[test]
-fn selected_credit_and_request_id_survive_ambiguous_redemption() {
-    let mut d = Document::default();
-    let mut pending = begin_redemption(&mut d, "a", "owner", "quota", Some("cards".into()));
-    pending.credit_id = Some("earliest-card".into());
-    pending.rule = Some(Rule { enabled: true, ..Rule::default() });
-    d.pending.insert("a".into(), pending.clone());
-    finish_redemption(&mut d, "a", &pending, Err("connection lost".into())).unwrap();
-    let restored: Document = serde_json::from_slice(&serde_json::to_vec(&d).unwrap()).unwrap();
-    assert_eq!(restored.pending["a"].credit_id.as_deref(), Some("earliest-card"));
-    assert_eq!(restored.pending["a"].request_id, pending.request_id);
-    assert_eq!(restored.pending["a"].rule, pending.rule);
 }

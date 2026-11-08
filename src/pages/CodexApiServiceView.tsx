@@ -15,7 +15,6 @@ import { CodexOverloadRetrySetting } from "../components/codex/CodexOverloadRetr
 import { CodexOverloadHistory, useCodexOverloadCounts } from "./CodexOverloadHistory";
 import { isCodexChatgptPlanAccount } from "../types/codex";
 import { formatCodexGatewayModeError } from "../utils/codexGatewayError";
-import { CodexGatewayModeControl } from "../components/codex/CodexGatewayModeControl";
 import { CodexSessionIdentityMappingControl } from "../components/codex/CodexSessionIdentityMappingControl";
 import { CodexSpeedControl } from "../components/codex/CodexSpeedControl";
 import { Activity, BadgeDollarSign, ChevronDown, Check, CircleAlert, Copy, Eye, EyeOff, FolderPlus, Gauge, Image, Pin, PinOff, Play, Plus, Power, RefreshCw, Route, Send, ShieldCheck, SlidersHorizontal, Trash2, Undo2, Wrench, X } from "lucide-react";
@@ -55,7 +54,7 @@ export type CodexApiServiceViewProps = ReturnType<typeof useCodexApiServicePageC
 
 /** 渲染 CodexApiServicePage 的界面；业务状态与动作统一由 Controller 提供。 */
 export function CodexApiServiceView(props: CodexApiServiceViewProps) {
-  const [gatewaySaving, setGatewaySaving] = useState(false);
+
   const {
     accessScope,
     inspectionNoticeKey,
@@ -287,7 +286,7 @@ export function CodexApiServiceView(props: CodexApiServiceViewProps) {
   const accountStats = useMemo(() => aggregateCodexServiceAccountStats(selectedStatsWindow?.accounts ?? [], accounts,
     planGrants.accounts, planGrants.displaySourceIds), [selectedStatsWindow?.accounts, accounts, planGrants.accounts, planGrants.displaySourceIds]);
   const displayPoolHealth = summarizeAccountPoolHealth(localAccessAccounts, memberIds, state);
-  const busy = controllerBusy || gatewaySaving;
+  const busy = controllerBusy;
   const lanBaseUrl = state?.lanBaseUrl;
   const localAccessStatus = resolveCodexLocalAccessRuntimeStatus(collection, state);
   const keyRecoveryRequired = isCodexGatewayKeyRecoveryError(state?.lastError);
@@ -483,7 +482,7 @@ export function CodexApiServiceView(props: CodexApiServiceViewProps) {
             {error && error !== state?.lastError && (
               <div className="codex-api-service-message error">
                 <CircleAlert size={15} />
-                <span>{formatCodexGatewayModeError(t, error)}</span>
+                <span>{String(error)}</span>
                 <button
                   type="button"
                   className="codex-api-service-message-dismiss"
@@ -599,9 +598,6 @@ export function CodexApiServiceView(props: CodexApiServiceViewProps) {
                 <h2>{t("codex.localAccess.configTitle", "服务配置")}</h2>
               </div>
               <div className="codex-api-service-config-list">
-                <CodexGatewayModeControl state={state} onState={setState}
-                  disabled={busy || activating || testDialogRunning || sidecarRestarting}
-                  onError={setError} onNotice={setNotice} onSavingChange={setGatewaySaving} />
                 <label>
                   <span>Base URL</span>
                   <div className="codex-api-service-copy-row">

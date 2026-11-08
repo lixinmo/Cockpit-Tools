@@ -2562,17 +2562,6 @@
       "windowHint": "Die Schwellen richten sich nach der tatsächlichen Dauer: Ab einer Woche gilt die Wochenschwelle. Konten mit nur einem Wochenkontingent prüfen nur dieses. Ohne Dauer bleibt die Zuordnung zum primären und sekundären Fenster bestehen.",
       "rule": "Kurzzeitrest <= {{shortCycle}}% oder Wochenrest <= {{weekly}}%"
     },
-    "credits": {
-      "title": "Credits-Nutzung steuern",
-      "policy": "Globale Richtlinie (sofort gespeichert)",
-      "default": "Standard",
-      "prefer": "Reguläres Kontingent bevorzugen",
-      "strict": "Nur reguläres Kontingent",
-      "allow": "Credits erlauben",
-      "description": "Der Standardmodus behält das bestehende Routing bei. Bei Bevorzugung des regulären Kontingents sind Credits erst erlaubt, wenn alle Codex-Konten im Pool des aktuellen API-Schlüssels ihr reguläres Kontingent aufgebraucht haben. Nur reguläres Kontingent sperrt Credits. Ein deaktivierter Credits-Schalter eines Kontos hat immer Vorrang.",
-      "boundary": "Kontingent-Snapshots sind 5 Minuten gültig. Bei eingeschränkten Konten mit unbekanntem, veraltetem oder zurückgesetztem Kontingent wird dieses vor der Auswahl automatisch aktualisiert (höchstens 9 Sekunden; gleichzeitige Abfragen werden zusammengefasst). Schlägt die Aktualisierung fehl, wird das Konto sicher pausiert; Details stehen in der Kontopool-Diagnose. Laufende Anfragen lassen sich nicht zurücknehmen. Eine Anfrage, die eine Kontingentgrenze überschreitet, oder die gleichzeitige Nutzung durch andere Clients kann beim Anbieter dennoch Credits verbrauchen; verbindliche Ausgabenlimits müssen beim Anbieter eingestellt werden.",
-      "strictHint": "Der Modus Nur reguläres Kontingent sperrt Credits für alle Konten. Die Kontoschalter bleiben für andere Richtlinien gespeichert."
-    },
     "launchConfirmation": {
       "title": "Start unbestätigt",
       "description": "Der Start wurde angefordert, der Clientstatus ist aber noch unbestätigt. Das Fenster ist möglicherweise bereits offen. Bitte nicht erneut starten.",
@@ -2894,16 +2883,6 @@
       "savedPath": "Gespeicherter Pfad"
     },
     "localAccess": {
-      "gatewayEngineNative": "Rust nativ",
-      "gatewayEngineSidecar": "Go (bisher)",
-      "gatewayEngineHint": "Rust ist der Standard. Beim ersten Upgrade wird zu Rust gewechselt; spätere Einstellungen bleiben erhalten. Ein Wechsel startet den API-Dienst neu und kann laufende Anfragen unterbrechen; Codex-Fenster bleiben geöffnet.",
-      "gatewayEngineSwitching": "Engine wird gewechselt…",
-      "gatewayEngineSwitchFailed": "Engine-Wechsel fehlgeschlagen: {{error}}",
-      "gatewayEngineReadbackFailed": "Aktuelle Engine unbestätigt. Vor einem neuen Versuch aktualisieren: {{error}}",
-      "gatewayEngineReadbackTimeout": "Zeitüberschreitung beim Statusabruf",
-      "gatewayEngineOperationBusy": "Ein anderer Dienstvorgang läuft. In Kürze erneut versuchen.",
-      "gatewayEngineSwitchRestored": "Wechsel fehlgeschlagen. Die vorherige Engine wurde wiederhergestellt.",
-      "gatewayEngineRestoreFailed": "Wechsel und Wiederherstellung fehlgeschlagen. Vor einem neuen Versuch den Dienststatus prüfen.",
       "title": "API-Dienst",
       "accountCount": "{{count}} Konten",
       "baseUrl": "Adresse",
@@ -3383,9 +3362,6 @@
       "resetCredits": "Rücksetz. {{count}}",
       "resetCreditsTitle": "Verbleibende Resets für das 5-Stunden-Fenster: {{count}}",
       "resetCreditConfirm": "Bestätigen?",
-      "autoConsumeResetDescription": "Der Schalter und der Schwellenwert gelten nur für dieses Codex-Konto. Solange Cockpit Tools läuft und der Computer nicht im Ruhezustand ist, wird das Kontingent etwa einmal pro Minute im Hintergrund geprüft. Wenn das verbleibende Wochenkontingent den Schwellenwert erreicht oder unterschreitet, wird ein Banked Reset mit dem frühesten Ablaufdatum verwendet. Das 5-Stunden-Kontingent wird ignoriert; ohne verfügbaren Reset geschieht nichts. Eine weitere automatische Verwendung ist erst möglich, nachdem das aktualisierte verbleibende Wochenkontingent den Schwellenwert überschritten hat. Standardmäßig deaktiviert.",
-      "autoConsumeResetThreshold": "Schwellenwert für verbleibendes Wochenkontingent",
-      "autoConsumeResetInvalidThreshold": "Gib eine ganze Zahl von 0 bis 99 ein.",
       "resetCreditDialogTitle": "Nutzung zurücksetzen?",
       "resetCreditDialogDesc": "Setze das Rate-Limit zurück, um ohne Unterbrechung weiterzuarbeiten. Verfügbare Resets: {{count}}.",
       "resetCreditDialogAction": "Nutzung zurücksetzen",
@@ -6080,15 +6056,6 @@
       "defaultReasoning": "Standardstufe",
       "defaultReasoningFollow": "Standard übernehmen",
       "defaultReasoningHint": "Leer lassen, um die Modellvorgabe zu übernehmen. Die gewählte Stufe muss unterstützt werden.",
-      "reasoningNone": "Aus",
-      "reasoningMinimal": "Sehr gering",
-      "providerPolicyHint": "Hier kannst du die Fähigkeiten der Modelle dieses Anbieters konfigurieren. Modelle fügst du in der Modellliste seines Kontos hinzu oder entfernst sie dort; Instanzimporte gelten hier nicht.",
-      "providerPolicyDescription": "Die bekannten Fähigkeiten des Anbieters werden verwendet. Sind sie nicht verfügbar, werden Kompatibilitätsstufen angeboten. Du kannst sie manuell konfigurieren.",
-      "providerPolicyFollow": "Anbieter folgen",
-      "providerPolicyCustom": "Benutzerdefiniert",
-      "providerPolicyConfirm": "Separate Modelleinstellungen für diesen Anbieter speichern. Andere Konten bleiben unverändert.",
-      "inheritReasoning": "Modell folgen",
-      "noReasoning": "Keine einstellbare Denkintensität",
       "defaultReasoningInvalid": "Die Standardstufe für Schlussfolgerungen muss vom Modell unterstützt werden."
     },
     "modelConfig": {
@@ -6207,6 +6174,17 @@
     },
     "officialApi": {
       "hint": "Konto mit offiziellem OpenAI-API-Schlüssel, anhand der tatsächlichen Zieladresse erkannt."
+    },
+    "credits": {
+      "title": "Credits-Nutzung steuern",
+      "policy": "Globale Richtlinie (sofort gespeichert)",
+      "default": "Standard",
+      "prefer": "Reguläres Kontingent bevorzugen",
+      "strict": "Nur reguläres Kontingent",
+      "allow": "Credits erlauben",
+      "description": "Der Standardmodus behält das bestehende Routing bei. Bei Bevorzugung des regulären Kontingents sind Credits erst erlaubt, wenn alle Codex-Konten im Pool des aktuellen API-Schlüssels ihr reguläres Kontingent aufgebraucht haben. Nur reguläres Kontingent sperrt Credits. Ein deaktivierter Credits-Schalter eines Kontos hat immer Vorrang.",
+      "boundary": "Kontingent-Snapshots sind 5 Minuten gültig. Bei eingeschränkten Konten mit unbekanntem, veraltetem oder zurückgesetztem Kontingent wird dieses vor der Auswahl automatisch aktualisiert (höchstens 9 Sekunden; gleichzeitige Abfragen werden zusammengefasst). Schlägt die Aktualisierung fehl, wird das Konto sicher pausiert; Details stehen in der Kontopool-Diagnose. Laufende Anfragen lassen sich nicht zurücknehmen. Eine Anfrage, die eine Kontingentgrenze überschreitet, oder die gleichzeitige Nutzung durch andere Clients kann beim Anbieter dennoch Credits verbrauchen; verbindliche Ausgabenlimits müssen beim Anbieter eingestellt werden.",
+      "strictHint": "Der Modus Nur reguläres Kontingent sperrt Credits für alle Konten. Die Kontoschalter bleiben für andere Richtlinien gespeichert."
     }
   },
   "githubCopilot": {

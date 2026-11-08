@@ -51,7 +51,7 @@ fn remote_client_model_catalog(
         collection,
         resolved_key,
         accounts,
-    )?;
+    );
     let prefix = resolve_collection_api_key(collection, key)
         .and_then(|k| k.model_prefix.clone())
         .unwrap_or_default();

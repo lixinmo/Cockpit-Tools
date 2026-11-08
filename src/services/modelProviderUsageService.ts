@@ -12,14 +12,6 @@ export type ModelProviderUsageMode =
 export interface ModelProviderModel {
   id: string;
   displayName?: string | null;
-  /** Explicit upstream facts; absent fields mean unknown, not unsupported. */
-  metadata?: {
-    /** An empty array explicitly declares no adjustable reasoning effort. */
-    reasoningEfforts?: string[];
-    defaultReasoningEffort?: string;
-    contextWindow?: number;
-    supportsVision?: boolean;
-  };
 }
 
 export interface ModelProviderModelsResult {

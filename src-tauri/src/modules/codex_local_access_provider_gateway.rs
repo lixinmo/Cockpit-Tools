@@ -57,20 +57,9 @@ fn save_provider_gateway_profile_state(
         std::fs::create_dir_all(parent)
             .map_err(|e| format!("创建 Codex provider gateway 状态目录失败: {}", e))?;
     }
-    update_string_atomic(&path, |current| {
-        let mut next = state.clone();
-        // Port/key maintenance may have read state before model migration.
-        // A stale writer cannot erase identities frozen by that migration.
-        if next.model_bindings.is_none() {
-            if let Some(current) = current {
-                let current: ProviderGatewayProfileState = serde_json::from_str(current)
-                    .map_err(|_| "PROVIDER_MODEL_BINDING_STATE_INVALID".to_string())?;
-                next.model_bindings = current.model_bindings;
-            }
-        }
-        serde_json::to_string_pretty(&next)
-            .map_err(|e| format!("序列化 Codex provider gateway 状态失败: {}", e))
-    })
+    let content = serde_json::to_string_pretty(state)
+        .map_err(|e| format!("序列化 Codex provider gateway 状态失败: {}", e))?;
+    write_string_atomic(&path, &content)
         .map_err(|e| format!("写入 Codex provider gateway 状态失败: {}", e))
 }
 
@@ -89,7 +78,6 @@ fn provider_gateway_profile_api_key(
     let state = ProviderGatewayProfileState {
         api_key: generate_local_api_key(),
         port: None,
-        model_bindings: None,
         created_at: now,
         updated_at: now,
     };
@@ -115,7 +103,6 @@ fn provider_gateway_profile_port(profile_dir: &Path, account_id: &str) -> Result
         port: Some(allocate_random_local_port(
             CODEX_LOCAL_ACCESS_LOCALHOST_BIND_HOST,
         )?),
-        model_bindings: None,
         created_at: now,
         updated_at: now,
     };
@@ -626,8 +613,6 @@ pub(crate) struct ProviderGatewayModelSlot {
     pub(crate) client_model: String,
     pub(crate) upstream_model: String,
 }
-
-include!("codex_local_access_provider_model_bindings.rs");
 
 fn preferred_provider_gateway_slot<'a>(
     account: &CodexAccount,
@@ -1348,7 +1333,7 @@ fn provider_gateway_for_account(
             api_key:account.openai_api_key.clone().ok_or("供应商账号缺少上游 API Key")?,
             upstream_model:upstream_models.first().cloned().unwrap_or_default(),upstream_models,
             wire_api:Some("responses".into()),supports_vision:model_capabilities.values().any(|c|c.supports_vision),
-            model_capabilities,vision_routing_model:None,model_bindings:None,
+            model_capabilities,vision_routing_model:None,
         });
     }
     if codex_account::is_grok_upstream_provider(account) {
@@ -1379,7 +1364,6 @@ fn provider_gateway_for_account(
             api_key: String::new(),
             upstream_model: upstream_models.first().cloned().unwrap_or_default(),
             upstream_models,
-            model_bindings: None,
             wire_api: Some("responses".to_string()),
             supports_vision: account.api_supports_vision,
             model_capabilities,
@@ -1464,7 +1448,6 @@ fn provider_gateway_for_account(
         api_key: api_key.to_string(),
         upstream_model: upstream_models.first().cloned().unwrap_or_default(),
         upstream_models,
-        model_bindings: None,
         wire_api: Some(provider_gateway_wire_api_for_account(account)),
         supports_vision: gateway_supports_vision,
         model_capabilities,
@@ -1477,23 +1460,12 @@ fn provider_gateway_for_account(
     })
 }
 
-fn validate_provider_gateway_template_mode() -> Result<(), String> {
-    if let Some(template) = load_collection_from_disk()? {
-        credits_compat::validate_mode(&template, collection_gateway_mode(&template))?;
-    }
-    Ok(())
-}
-
 fn apply_provider_gateway_template_settings(
     collection: &mut CodexLocalAccessCollection,
     template: &CodexLocalAccessCollection,
 ) {
     collection.multi_agent = template.multi_agent.clone();
-    collection.gateway_mode = if template.gateway_mode == CodexLocalAccessGatewayMode::Native {
-        CodexLocalAccessGatewayMode::Native
-    } else {
-        CodexLocalAccessGatewayMode::Sidecar
-    };
+    collection.gateway_mode = CodexLocalAccessGatewayMode::Native;
     collection.client_base_url_host = template.client_base_url_host;
     collection.image_generation_mode = template.image_generation_mode;
     collection.image_generation_model = template.image_generation_model.clone();
@@ -1710,9 +1682,7 @@ fn build_mixed_model_gateway_collection_for_profile(
     collection.port = provider_gateway_profile_port(profile_dir, MIXED_MODEL_ROUTING_RUNTIME_ID)?;
     collection.access_scope = CodexLocalAccessScope::Localhost;
     collection.client_base_url_host = CodexLocalAccessClientBaseUrlHost::default();
-    if collection.gateway_mode != CodexLocalAccessGatewayMode::Native {
-        collection.gateway_mode = CodexLocalAccessGatewayMode::Sidecar;
-    }
+    collection.gateway_mode = CodexLocalAccessGatewayMode::Native;
     collection.responses_websockets_enabled = false;
     collection.account_ids = vec![oauth_account.id.clone()];
     collection.custom_routing_rules.clear();
@@ -1747,7 +1717,6 @@ fn build_mixed_model_gateway_collection_for_profile(
         label: "Mixed Model Routing".to_string(),
         key: key.clone(),
         provider_gateway: None,
-        provider_model_bindings: None,
         model_routing: Some(CodexLocalAccessModelRouting {
             default_route: "oauth".to_string(),
             failure_policy: "strict".to_string(),
@@ -1793,9 +1762,6 @@ fn build_provider_gateway_collection_for_profile(
     ),
     String,
 > {
-    // Capture whether a legacy profile existed before port/key initialization.
-    // A fresh profile must not acquire the old positional GPT aliases.
-    let previous_model_state = load_provider_gateway_profile_state(profile_dir, &account.id)?;
     let mut collection = new_empty_local_access_collection()?;
     if let Some(template) = load_collection_from_disk()? {
         apply_provider_gateway_template_settings(&mut collection, &template);
@@ -1807,9 +1773,7 @@ fn build_provider_gateway_collection_for_profile(
     collection.port = provider_gateway_profile_port(profile_dir, &account.id)?;
     collection.access_scope = CodexLocalAccessScope::Localhost;
     collection.client_base_url_host = CodexLocalAccessClientBaseUrlHost::default();
-    if collection.gateway_mode != CodexLocalAccessGatewayMode::Native {
-        collection.gateway_mode = CodexLocalAccessGatewayMode::Sidecar;
-    }
+    collection.gateway_mode = CodexLocalAccessGatewayMode::Native;
     // The remote Cockpit service owns upstream identity mapping. Mapping twice
     // loses the client's thread identity before A can record its Key view.
     if crate::modules::codex_remote_service::is_known_account(account) {
@@ -1866,18 +1830,8 @@ fn build_provider_gateway_collection_for_profile(
         return Err("该供应商账号不符合本地网关使用条件".to_string());
     }
 
-    let mut provider_gateway = provider_gateway_for_account(account)?;
-    if collection.gateway_mode == CodexLocalAccessGatewayMode::Native {
-        provider_gateway.model_bindings = Some(resolve_native_provider_model_bindings_for_profile(
-            profile_dir,
-            account,
-            previous_model_state.as_ref(),
-        )?);
-        // Frozen mappings live on this provider key, not in the global alias
-        // namespace. Explicit collection aliases remain subject to normal ACLs.
-        collection.suppress_oauth_model_alias = true;
-    } else if !crate::modules::codex_remote_service::is_known_account(account) {
-        // The Go reference retains its existing alias allocation path.
+    let provider_gateway = provider_gateway_for_account(account)?;
+    if !crate::modules::codex_remote_service::is_known_account(account) {
         apply_provider_gateway_model_slots(&mut collection, &provider_gateway.upstream_models);
     }
     let key = provider_gateway_profile_api_key(profile_dir, &account.id)?;
@@ -1895,7 +1849,6 @@ fn build_provider_gateway_collection_for_profile(
         } else {
             Some(provider_gateway.clone())
         },
-        provider_model_bindings: provider_gateway.model_bindings.clone(),
         model_routing: None,
         inherit_account_pool: Some(false),
         account_ids: vec![account.id.clone()],
@@ -1951,9 +1904,7 @@ fn build_bound_oauth_local_gateway_collection_for_profile(
     collection.port = provider_gateway_profile_port(profile_dir, &account.id)?;
     collection.access_scope = CodexLocalAccessScope::Localhost;
     collection.client_base_url_host = CodexLocalAccessClientBaseUrlHost::default();
-    if collection.gateway_mode != CodexLocalAccessGatewayMode::Native {
-        collection.gateway_mode = CodexLocalAccessGatewayMode::Sidecar;
-    }
+    collection.gateway_mode = CodexLocalAccessGatewayMode::Native;
     collection.image_generation_mode = provider_gateway_image_generation_mode_for_account(
         account,
         collection.image_generation_mode,
@@ -1977,7 +1928,6 @@ fn build_bound_oauth_local_gateway_collection_for_profile(
         label: format!("Bound OAuth Local Gateway: {}", account.email),
         key: key.clone(),
         provider_gateway: None,
-        provider_model_bindings: None,
         model_routing: None,
         inherit_account_pool: Some(false),
         account_ids: vec![account.id.clone()],
@@ -2143,9 +2093,7 @@ fn build_model_provider_gateway_test_collection(
     collection.port = allocate_random_local_port(CODEX_LOCAL_ACCESS_LOCALHOST_BIND_HOST)?;
     collection.access_scope = CodexLocalAccessScope::Localhost;
     collection.client_base_url_host = CodexLocalAccessClientBaseUrlHost::default();
-    if collection.gateway_mode != CodexLocalAccessGatewayMode::Native {
-        collection.gateway_mode = CodexLocalAccessGatewayMode::Sidecar;
-    }
+    collection.gateway_mode = CodexLocalAccessGatewayMode::Native;
     collection.image_generation_mode = CodexLocalAccessImageGenerationMode::Enabled;
     collection.account_ids.clear();
     collection.custom_routing_rules.clear();
@@ -2167,7 +2115,6 @@ fn build_model_provider_gateway_test_collection(
         label: provider_gateway_test_api_key_label(request),
         key: collection.api_key.clone(),
         provider_gateway,
-        provider_model_bindings: None,
         model_routing: None,
         inherit_account_pool: Some(false),
         account_ids: vec![account.id.clone()],
@@ -2353,205 +2300,7 @@ pub async fn run_model_provider_gateway_chat_test(
         provider_gateway,
         &client_model_id,
     )?;
-    if collection.gateway_mode == CodexLocalAccessGatewayMode::Native {
-        return native_run_model_provider_chat_test(request, collection, account, client_model_id)
-            .await;
-    }
-    let sidecar_dir = provider_gateway_sidecars_dir()?
-        .join(format!("model-provider-test-{}", uuid::Uuid::new_v4()));
-    let mut account_overrides = HashMap::new();
-    account_overrides.insert(account.id.clone(), account);
-    let launch_config = match prepare_sidecar_launch_config_in_dir(
-        &collection,
-        sidecar_dir.clone(),
-        HashMap::new(),
-        None,
-        account_overrides,
-    )
-    .await
-    {
-        Ok(launch_config) => launch_config,
-        Err(error) => {
-            if sidecar_dir.exists() {
-                let _ = std::fs::remove_dir_all(&sidecar_dir);
-            }
-            return Err(error);
-        }
-    };
-
-    if is_model_provider_chat_test_cancelled(&run_id) {
-        if sidecar_dir.exists() {
-            let _ = std::fs::remove_dir_all(&sidecar_dir);
-        }
-        return Err(MODEL_PROVIDER_CHAT_TEST_CANCELLED_ERROR.to_string());
-    }
-
-    let (child, task, bind_host) =
-        match spawn_provider_gateway_sidecar(&collection, &launch_config, false).await {
-            Ok(runtime) => runtime,
-            Err(error) => {
-                if sidecar_dir.exists() {
-                    let _ = std::fs::remove_dir_all(&sidecar_dir);
-                }
-                return Err(error);
-            }
-        };
-    if is_model_provider_chat_test_cancelled(&run_id) {
-        stop_temporary_provider_gateway_sidecar(
-            child,
-            task,
-            bind_host,
-            collection.port,
-            sidecar_dir,
-        )
-        .await;
-        return Err(MODEL_PROVIDER_CHAT_TEST_CANCELLED_ERROR.to_string());
-    }
-    let client_request_id = format!(
-        "{}:{}:{}:{}",
-        request.run_id.trim(),
-        request.provider_id.trim(),
-        request.api_key_id.as_deref().unwrap_or_default().trim(),
-        model_id
-    );
-    let (url, body) = if uses_provider_gateway {
-        (
-            format!("http://{}:{}/v1/responses", bind_host, collection.port),
-            json!({
-                "model": client_model_id.as_str(),
-                "input": [
-                    {
-                        "type": "message",
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "input_text",
-                                "text": request.prompt.as_str()
-                            }
-                        ]
-                    }
-                ],
-                "instructions": "",
-                "store": false,
-                "stream": false,
-                "max_output_tokens": 256,
-                "metadata": {
-                    "agtools_source": "codex_model_provider_batch_test",
-                    "agtools_test_run_id": request.run_id.as_str(),
-                    "agtools_provider_id": request.provider_id.as_str(),
-                    "agtools_provider_name": request.provider_name.as_str(),
-                    "agtools_provider_api_key_id": request.api_key_id.as_deref(),
-                    "agtools_provider_api_key_name": request.api_key_name.as_deref(),
-                    "agtools_wire_api": request.wire_api.as_str(),
-                    "agtools_test_model": model_id,
-                    "agtools_client_model": client_model_id.as_str(),
-                    "agtools_client_request_id": client_request_id,
-                }
-            }),
-        )
-    } else {
-        (
-            format!(
-                "http://{}:{}/v1/chat/completions",
-                bind_host, collection.port
-            ),
-            json!({
-                "model": client_model_id.as_str(),
-                "stream": false,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": request.prompt.as_str()
-                    }
-                ],
-                "max_tokens": 256
-            }),
-        )
-    };
-
-    let result = tokio::select! {
-        result = async {
-            let client =
-                build_localhost_http_client(Duration::from_secs(90), "模型供应商临时网关测试")?;
-            let started = Instant::now();
-            let mut builder = client
-                .post(&url)
-                .bearer_auth(collection.api_key.trim())
-                .header(ACCEPT, "application/json")
-                .header(CONTENT_TYPE, "application/json");
-            builder =
-                add_model_provider_test_header(builder, "x-client-request-id", &client_request_id);
-            builder = add_model_provider_test_header(builder, "x-agtools-test-run-id", &request.run_id);
-            builder =
-                add_model_provider_test_header(builder, "x-agtools-provider-id", &request.provider_id);
-            builder = add_model_provider_test_header(builder, "x-agtools-wire-api", &request.wire_api);
-            builder = add_model_provider_test_header_b64(
-                builder,
-                "x-agtools-provider-name-b64",
-                &request.provider_name,
-            );
-            builder = add_model_provider_test_header_b64(
-                builder,
-                "x-agtools-provider-base-url-b64",
-                &request.base_url,
-            );
-            if let Some(api_key_id) = request.api_key_id.as_deref() {
-                builder = add_model_provider_test_header(
-                    builder,
-                    "x-agtools-provider-api-key-id",
-                    api_key_id,
-                );
-            }
-            if let Some(api_key_name) = request.api_key_name.as_deref() {
-                builder = add_model_provider_test_header_b64(
-                    builder,
-                    "x-agtools-provider-api-key-name-b64",
-                    api_key_name,
-                );
-            }
-            builder = add_model_provider_test_header(builder, "x-agtools-test-model", model_id);
-            builder =
-                add_model_provider_test_header(builder, "x-agtools-client-model", &client_model_id);
-            let response = builder
-                .json(&body)
-                .send()
-                .await
-                .map_err(|error| format!("本地网关对话请求失败: {}", error))?;
-            let duration_ms = started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
-            let status = response.status();
-            let text = response
-                .text()
-                .await
-                .map_err(|error| format!("读取本地网关对话响应失败: {}", error))?;
-            if !status.is_success() {
-                return Err(format!(
-                    "本地网关对话失败({}): {}",
-                    status.as_u16(),
-                    extract_provider_gateway_test_error_message(&text)
-                ));
-            }
-            let reply = if uses_provider_gateway {
-                let parsed = serde_json::from_str::<Value>(&text)
-                    .map_err(|error| format!("解析本地网关对话响应失败: {}", error))?;
-                extract_provider_gateway_test_output_text(&parsed)
-            } else {
-                extract_chat_completion_output(&text).or_else(|| {
-                    serde_json::from_str::<Value>(&text)
-                        .ok()
-                        .and_then(|parsed| extract_provider_gateway_test_output_text(&parsed))
-                })
-            }
-            .ok_or_else(|| "本地网关对话未返回可读回复".to_string())?;
-            Ok(CodexModelProviderGatewayChatTestResult { duration_ms, reply })
-        } => result,
-        _ = wait_for_model_provider_chat_test_cancellation(&run_id) => {
-            Err(MODEL_PROVIDER_CHAT_TEST_CANCELLED_ERROR.to_string())
-        }
-    };
-
-    stop_temporary_provider_gateway_sidecar(child, task, bind_host, collection.port, sidecar_dir)
-        .await;
-    result
+    native_run_model_provider_chat_test(request, collection, account, client_model_id).await
 }
 
 fn write_local_access_profile_model_override(
@@ -2564,9 +2313,6 @@ fn write_local_access_profile_model_override(
     }
     let config_path = profile_config_path(profile_dir);
     let mut doc = crate::modules::codex_config_format::load_codex_config_doc(&config_path)?;
-    if doc.get("model").and_then(|item| item.as_str()) == Some(model) {
-        return Ok(());
-    }
     doc["model"] = value(model);
     let content = crate::modules::codex_config_format::codex_config_doc_to_string(&mut doc);
     crate::modules::codex_config_format::write_codex_config_toml_atomic(&config_path, &content)
@@ -2840,12 +2586,7 @@ pub async fn activate_provider_gateway_for_dir(
         .ok_or_else(|| format!("供应商网关账号不存在: {}", account_id))?;
     let (collection, key, provider_gateway) =
         build_provider_gateway_collection_for_profile(profile_dir, &account)?;
-    let model_slots = provider_gateway_model_slots_for_collection(&collection, &provider_gateway)?;
-    let selected_model = if collection.gateway_mode == CodexLocalAccessGatewayMode::Native {
-        native_provider_profile_selected_model(profile_dir, &account, &collection, &key, &model_slots)?
-    } else {
-        preferred_provider_gateway_slot(&account, &model_slots).map(|slot| slot.client_model.clone())
-    };
+    let model_slots = provider_model_slots_for_account(&account,&provider_gateway.upstream_models);
     save_profile_takeover_backup(profile_dir, &key)?;
     write_local_access_profile_takeover(profile_dir, &collection, Some(&key), false).await?;
     cleanup_provider_gateway_profile_model_overrides(profile_dir)?;
@@ -2856,12 +2597,10 @@ pub async fn activate_provider_gateway_for_dir(
             .map(|slot| slot.client_model.clone())
             .collect::<Vec<_>>(),
     )?;
-    if collection.gateway_mode != CodexLocalAccessGatewayMode::Native {
-        if let Some(model) = &selected_model {
-            write_local_access_profile_model_override(profile_dir, model)?;
-        }
+    if let Some(default_slot) = preferred_provider_gateway_slot(&account, &model_slots) {
+        write_local_access_profile_model_override(profile_dir, &default_slot.client_model)?;
     }
-    if !model_slots.is_empty() && collection.gateway_mode != CodexLocalAccessGatewayMode::Native {
+    if !model_slots.is_empty() {
         write_provider_gateway_model_catalog_with_templates(
             profile_dir,
             &model_slots,
@@ -2874,13 +2613,6 @@ pub async fn activate_provider_gateway_for_dir(
     if !crate::modules::codex_remote_service::is_known_account(&account)
         && model_slots.iter().any(|slot| codex_protocol::deepseek_model_template(&slot.upstream_model).is_some()) {
         ensure_profile_max_reasoning_effort(profile_dir)?;
-    }
-    if collection.gateway_mode == CodexLocalAccessGatewayMode::Native {
-        if let Some(model) = &selected_model {
-            write_local_access_profile_model_override(profile_dir, model)?;
-        }
-        write_native_provider_profile_model_catalog(profile_dir, &collection, &key, &account)?;
-        remember_takeover_ownership(profile_dir)?;
     }
     ensure_runtime_loaded_without_start().await?;
     let runtime = gateway_runtime().lock().await;
@@ -2896,129 +2628,6 @@ fn provider_gateway_sidecar_parent_pid(persistent_after_host_exit: bool) -> u32 
 }
 
 
-
-async fn spawn_provider_gateway_sidecar(
-    collection: &CodexLocalAccessCollection,
-    launch_config: &SidecarLaunchConfig,
-    persistent_after_host_exit: bool,
-) -> Result<(Child, tokio::task::JoinHandle<()>, String), String> {
-    credits_compat::validate_mode(collection, CodexLocalAccessGatewayMode::Sidecar)?;
-    let bind_host = bind_host_for_collection(collection);
-    let binary = sidecar_binary_path()?;
-    let mut command = TokioCommand::new(&binary);
-    sanitize_sidecar_command_env(&mut command);
-    command
-        .arg("--config")
-        .arg(&launch_config.config_path)
-        .arg("--manifest")
-        .arg(&launch_config.manifest_path)
-        .arg("--quota-reserve-state")
-        .arg(&launch_config.quota_reserve_path)
-        .arg("--quota-pool-state")
-        .arg(&launch_config.quota_pool_path)
-        .arg("--parent-pid")
-        .arg(provider_gateway_sidecar_parent_pid(persistent_after_host_exit).to_string())
-        .current_dir(
-            launch_config
-                .config_path
-                .parent()
-                .unwrap_or_else(|| Path::new(".")),
-        )
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        command.creation_flags(0x08000000);
-    }
-
-    let mut child = command
-        .spawn()
-        .map_err(|e| format!("启动 Codex provider gateway sidecar 失败: {}", e))?;
-
-    let stdout = child.stdout.take();
-    let stderr = child.stderr.take();
-    let (ready_sender, mut ready_receiver) = oneshot::channel();
-    let startup_diagnostics = Arc::new(Mutex::new(SidecarStartupDiagnostics::default()));
-    let task_startup_diagnostics = Arc::clone(&startup_diagnostics);
-    let task = tokio::spawn(async move {
-        let stdout_diagnostics = Arc::clone(&task_startup_diagnostics);
-        let stderr_diagnostics = Arc::clone(&task_startup_diagnostics);
-        let stdout_task = stdout.map(|stdout| {
-            tokio::spawn(drain_sidecar_stdout(
-                stdout,
-                ready_sender,
-                stdout_diagnostics,
-            ))
-        });
-        let stderr_task =
-            stderr.map(|stderr| tokio::spawn(drain_sidecar_stderr(stderr, stderr_diagnostics)));
-        if let Some(task) = stdout_task {
-            let _ = task.await;
-        }
-        if let Some(task) = stderr_task {
-            let _ = task.await;
-        }
-    });
-
-    let ready_signal = match wait_for_sidecar_ready(&mut ready_receiver, &mut child, None).await {
-        Ok(signal) => signal,
-        Err(error) => {
-            let diagnostics = sidecar_startup_diagnostics_text(&startup_diagnostics);
-            let message = format!("{}; {}", error, diagnostics);
-            logger::log_codex_api_warn(&format!(
-                "[CodexLocalAccess][provider-gateway] sidecar ready 等待失败，将停止进程: {}",
-                message
-            ));
-            let _ = child.kill().await;
-            task.abort();
-            let _ = task.await;
-            return Err(message);
-        }
-    };
-
-    if let Some(ready_port) = ready_signal.port {
-        if ready_port != collection.port {
-            let message = format!(
-                "Codex provider gateway sidecar ready 端口不一致: expected={}, actual={}, host={}",
-                collection.port, ready_port, ready_signal.host
-            );
-            logger::log_codex_api_warn(&format!(
-                "[CodexLocalAccess][provider-gateway] sidecar ready 校验失败，将停止进程: {}",
-                message
-            ));
-            let _ = child.kill().await;
-            task.abort();
-            let _ = task.await;
-            return Err(message);
-        }
-    } else {
-        let message = format!(
-            "Codex provider gateway sidecar ready 事件缺少端口: host={}",
-            ready_signal.host
-        );
-        logger::log_codex_api_warn(&format!(
-            "[CodexLocalAccess][provider-gateway] sidecar ready 校验失败，将停止进程: {}",
-            message
-        ));
-        let _ = child.kill().await;
-        task.abort();
-        let _ = task.await;
-        return Err(message);
-    }
-
-    log_sidecar_proxy_signature(&launch_config.proxy_signature);
-    logger::log_codex_api_info(&format!(
-        "[CodexLocalAccess][provider-gateway] sidecar 已启动: bin={} bind={}:{} base={}",
-        binary.display(),
-        bind_host,
-        collection.port,
-        build_base_url(collection.port)
-    ));
-
-    Ok((child, task, bind_host.to_string()))
-}
 
 async fn stop_spawned_provider_gateway_sidecar(
     mut child: Child,
@@ -3321,17 +2930,15 @@ pub async fn ensure_provider_gateway_for_dir(
     }
 
     let _guard = provider_gateway_lifecycle_lock().lock().await;
-    validate_provider_gateway_template_mode()?;
     let account = codex_account::load_account(account_id)
         .ok_or_else(|| format!("供应商网关账号不存在: {}", account_id))?;
-    freeze_existing_native_provider_model_bindings(profile_dir, &account)?;
     // 持久端口可能已被其它实例/进程占用：先放弃该端口，下面的构建会重新分配一个空闲端口，
     // 避免带着冲突端口启动 sidecar 失败后，后续每次尝试都继续失败。
     stop_profile_writer_before_port_reassignment(profile_dir, account_id).await?;
     release_occupied_provider_gateway_profile_port(profile_dir, account_id).await;
     let (collection, key, provider_gateway) =
         build_provider_gateway_collection_for_profile(profile_dir, &account)?;
-    let model_slots = provider_gateway_model_slots_for_collection(&collection, &provider_gateway)?;
+    let model_slots = provider_model_slots_for_account(&account,&provider_gateway.upstream_models);
     let runtime_key = provider_gateway_runtime_key(profile_dir, account_id);
     let (endpoint, stopped) =
         stop_provider_gateway_runtime_checked(&runtime_key, "configuration_rebuild").await;
@@ -3340,113 +2947,7 @@ pub async fn ensure_provider_gateway_for_dir(
         wait_for_gateway_port_release(&endpoint.bind_host, endpoint.port).await?;
     }
 
-    if collection.gateway_mode == CodexLocalAccessGatewayMode::Native {
-        return native_ensure_provider_profile(
-            profile_dir,
-            &account,
-            collection,
-            &key,
-            &model_slots,
-        )
-        .await;
-    }
-
-    let sidecar_dir = provider_gateway_sidecar_dir(profile_dir, account_id)?;
-    let runtime_sidecar_dir = sidecar_dir.clone();
-    let default_service_tier =
-        crate::modules::codex_speed::get_app_speed_config_for_dir(profile_dir)
-            .map(|config| codex_app_speed_service_tier(&config.speed))?;
-    // 生图转发账号需要把凭据写进实例 sidecar，否则网关手里只有 API Key 上游。
-    let image_accounts = image_generation_accounts_for_account(&account, &collection);
-    let mut account_overrides: HashMap<String, CodexAccount> = HashMap::new();
-    account_overrides.insert(account.id.clone(), account.clone());
-    for image_account in &image_accounts {
-        account_overrides.insert(image_account.id.clone(), image_account.clone());
-    }
-    let runtime_oauth_account_ids = image_accounts
-        .iter()
-        .filter(|item| !item.is_api_key_auth())
-        .map(|item| item.id.clone())
-        .collect::<Vec<_>>();
-    let launch_config = prepare_sidecar_launch_config_in_dir(
-        &collection,
-        sidecar_dir,
-        HashMap::new(),
-        default_service_tier,
-        account_overrides,
-    )
-    .await?;
-    if probe_sidecar_ready_once(&collection, Duration::from_millis(250))
-        .await
-        .is_ok()
-    {
-        let killed = cleanup_managed_sidecar_port_processes(
-            collection.port,
-            launch_config.config_path.clone(),
-        )
-        .await??;
-        if killed > 0 {
-            logger::log_codex_api_info(&format!(
-                "[CodexLocalAccess][provider-gateway] 已停止旧 sidecar: port={}, killed={}",
-                collection.port, killed
-            ));
-        }
-        wait_for_gateway_port_release(bind_host_for_collection(&collection), collection.port)
-            .await?;
-    }
-
-    let port = collection.port;
-    let (child, task, bind_host) = activate_provider_gateway_profile(
-        profile_dir,
-        &key,
-        || spawn_provider_gateway_sidecar(&collection, &launch_config, false),
-        || async {
-            save_profile_takeover_backup(profile_dir, &key)?;
-            write_local_access_profile_takeover(profile_dir, &collection, Some(&key), false)
-                .await?;
-            cleanup_provider_gateway_profile_model_overrides(profile_dir)?;
-            backup_current_profile_model_before_provider_gateway(
-                profile_dir,
-                &model_slots
-                    .iter()
-                    .map(|slot| slot.client_model.clone())
-                    .collect::<Vec<_>>(),
-            )?;
-            if let Some(default_slot) = preferred_provider_gateway_slot(&account, &model_slots) {
-                write_local_access_profile_model_override(profile_dir, &default_slot.client_model)?;
-            }
-            if !model_slots.is_empty() {
-                write_provider_gateway_model_catalog_with_templates(
-                    profile_dir,
-                    &model_slots,
-                    official_catalog_json_for_provider_gateway(&account)?.as_deref(),
-                    Some(&account),
-                )?;
-            }
-            codex_account::reapply_experimental_model_policy_if_enabled(profile_dir)?;
-            reapply_deepseek_profile_config_overrides(profile_dir, &account)?;
-            Ok(())
-        },
-        |(child, task, bind_host)| async move {
-            stop_spawned_provider_gateway_sidecar(child, task, &bind_host, port).await;
-        },
-    )
-    .await?;
-    let mut runtimes = provider_gateway_runtime_store().lock().await;
-    runtimes.insert(
-        runtime_key,
-        ProviderGatewayRuntime {
-            actual_port: Some(collection.port),
-            actual_bind_host: Some(bind_host),
-            task: Some(task),
-            sidecar_child: Some(child),
-            native_handle: None,
-            sidecar_dir: Some(runtime_sidecar_dir),
-            collection: Some(collection),
-            oauth_account_ids: runtime_oauth_account_ids,
-        },
-    );
-    Ok(())
+    native_ensure_provider_profile(profile_dir, &account, collection, &key, &model_slots).await
 }
 
 pub async fn ensure_mixed_model_gateway_for_dir(
@@ -3491,7 +2992,6 @@ pub(crate) async fn ensure_mixed_model_gateway_for_dir_if_current(
     let oauth_account = validate_local_access_bound_oauth_account(oauth_account_id)?;
     let routing = validate_mixed_model_routing_config(Some(oauth_account_id), routing)?;
     let _guard = provider_gateway_lifecycle_lock().lock().await;
-    validate_provider_gateway_template_mode()?;
     if !is_current() {
         return Ok(());
     }
@@ -3509,140 +3009,7 @@ pub(crate) async fn ensure_mixed_model_gateway_for_dir_if_current(
     }
     let runtime_key = provider_gateway_runtime_key(profile_dir, MIXED_MODEL_ROUTING_RUNTIME_ID);
 
-    if collection.gateway_mode == CodexLocalAccessGatewayMode::Native {
-        return native_ensure_mixed_profile(
-            profile_dir,
-            &oauth_account.id,
-            collection,
-            &key,
-            &routing,
-            is_current,
-        )
-        .await;
-    }
-
-    let sidecar_dir = provider_gateway_sidecar_dir(profile_dir, MIXED_MODEL_ROUTING_RUNTIME_ID)
-        .map_err(|error| mixed_model_start_error_with_rollback(profile_dir, error))?;
-    let runtime_sidecar_dir = sidecar_dir.clone();
-    let runtime_oauth_account_id = oauth_account.id.clone();
-    let default_service_tier =
-        crate::modules::codex_speed::get_app_speed_config_for_dir(profile_dir)
-            .map(|config| codex_app_speed_service_tier(&config.speed))
-            .map_err(|error| mixed_model_start_error_with_rollback(profile_dir, error))?;
-    let launch_config = match prepare_sidecar_launch_config_in_dir(
-        &collection,
-        sidecar_dir,
-        HashMap::new(),
-        default_service_tier,
-        HashMap::from([(oauth_account.id.clone(), oauth_account)]),
-    )
-    .await
-    {
-        Ok(config) => config,
-        Err(error) => return Err(mixed_model_start_error_with_rollback(profile_dir, error)),
-    };
-    if !is_current() {
-        return Ok(());
-    }
-    if probe_sidecar_ready_once(&collection, Duration::from_millis(250))
-        .await
-        .is_ok()
-    {
-        if !is_current() {
-            return Ok(());
-        }
-        let killed = process::kill_port_processes(collection.port)
-            .map_err(|error| mixed_model_start_error_with_rollback(profile_dir, error))?;
-        if killed > 0 {
-            logger::log_codex_api_info(&format!(
-                "[CodexLocalAccess][mixed-model-routing] 已停止旧 sidecar: port={}, killed={}",
-                collection.port, killed
-            ));
-        }
-        wait_for_gateway_port_release(bind_host_for_collection(&collection), collection.port)
-            .await
-            .map_err(|error| mixed_model_start_error_with_rollback(profile_dir, error))?;
-    }
-
-    if !is_current() {
-        return Ok(());
-    }
-    let (child, task, bind_host) =
-        match spawn_provider_gateway_sidecar(&collection, &launch_config, true).await {
-            Ok(runtime) => runtime,
-            Err(error) => return Err(mixed_model_start_error_with_rollback(profile_dir, error)),
-        };
-
-    if !is_current() {
-        stop_spawned_provider_gateway_sidecar(child, task, &bind_host, collection.port).await;
-        return Ok(());
-    }
-
-    let activation_snapshot =
-        match capture_mixed_model_profile_activation_snapshot(profile_dir, &key) {
-            Ok(snapshot) => snapshot,
-            Err(error) => {
-                stop_spawned_provider_gateway_sidecar(child, task, &bind_host, collection.port)
-                    .await;
-                return Err(mixed_model_start_error_with_rollback(profile_dir, error));
-            }
-        };
-
-    // 混合路由的可见模型清单直接从路由配置推导，因此不依赖、也不修改用户的「模型管理」开关。
-    let catalog_definitions = mixed_model_catalog_definitions(&routing)?;
-    let catalog_model_ids = catalog_definitions
-        .iter()
-        .map(|(model_id, _)| model_id.clone())
-        .collect::<Vec<_>>();
-    let takeover_result = async {
-        save_profile_takeover_backup(profile_dir, &key)?;
-        cleanup_provider_gateway_profile_model_overrides(profile_dir)?;
-        // 记录本次接管前的模型目录状态：停止实例或退出 Cockpit 时按它恢复。
-        if !catalog_model_ids.is_empty() {
-            backup_current_profile_model_before_provider_gateway(profile_dir, &catalog_model_ids)?;
-        }
-        write_local_access_profile_takeover(profile_dir, &collection, Some(&key), false).await?;
-        if !catalog_definitions.is_empty() {
-            write_local_access_profile_model_catalog_with_definitions(
-                profile_dir,
-                false,
-                Some(catalog_definitions.clone()),
-            )?;
-        }
-        codex_account::reapply_experimental_model_policy_if_enabled(profile_dir)
-    }
-    .await;
-    if let Err(error) = takeover_result {
-        stop_spawned_provider_gateway_sidecar(child, task, &bind_host, collection.port).await;
-        if let Err(rollback_error) =
-            rollback_mixed_model_profile_after_start_failure(profile_dir, Some(activation_snapshot))
-        {
-            return Err(format!("{}; 启动失败回滚也失败: {}", error, rollback_error));
-        }
-        return Err(error);
-    }
-
-    let mut runtimes = provider_gateway_runtime_store().lock().await;
-    if !is_current() {
-        drop(runtimes);
-        stop_spawned_provider_gateway_sidecar(child, task, &bind_host, collection.port).await;
-        rollback_mixed_model_profile_after_start_failure(profile_dir, Some(activation_snapshot))?;
-        return Ok(());
-    }
-    runtimes.insert(
-        runtime_key,
-        ProviderGatewayRuntime {
-            actual_port: Some(collection.port),
-            actual_bind_host: Some(bind_host),
-            task: Some(task),
-            sidecar_child: Some(child),
-            native_handle: None,
-            sidecar_dir: Some(runtime_sidecar_dir),
-            collection: Some(collection),
-            oauth_account_ids: vec![runtime_oauth_account_id],
-        },
-    );
-    Ok(())
+    native_ensure_mixed_profile(profile_dir, &oauth_account.id, collection, &key, &routing, is_current).await
 }
 
 pub async fn ensure_bound_oauth_local_gateway_for_dir(
@@ -3655,7 +3022,6 @@ pub async fn ensure_bound_oauth_local_gateway_for_dir(
     }
 
     let _guard = provider_gateway_lifecycle_lock().lock().await;
-    validate_provider_gateway_template_mode()?;
     let account = codex_account::load_account(account_id)
         .ok_or_else(|| format!("绑定 OAuth 本地网关账号不存在: {}", account_id))?;
     // 同 provider gateway：持久端口被其它进程占用时先放弃，改用新的空闲端口。
@@ -3671,76 +3037,7 @@ pub async fn ensure_bound_oauth_local_gateway_for_dir(
         wait_for_gateway_port_release(&endpoint.bind_host, endpoint.port).await?;
     }
 
-    if collection.gateway_mode == CodexLocalAccessGatewayMode::Native {
-        return native_ensure_bound_profile(profile_dir, &account, collection, &key).await;
-    }
-
-    let sidecar_dir = provider_gateway_sidecar_dir(profile_dir, account_id)?;
-    let runtime_sidecar_dir = sidecar_dir.clone();
-    let runtime_oauth_account_id = account.id.clone();
-    let default_service_tier =
-        crate::modules::codex_speed::get_app_speed_config_for_dir(profile_dir)
-            .map(|config| codex_app_speed_service_tier(&config.speed))?;
-    let launch_config = prepare_sidecar_launch_config_in_dir(
-        &collection,
-        sidecar_dir,
-        HashMap::new(),
-        default_service_tier,
-        HashMap::from([(account.id.clone(), account)]),
-    )
-    .await?;
-    if probe_sidecar_ready_once(&collection, Duration::from_millis(250))
-        .await
-        .is_ok()
-    {
-        let killed = cleanup_managed_sidecar_port_processes(
-            collection.port,
-            launch_config.config_path.clone(),
-        )
-        .await??;
-        if killed > 0 {
-            logger::log_codex_api_info(&format!(
-                "[CodexLocalAccess][bound-oauth-local-gateway] 已停止旧 sidecar: port={}, killed={}",
-                collection.port, killed
-            ));
-        }
-        wait_for_gateway_port_release(bind_host_for_collection(&collection), collection.port)
-            .await?;
-    }
-
-    let port = collection.port;
-    let (child, task, bind_host) = activate_provider_gateway_profile(
-        profile_dir,
-        &key,
-        || spawn_provider_gateway_sidecar(&collection, &launch_config, false),
-        || async {
-            save_profile_takeover_backup(profile_dir, &key)?;
-            write_local_access_profile_takeover(profile_dir, &collection, Some(&key), false)
-                .await?;
-            cleanup_provider_gateway_profile_model_overrides(profile_dir)?;
-            codex_account::reapply_experimental_model_policy_if_enabled(profile_dir)?;
-            Ok(())
-        },
-        |(child, task, bind_host)| async move {
-            stop_spawned_provider_gateway_sidecar(child, task, &bind_host, port).await;
-        },
-    )
-    .await?;
-    let mut runtimes = provider_gateway_runtime_store().lock().await;
-    runtimes.insert(
-        runtime_key,
-        ProviderGatewayRuntime {
-            actual_port: Some(collection.port),
-            actual_bind_host: Some(bind_host),
-            task: Some(task),
-            sidecar_child: Some(child),
-            native_handle: None,
-            sidecar_dir: Some(runtime_sidecar_dir),
-            collection: Some(collection),
-            oauth_account_ids: vec![runtime_oauth_account_id],
-        },
-    );
-    Ok(())
+    native_ensure_bound_profile(profile_dir, &account, collection, &key).await
 }
 
 include!("codex_local_access_grok_auth_sync.rs");

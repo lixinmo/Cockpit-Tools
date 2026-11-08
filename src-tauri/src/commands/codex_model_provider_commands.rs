@@ -60,7 +60,24 @@ pub async fn save_codex_model_providers(data: String) -> Result<(), String> {
 }
 
 fn codex_model_provider_models_url(base_url: &str) -> Result<String, String> {
-    crate::modules::codex_provider_metadata::models_url(base_url)
+    let trimmed = base_url.trim().trim_end_matches('/');
+    if trimmed.is_empty() {
+        return Err("PROVIDER_BASE_URL_INVALID".to_string());
+    }
+    let mut url =
+        reqwest::Url::parse(trimmed).map_err(|_| "PROVIDER_BASE_URL_INVALID".to_string())?;
+    match url.scheme() {
+        "http" | "https" => {}
+        _ => return Err("PROVIDER_BASE_URL_INVALID".to_string()),
+    }
+    let next_path = if url.path().is_empty() || url.path() == "/" {
+        "/models".to_string()
+    } else {
+        format!("{}/models", url.path().trim_end_matches('/'))
+    };
+    url.set_path(&next_path);
+    url.set_query(None);
+    Ok(url.to_string())
 }
 
 fn codex_model_provider_usage_url(base_url: &str) -> Result<String, String> {
@@ -585,6 +602,38 @@ fn summarize_model_provider_models(body: &serde_json::Value) -> (Option<String>,
     (first, output)
 }
 
+fn list_model_provider_models(body: &serde_json::Value) -> Vec<CodexModelProviderModel> {
+    let mut seen = std::collections::HashSet::new();
+    body.get("data")
+        .and_then(|value| value.as_array())
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| {
+                    let id = item.get("id").and_then(|id| id.as_str())?.trim();
+                    if id.is_empty() {
+                        return None;
+                    }
+                    let key = id.to_ascii_lowercase();
+                    if !seen.insert(key) {
+                        return None;
+                    }
+                    Some(CodexModelProviderModel {
+                        id: id.to_string(),
+                        display_name: item
+                            .get("display_name")
+                            .or_else(|| item.get("displayName"))
+                            .and_then(|value| value.as_str())
+                            .map(str::trim)
+                            .filter(|value| !value.is_empty())
+                            .map(str::to_string),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CodexModelProviderUsageDetail {
@@ -593,7 +642,12 @@ pub struct CodexModelProviderUsageDetail {
     pub value: String,
 }
 
-pub type CodexModelProviderModel = crate::modules::codex_provider_metadata::DiscoveredModel;
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexModelProviderModel {
+    pub id: String,
+    pub display_name: Option<String>,
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -1681,36 +1735,40 @@ pub fn codex_cancel_model_provider_chat_test(run_id: String) -> Result<bool, Str
 }
 
 #[tauri::command]
-pub async fn codex_list_model_provider_models(
-    base_url: String,
-    api_key: String,
-    wire_api: Option<String>,
-    auth_scheme: Option<String>,
-) -> Result<CodexModelProviderModelsResult, String> {
+pub async fn codex_list_model_provider_models(base_url: String, api_key: String, wire_api: Option<String>, auth_scheme: Option<String>) -> Result<CodexModelProviderModelsResult, String> {
     if let Ok(Some(remote)) = crate::modules::codex_remote_service::discover(&base_url, api_key.trim(), false).await {
-        let templates = remote.model_catalog.as_ref().and_then(|catalog| catalog["models"].as_array());
-        let mut ids = remote.models;
-        ids.sort_by_key(|id| templates.into_iter().flatten()
-            .find(|model| model["slug"].as_str() == Some(id.as_str()))
-            .and_then(|model| model["priority"].as_i64()).unwrap_or(i64::MAX));
-        let models = ids.into_iter().map(|id| {
-            let template = templates.into_iter().flatten()
-                .find(|model| model["slug"].as_str() == Some(id.as_str()));
-            CodexModelProviderModel {
-                display_name: template.and_then(|model| model["display_name"].as_str()).map(str::to_owned),
-                metadata: template.and_then(crate::modules::codex_provider_metadata::parse_metadata),
-                id,
-            }
-        }).collect();
-        return Ok(CodexModelProviderModelsResult { models, latency_ms: 0 });
+        let names:std::collections::HashMap<String,String>=remote.model_catalog.as_ref().and_then(|c|c["models"].as_array())
+            .into_iter().flatten().filter_map(|m|Some((m["slug"].as_str()?.into(),m["display_name"].as_str()?.into()))).collect();
+        let priorities:std::collections::HashMap<String,i64>=remote.model_catalog.as_ref().and_then(|c|c["models"].as_array())
+            .into_iter().flatten().filter_map(|m|Some((m["slug"].as_str()?.into(),m["priority"].as_i64().unwrap_or(i64::MAX)))).collect();
+        let mut ids=remote.models;
+        ids.sort_by_key(|id|priorities.get(id).copied().unwrap_or(i64::MAX));
+        return Ok(CodexModelProviderModelsResult { models: ids.into_iter().map(|id| {
+            let display_name=names.get(&id).cloned();CodexModelProviderModel { id, display_name }
+        }).collect(), latency_ms: 0 });
     }
-    let fetched = crate::modules::codex_provider_metadata::fetch_with_protocol(
-        &base_url, &api_key, wire_api.as_deref(), auth_scheme.as_deref(),
-    ).await?;
-    Ok(CodexModelProviderModelsResult {
-        models: fetched.models,
-        latency_ms: fetched.latency_ms,
-    })
+    if api_key.trim().is_empty() { return Err("MISSING_API_KEY".into()); }
+    let client = reqwest::Client::builder().timeout(Duration::from_secs(20)).build().map_err(|_| "PROVIDER_MODELS_NETWORK_FAILED".to_string())?;
+    let protocol = normalize_model_provider_wire_api(wire_api.as_deref(), &base_url);
+    let raw = if protocol == "anthropic" {
+        crate::modules::codex_native_api::anthropic::endpoint(&base_url,"models").map_err(|_| "PROVIDER_BASE_URL_INVALID".to_string())?
+    } else { codex_model_provider_models_url(&base_url)? };
+    let mut url = reqwest::Url::parse(&raw).map_err(|_| "PROVIDER_BASE_URL_INVALID".to_string())?;
+    let started = Instant::now();
+    let mut models = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for _ in 0..10 {
+        let remaining = Duration::from_secs(20).checked_sub(started.elapsed()).ok_or("PROVIDER_MODELS_NETWORK_FAILED")?;
+        let request = crate::modules::codex_provider_protocol::authenticate_provider_request(client.get(url.clone()), &protocol, auth_scheme.as_deref(), &api_key).timeout(remaining);
+        let response = request.send().await.map_err(|_| "PROVIDER_MODELS_NETWORK_FAILED".to_string())?;
+        if !response.status().is_success() { return Err(format!("PROVIDER_MODELS_HTTP_{}",response.status().as_u16())); }
+        let body: serde_json::Value = response.json().await.map_err(|_| "PROVIDER_MODELS_PARSE_FAILED".to_string())?;
+        for model in list_model_provider_models(&body) { if seen.insert(model.id.clone()) { models.push(model); } }
+        if body["has_more"] != true { break; }
+        let Some(last) = body["last_id"].as_str().filter(|s|!s.is_empty()) else { break; };
+        url.query_pairs_mut().clear().append_pair("after_id",last);
+    }
+    Ok(CodexModelProviderModelsResult {models,latency_ms:started.elapsed().as_millis().min(u64::MAX as u128) as u64})
 }
 
 #[tauri::command]

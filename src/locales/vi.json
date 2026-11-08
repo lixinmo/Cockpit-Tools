@@ -2562,17 +2562,6 @@
       "windowHint": "Ngưỡng dựa trên thời lượng thực tế: từ một tuần trở lên dùng ngưỡng tuần. Tài khoản chỉ có hạn mức tuần chỉ kiểm tra hạn mức đó. Khi thiếu thời lượng, giữ ánh xạ cửa sổ chính/phụ.",
       "rule": "Còn lại ngắn hạn <= {{shortCycle}}% hoặc tuần <= {{weekly}}%"
     },
-    "credits": {
-      "title": "Kiểm soát sử dụng credit",
-      "policy": "Chính sách chung (lưu ngay)",
-      "default": "Mặc định",
-      "prefer": "Ưu tiên hạn mức thông thường",
-      "strict": "Chỉ dùng hạn mức thông thường",
-      "allow": "Cho phép dùng credit",
-      "description": "Chế độ mặc định giữ nguyên cách định tuyến hiện tại. Ưu tiên hạn mức thông thường chỉ cho phép dùng credit sau khi mọi tài khoản Codex trong nhóm của khóa API hiện tại đã dùng hết hạn mức thông thường. Chỉ dùng hạn mức thông thường sẽ chặn credit. Việc tắt credit cho từng tài khoản luôn được ưu tiên.",
-      "boundary": "Ảnh chụp trạng thái hạn mức có hiệu lực trong 5 phút. Hạn mức của tài khoản bị hạn chế được tự động cập nhật trước khi chọn nếu chưa rõ, đã cũ hoặc vừa đặt lại (tối đa 9 giây, gộp các lượt đọc đồng thời). Nếu cập nhật thất bại, tài khoản sẽ được tạm dừng an toàn; xem chẩn đoán nhóm tài khoản để biết chi tiết. Không thể thu hồi yêu cầu đang xử lý. Yêu cầu vượt qua ranh giới hạn mức hoặc việc các ứng dụng khác sử dụng đồng thời vẫn có thể tiêu tốn credit ở nhà cung cấp; cần đặt giới hạn chi tiêu tuyệt đối tại nhà cung cấp.",
-      "strictHint": "Chế độ Chỉ dùng hạn mức thông thường chặn credit cho mọi tài khoản. Các công tắc của từng tài khoản được giữ lại cho các chính sách khác."
-    },
     "launchConfirmation": {
       "title": "Chưa xác nhận khởi chạy",
       "description": "Đã gửi yêu cầu khởi chạy nhưng chưa xác nhận được trạng thái ứng dụng. Có thể ứng dụng đã mở. Vui lòng không khởi chạy lại.",
@@ -2894,16 +2883,6 @@
       "savedPath": "Đường dẫn đã lưu"
     },
     "localAccess": {
-      "gatewayEngineNative": "Rust gốc",
-      "gatewayEngineSidecar": "Go (hiện tại)",
-      "gatewayEngineHint": "Rust là bộ máy mặc định. Lần nâng cấp đầu tiên sẽ chuyển sang Rust; các lựa chọn sau đó được giữ lại. Chuyển đổi sẽ khởi động lại dịch vụ API và có thể ngắt yêu cầu đang chạy; cửa sổ Codex vẫn mở.",
-      "gatewayEngineSwitching": "Đang chuyển bộ máy…",
-      "gatewayEngineSwitchFailed": "Không thể chuyển bộ máy: {{error}}",
-      "gatewayEngineReadbackFailed": "Chưa xác nhận được bộ máy hiện tại. Hãy làm mới trước khi thử lại: {{error}}",
-      "gatewayEngineReadbackTimeout": "Làm mới trạng thái đã hết thời gian",
-      "gatewayEngineOperationBusy": "Dịch vụ đang thực hiện thao tác khác. Hãy thử lại sau ít phút.",
-      "gatewayEngineSwitchRestored": "Chuyển đổi thất bại. Đã khôi phục bộ máy trước đó.",
-      "gatewayEngineRestoreFailed": "Chuyển đổi thất bại và không thể khôi phục bộ máy trước đó. Hãy kiểm tra trạng thái dịch vụ trước khi thử lại.",
       "title": "Dịch vụ API",
       "accountCount": "{{count}} tài khoản",
       "baseUrl": "Địa chỉ",
@@ -3383,9 +3362,6 @@
       "resetCredits": "Lượt đặt lại {{count}}",
       "resetCreditsTitle": "Lượt đặt lại còn lại cho cửa sổ 5 giờ: {{count}}",
       "resetCreditConfirm": "Xác nhận?",
-      "autoConsumeResetDescription": "Công tắc và ngưỡng chỉ áp dụng cho tài khoản Codex này. Khi Cockpit Tools đang chạy và máy tính không ở chế độ ngủ, hạn mức được kiểm tra trong nền khoảng mỗi phút một lần. Nếu phần trăm hạn mức tuần còn lại bằng hoặc thấp hơn ngưỡng, một Banked Reset có ngày hết hạn gần nhất sẽ được sử dụng. Bỏ qua hạn mức 5 giờ; không làm gì nếu không có Reset khả dụng. Chỉ có thể tự động sử dụng lần tiếp theo sau khi hạn mức tuần còn lại được cập nhật và vượt ngưỡng. Mặc định tắt.",
-      "autoConsumeResetThreshold": "Ngưỡng hạn mức tuần còn lại",
-      "autoConsumeResetInvalidThreshold": "Nhập số nguyên từ 0 đến 99.",
       "resetCreditDialogTitle": "Đặt lại mức dùng?",
       "resetCreditDialogDesc": "Đặt lại giới hạn tốc độ để tiếp tục làm việc không gián đoạn. Lượt đặt lại còn lại: {{count}}.",
       "resetCreditDialogAction": "Đặt lại mức dùng",
@@ -6080,15 +6056,6 @@
       "defaultReasoning": "Mức mặc định",
       "defaultReasoningFollow": "Dùng mặc định",
       "defaultReasoningHint": "Để trống để dùng mức mặc định của mô hình. Mức đã chọn phải được hỗ trợ.",
-      "reasoningNone": "Tắt",
-      "reasoningMinimal": "Tối thiểu",
-      "providerPolicyHint": "Cấu hình khả năng của các mô hình thuộc nhà cung cấp này tại đây. Để thêm hoặc xóa mô hình, hãy sửa danh sách mô hình trong tài khoản của họ; chức năng nhập cấu hình phiên bản không áp dụng ở đây.",
-      "providerPolicyDescription": "Sử dụng khả năng đã biết của nhà cung cấp; nếu không có thông tin, dùng các mức tương thích. Bạn có thể cấu hình thủ công.",
-      "providerPolicyFollow": "Theo nhà cung cấp",
-      "providerPolicyCustom": "Tùy chỉnh",
-      "providerPolicyConfirm": "Lưu cấu hình mô hình riêng cho nhà cung cấp này. Các tài khoản khác sẽ không thay đổi.",
-      "inheritReasoning": "Theo mô hình",
-      "noReasoning": "Không thể điều chỉnh mức suy luận",
       "defaultReasoningInvalid": "Mức suy luận mặc định phải được mô hình này hỗ trợ."
     },
     "modelConfig": {
@@ -6207,6 +6174,17 @@
     },
     "officialApi": {
       "hint": "Tài khoản dùng khóa API chính thức của OpenAI, được xác định theo địa chỉ kết nối thực tế."
+    },
+    "credits": {
+      "title": "Kiểm soát sử dụng credit",
+      "policy": "Chính sách chung (lưu ngay)",
+      "default": "Mặc định",
+      "prefer": "Ưu tiên hạn mức thông thường",
+      "strict": "Chỉ dùng hạn mức thông thường",
+      "allow": "Cho phép dùng credit",
+      "description": "Chế độ mặc định giữ nguyên cách định tuyến hiện tại. Ưu tiên hạn mức thông thường chỉ cho phép dùng credit sau khi mọi tài khoản Codex trong nhóm của khóa API hiện tại đã dùng hết hạn mức thông thường. Chỉ dùng hạn mức thông thường sẽ chặn credit. Việc tắt credit cho từng tài khoản luôn được ưu tiên.",
+      "boundary": "Ảnh chụp trạng thái hạn mức có hiệu lực trong 5 phút. Hạn mức của tài khoản bị hạn chế được tự động cập nhật trước khi chọn nếu chưa rõ, đã cũ hoặc vừa đặt lại (tối đa 9 giây, gộp các lượt đọc đồng thời). Nếu cập nhật thất bại, tài khoản sẽ được tạm dừng an toàn; xem chẩn đoán nhóm tài khoản để biết chi tiết. Không thể thu hồi yêu cầu đang xử lý. Yêu cầu vượt qua ranh giới hạn mức hoặc việc các ứng dụng khác sử dụng đồng thời vẫn có thể tiêu tốn credit ở nhà cung cấp; cần đặt giới hạn chi tiêu tuyệt đối tại nhà cung cấp.",
+      "strictHint": "Chế độ Chỉ dùng hạn mức thông thường chặn credit cho mọi tài khoản. Các công tắc của từng tài khoản được giữ lại cho các chính sách khác."
     }
   },
   "githubCopilot": {

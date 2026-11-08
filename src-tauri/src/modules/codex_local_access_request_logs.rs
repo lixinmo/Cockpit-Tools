@@ -41,16 +41,11 @@ fn gateway_mode_from_db_value(value: &str) -> Option<CodexLocalAccessGatewayMode
 }
 
 fn migrate_legacy_gateway_mode(collection: &mut CodexLocalAccessCollection) -> bool {
-    // Legacy is retired; unmarked snapshots predate the Native default. A later
-    // explicit Sidecar selection carries this marker and must remain unchanged.
-    if collection.gateway_mode == CodexLocalAccessGatewayMode::Legacy
-        || !collection.native_gateway_default_migrated
-    {
-        collection.gateway_mode = CodexLocalAccessGatewayMode::Native;
-        collection.native_gateway_default_migrated = true;
-        return true;
-    }
-    false
+    let changed = collection.gateway_mode != CodexLocalAccessGatewayMode::Native
+        || !collection.native_gateway_default_migrated;
+    collection.gateway_mode = CodexLocalAccessGatewayMode::Native;
+    collection.native_gateway_default_migrated = true;
+    changed
 }
 
 fn bool_to_db_value(value: bool) -> i64 {

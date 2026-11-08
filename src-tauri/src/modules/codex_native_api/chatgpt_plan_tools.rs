@@ -23,12 +23,6 @@ fn text<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
     value.get(key).and_then(Value::as_str)
 }
 
-fn tool_name(value: &Value) -> Option<&str> {
-    text(value, "name")
-        .filter(|name| !name.is_empty())
-        .or_else(|| value.pointer("/function/name").and_then(Value::as_str))
-}
-
 fn invalid(message: &str) -> ServiceError {
     ServiceError::new(400, "invalid_client_tool_discovery", message).with_error_details(
         json!({"code":"invalid_client_tool_discovery","message":message,"param":"tools"}),
@@ -76,7 +70,7 @@ fn names(value: &Value, used: &mut HashSet<String>, depth: usize) -> Result<(), 
     }
     if let Some(tools) = value.get("tools").and_then(Value::as_array) {
         for tool in tools {
-            if let Some(name) = tool_name(tool) {
+            if let Some(name) = text(tool, "name") {
                 used.insert(name.into());
             }
             names(tool, used, depth + 1)?;
@@ -201,7 +195,7 @@ fn group_qualified_tools(body: &mut Value) -> Result<(), ServiceError> {
                 };
                 let children = grouped[index]["tools"].as_array_mut().unwrap();
                 if children.iter().any(|existing| {
-                    existing["type"] == tool["type"] && tool_name(existing) == tool_name(&tool)
+                    existing["type"] == tool["type"] && existing["name"] == tool["name"]
                 }) {
                     return Err(invalid("Duplicate client tool declaration in namespace"));
                 }

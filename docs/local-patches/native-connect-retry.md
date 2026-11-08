@@ -1,3 +1,7 @@
+> Current runtime is Native-only. The Go implementation, its T01–T22 code and
+> verifier are retired; their original contract remains available in Git history.
+> This Native implementation and its fixed runtime limits remain unchanged.
+
 # CT-CONNECT-RETRY-001: Native Rust integration
 
 This integration preserves the fixed setup-only behavior of
@@ -88,9 +92,9 @@ bodies, early response drop, exclusion of other hosts/Upgrade, and refusal to
 replay after the send boundary. All 18 passed with the main workspace's locked
 hyper 1.9.0, h2 0.4.13 and tokio 1.52.0 on 2026-10-22.
 
-The Go verifier must still pass when retaining or updating the reference patch.
+The former Go implementation is retired; the original v1.0 reference remains in Git history.
 After any dependency/upstream refresh, inspect retry/pooling/handshake layers
-again before running both verifiers. Builds and compilation-dependent checks run in standard GitHub-hosted Actions
+again before running the Native verifier. Builds and compilation-dependent checks run in standard GitHub-hosted Actions
 under `docs/cloud-builds.md`; `npm run build:app:local` is only a compatibility
 alias that dispatches the cloud workflow.
 

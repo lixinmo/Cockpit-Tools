@@ -20,8 +20,6 @@ mod capability_fallback_http_tests;
 mod bootstrap;
 mod chat;
 mod chat_upstream;
-#[cfg(test)]
-pub(crate) use chat_upstream::responses_to_chat as responses_to_chat_for_test;
 mod chatgpt_plan_request;
 mod chatgpt_plan_wire;
 pub(super) mod chatgpt_plan_tools;

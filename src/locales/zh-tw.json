@@ -2562,17 +2562,6 @@
       "windowHint": "依實際時長匹配閾值，一週及以上使用週額度閾值；只有週額度時僅檢查週額度。缺少時長時沿用主／次視窗對應。",
       "rule": "短週期剩餘 <= {{shortCycle}}% 或週剩餘 <= {{weekly}}%"
     },
-    "credits": {
-      "title": "Credits 使用控制",
-      "policy": "全域策略（即時儲存）",
-      "default": "預設情況",
-      "prefer": "優先常規額度",
-      "strict": "嚴格常規額度",
-      "allow": "允許使用 credits",
-      "description": "預設依原調度規則使用帳號；優先常規額度需目前 API Key 帳號池所有帳號的常規額度耗盡才允許 credits；嚴格常規額度禁止轉入 credits。帳號開關關閉永遠優先。",
-      "boundary": "依據最近 5 分鐘內的額度快照判斷；額度未知、過期或重置後會先自動查詢額度（最多等待 9 秒，合併並行查詢）。查詢失敗時安全暫停該帳號，原因見帳號池診斷。無法撤銷進行中的請求，也無法保證上游在單次請求跨越額度邊界或其他客戶端並行用量時不扣 credits；絕對扣費限制需在上游設定。",
-      "strictHint": "嚴格模式下所有帳號均禁止 credits；帳號開關會保留，供切回其他策略後生效。"
-    },
     "launchConfirmation": {
       "title": "啟動待確認",
       "description": "啟動請求已送出，尚未確認用戶端狀態。用戶端可能已開啟，請勿重複啟動。",
@@ -2894,16 +2883,6 @@
       "savedPath": "儲存路徑"
     },
     "localAccess": {
-      "gatewayEngineNative": "Rust 原生",
-      "gatewayEngineSidecar": "Go 現有",
-      "gatewayEngineHint": "預設使用 Rust，首次升級會自動切換，之後保留你的選擇。切換會重新啟動 API 服務，可能中斷進行中的請求；Codex 視窗保持開啟。",
-      "gatewayEngineSwitching": "正在切換引擎…",
-      "gatewayEngineSwitchFailed": "切換引擎失敗：{{error}}",
-      "gatewayEngineReadbackFailed": "無法確認目前引擎，請先重新整理再重試：{{error}}",
-      "gatewayEngineReadbackTimeout": "重新整理狀態逾時",
-      "gatewayEngineOperationBusy": "服務正在執行其他操作，請稍後重試。",
-      "gatewayEngineSwitchRestored": "切換失敗，已還原原引擎。",
-      "gatewayEngineRestoreFailed": "切換失敗，且無法還原原引擎。請檢查服務狀態後重試。",
       "title": "API 服務",
       "accountCount": "{{count}} 個帳號",
       "baseUrl": "位址",
@@ -3514,9 +3493,6 @@
       "resetCredits": "重置 {{count}}",
       "resetCreditsTitle": "可用於重置目前 5 小時視窗的剩餘次數：{{count}}",
       "resetCreditConfirm": "確認重置?",
-      "autoConsumeResetDescription": "開關和閾值僅對目前的 Codex 帳號生效。應用程式執行且電腦未睡眠時，背景約每分鐘檢查額度。週額度剩餘 ≤ 閾值時使用 1 張最早到期的 Banked Reset，忽略 5h。無可用 Reset 則略過；週額度更新並恢復到閾值以上後才可再次自動使用。預設關閉。",
-      "autoConsumeResetThreshold": "週額度剩餘閾值",
-      "autoConsumeResetInvalidThreshold": "請輸入 0 到 99 的整數。",
       "resetCreditDialogTitle": "要重置你的使用量嗎？",
       "resetCreditDialogDesc": "重置速率限制後，可以繼續不中斷地工作。你還有 {{count}} 次重置可用。",
       "resetCreditDialogAction": "重置使用次數",
@@ -6080,15 +6056,6 @@
       "defaultReasoning": "預設檔位",
       "defaultReasoningFollow": "沿用預設",
       "defaultReasoningHint": "留空沿用模型預設檔位；所選檔位必須在目前支援範圍內。",
-      "reasoningNone": "關閉推理",
-      "reasoningMinimal": "極低",
-      "providerPolicyHint": "這裡只設定該供應商的模型能力。增刪型號請修改帳號的模型清單；執行個體設定的匯入匯出不適用於此處。",
-      "providerPolicyDescription": "讀取供應商已知能力；未提供時使用相容檔位，可手動設定。",
-      "providerPolicyFollow": "跟隨供應商",
-      "providerPolicyCustom": "已自訂",
-      "providerPolicyConfirm": "為這個供應商儲存獨立的模型能力設定，不影響其他帳號。",
-      "inheritReasoning": "跟隨模型",
-      "noReasoning": "不支援調整推理強度",
       "defaultReasoningInvalid": "預設推理檔位必須屬於目前支援的檔位。"
     },
     "modelConfig": {
@@ -6207,6 +6174,17 @@
     },
     "officialApi": {
       "hint": "OpenAI 官方 API Key 接入，依實際位址識別。"
+    },
+    "credits": {
+      "title": "Credits 使用控制",
+      "policy": "全域策略（即時儲存）",
+      "default": "預設情況",
+      "prefer": "優先常規額度",
+      "strict": "嚴格常規額度",
+      "allow": "允許使用 credits",
+      "description": "預設依原調度規則使用帳號；優先常規額度需目前 API Key 帳號池所有帳號的常規額度耗盡才允許 credits；嚴格常規額度禁止轉入 credits。帳號開關關閉永遠優先。",
+      "boundary": "依據最近 5 分鐘內的額度快照判斷；額度未知、過期或重置後會先自動查詢額度（最多等待 9 秒，合併並行查詢）。查詢失敗時安全暫停該帳號，原因見帳號池診斷。無法撤銷進行中的請求，也無法保證上游在單次請求跨越額度邊界或其他客戶端並行用量時不扣 credits；絕對扣費限制需在上游設定。",
+      "strictHint": "嚴格模式下所有帳號均禁止 credits；帳號開關會保留，供切回其他策略後生效。"
     }
   },
   "githubCopilot": {

@@ -13,11 +13,6 @@ mod messages;
 mod tools;
 pub(crate) use tools::ToolContext;
 pub(crate) use tools::unwrap_input;
-#[path = "chat_client_discovery.rs"]
-mod discovery;
-pub(super) fn validate_client_tools(body: &Value) -> Result<(), ServiceError> {
-    discovery::validate(body)
-}
 
 pub fn responses_to_chat(body: &Value) -> Result<Value, ServiceError> {
     responses_to_chat_inner(body, false)
@@ -358,7 +353,3 @@ mod parity22_tests;
 #[cfg(test)]
 #[path = "chat_plaintext_tests.rs"]
 mod plaintext_tests;
-
-#[cfg(test)]
-#[path = "chat_client_discovery_tests.rs"]
-mod client_discovery_tests;

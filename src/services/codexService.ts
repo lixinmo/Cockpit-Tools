@@ -113,9 +113,8 @@ export async function saveCodexModelCatalog(
 export async function getCodexModelReasoningEfforts(
   models: CodexExperimentalModelDefinition[],
   instanceId = '__default__',
-  providerAccountId?: string,
 ): Promise<Record<string, CodexReasoningEffort[]>> {
-  return await invoke('get_codex_model_reasoning_efforts', { models, instanceId, providerAccountId: providerAccountId ?? null });
+  return await invoke('get_codex_model_reasoning_efforts', { models, instanceId });
 }
 
 export async function previewCodexModelConfigImport(input: {

@@ -11,7 +11,7 @@ export interface CodexApiModelMapping {
 export interface CodexExperimentalModelDefinition {
   model_id: string;
   display_name: string;
-  /** undefined inherits model metadata; [] explicitly declares no adjustable reasoning; otherwise manual levels. */
+  /** undefined follows the official model reasoning levels; otherwise custom multi-select. */
   reasoning_efforts?: CodexReasoningEffort[];
   default_reasoning_effort?: CodexReasoningEffort;
   /** Omitted values follow the model catalog metadata. */
@@ -56,7 +56,7 @@ export interface CodexModelConfigImportPreview {
   defaultModelId: string | null;
 }
 
-export type CodexReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra';
+export type CodexReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra';
 
 export interface CodexQuickConfig {
   context_window_1m: boolean;

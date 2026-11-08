@@ -353,13 +353,6 @@ pub async fn codex_local_access_update_upstream_proxy_config(
 
 
 #[tauri::command]
-pub async fn codex_local_access_update_gateway_mode(
-    gateway_mode: CodexLocalAccessGatewayMode,
-) -> Result<CodexLocalAccessState, String> {
-    codex_local_access::update_local_access_gateway_mode(gateway_mode).await
-}
-
-#[tauri::command]
 pub async fn codex_local_access_update_debug_logs(
     debug_logs: bool,
 ) -> Result<CodexLocalAccessState, String> {

@@ -1242,7 +1242,6 @@ pub fn run() {
             commands::codex::codex_local_access_update_timeouts,
             commands::codex::codex_local_access_update_timeout_presets,
             commands::codex::codex_local_access_update_upstream_proxy_config,
-            commands::codex::codex_local_access_update_gateway_mode,
             commands::codex::codex_local_access_update_debug_logs,
             commands::codex::codex_local_access_update_image_generation_model,
             commands::codex::codex_local_access_update_image_generation_model_catalog,

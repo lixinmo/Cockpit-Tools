@@ -8,7 +8,6 @@ interface ConfigServiceOptions {
   loader: (
     instanceId: string,
     apiServicePreview?: boolean,
-    providerAccountId?: string,
   ) => Promise<CodexQuickConfig>;
   timeoutMs?: number;
   maxEntries?: number;
@@ -30,8 +29,6 @@ export function createCodexLaunchPreviewConfigService({
   const cache = new Map<string, CodexQuickConfig>();
   const pendingReads = new Map<string, PendingRead>();
 
-  const scopeKey = (instanceId: string, providerAccountId?: string) =>
-    providerAccountId ? JSON.stringify([instanceId, providerAccountId]) : instanceId;
   const cacheConfig = (instanceId: string, config: CodexQuickConfig) => {
     cache.delete(instanceId);
     cache.set(instanceId, config);
@@ -44,9 +41,7 @@ export function createCodexLaunchPreviewConfigService({
 
   const getCachedCodexLaunchPreviewConfig = (
     instanceId: string,
-    providerAccountId?: string,
   ): CodexQuickConfig | null => {
-    instanceId = scopeKey(instanceId, providerAccountId);
     const config = cache.get(instanceId);
     if (!config) return null;
     // 最近打开的实例保留，避免多开实例的历史缓存无限增长。
@@ -65,9 +60,7 @@ export function createCodexLaunchPreviewConfigService({
   const rememberCodexLaunchPreviewConfig = (
     instanceId: string,
     config: CodexQuickConfig,
-    providerAccountId?: string,
   ): void => {
-    instanceId = scopeKey(instanceId, providerAccountId);
     cacheConfig(instanceId, config);
     const request = pendingReads.get(instanceId);
     if (request && finishRead(instanceId, request)) {
@@ -79,10 +72,7 @@ export function createCodexLaunchPreviewConfigService({
   const loadCodexLaunchPreviewConfig = (
     instanceId: string,
     apiServicePreview = false,
-    providerAccountId?: string,
   ): Promise<CodexQuickConfig> => {
-    const requestInstanceId = instanceId;
-    instanceId = scopeKey(instanceId, providerAccountId);
     const existing = pendingReads.get(instanceId);
     if (existing) return existing.promise;
 
@@ -101,7 +91,7 @@ export function createCodexLaunchPreviewConfigService({
 
     // IPC 无法取消；身份检查防止超时、重试或保存后的旧结果覆盖新状态。
     void Promise.resolve()
-      .then(() => loader(requestInstanceId, apiServicePreview, providerAccountId))
+      .then(() => loader(instanceId, apiServicePreview))
       .then(
         (config) => {
           if (!finishRead(instanceId, request)) return;

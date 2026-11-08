@@ -118,14 +118,11 @@ test('native gateway regressions reuse the thin application target and isolate s
     ]);
     assert.ok(!tauriArgs('build', platform.target, 'example.json').some(arg => arg.includes('opt-level')));
     assert.ok(args.includes('--test-threads=1'));
-    assert.ok(args.includes('native_chat_upstream'));
-    assert.ok(args.includes('chat_legacy_reasoning'));
-    for (const name of ['provider_metadata', 'native_provider_reasoning', 'manual_reasoning']) {
-      assert.ok(args.includes(name));
-    }
     assert.ok(!args.includes('--ignored') && !args.includes('--include-ignored'));
-    for (const name of ['capabilities', 'capability_fallback_http_tests', 'mapping::capability::diagnostics_tests', 'chat_upstream', 'native_chat', 'native_capability_tests', 'native_capability_integration_tests', 'native_catalog_tools_tests', 'native_provider_profile_selection_tests', 'native_provider_wire_projection_', 'api_key_edit_', 'full_key_edit_migrates_persisted_references', 'editing_current_api_key_account_rewrites_relay_key_and_base_url', 'provider_snapshot_sync_updates_account', 'chat_completions_api_key_bundle_defers_catalog', 'passive_native_takeover_preserves_chat_tool_negotiation', 'parity22_http_responses_chat', 'native_provider_live_', 'native_credits', 'native_admission', 'native_gateway_credits']) {
-      assert.ok(args.some(arg => arg.includes(name)), `Missing ${name} coverage`);
+    for (const name of ['codex_native_api', 'codex_local_access', 'codex_account',
+      'codex_reset_automation', 'codex_session_visibility', 'codex_history_projection_repair',
+      'codex_instance', 'codex_quota', 'codex_protocol']) {
+      assert.ok(args.includes(`modules::${name}::`), `Missing ${name} coverage`);
     }
   }
   assert.throws(() => nativeRegressionArgs('universal-apple-darwin'), /thin macOS/);
@@ -142,12 +139,7 @@ test('native gateway regressions precede app optimization and gate packaging', (
   const step = workflow.slice(workflow.lastIndexOf('      - name:', regressions), regressions);
   assert.match(step, /if: runner\.os == 'macOS'/);
   assert.match(step, /CLOUD_BUILD_TARGET: \$\{\{ matrix\.target \}\}/);
-  assert.match(step, /COCKPIT_NATIVE_APP_BUILD: '1'/);
-  assert.match(step, /COCKPIT_SKIP_CLIPROXY_BUILD: '1'/);
-  // The same build script supports probe-only runs: a missing sidecar is built,
-  // while an already prepared binary can be reused by the test target.
-  const buildScript = fs.readFileSync(path.join(__dirname, '../../src-tauri/build.rs'), 'utf8');
-  assert.match(buildScript, /COCKPIT_SKIP_CLIPROXY_BUILD[\s\S]*?output\.exists\(\)/);
+  assert.doesNotMatch(workflow, /setup-go|COCKPIT_SKIP_CLIPROXY_BUILD/);
   assert.match(step, /inputs\.native_probe != true/);
   const probeStart = workflow.indexOf('      - name: Package optional local Native acceptance driver');
   const probeEnd = workflow.indexOf('      - name:', probeStart + 10);

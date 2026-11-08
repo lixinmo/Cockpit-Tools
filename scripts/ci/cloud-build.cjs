@@ -68,57 +68,17 @@ function nativeRegressionArgs(selectedTarget) {
     '-p', 'cockpit-tools', '--lib',
     '--config', 'profile.release.package.cockpit-tools.opt-level=0',
     '--', '--test-threads=1',
-    // Upstream integration changes shared routing, state recovery and model
-    // schemas. Exercise their complete mock suites, including retained policies.
+    // Exercise upstream Native behavior together with the retained Credits policy.
     'modules::codex_native_api::',
     'modules::codex_local_access::',
     'modules::codex_account::',
     'modules::codex_reset_automation::',
-    'modules::codex_auto_reset::',
     'modules::codex_speed::',
-    'modules::codex_project',
     'modules::codex_session_visibility::',
     'modules::codex_history_projection_repair::',
     'modules::codex_instance::',
     'modules::codex_quota::',
-    'modules::codex_native_api::capabilities::',
-    'modules::codex_native_api::capability_fallback_http_tests::',
-    'modules::codex_native_api::mapping::capability::diagnostics_tests::',
-    'modules::codex_native_api::chat_upstream::',
-    'native_chat_upstream',
-    'chat_legacy_reasoning',
-    'provider_metadata',
-    'native_provider_reasoning',
-    'manual_reasoning',
-    'manual_provider_reasoning',
-    'reasoning_order_',
-    'modules::codex_native_api::native_chat::',
-    'modules::codex_local_access::native_capability_tests::',
-    'modules::codex_local_access::native_capability_integration_tests::',
-    'modules::codex_local_access::native_catalog_tools_tests::',
-    'modules::codex_local_access::native_provider_routes_tests::',
-    'native_catalog_metadata_tests',
-    'provider_model_bindings_tests',
-    'native_provider_profile_selection_tests',
-    'native_provider_wire_projection_',
-    'api_key_edit_',
-    'full_key_edit_migrates_persisted_references',
-    'provider_snapshot_sync_updates_account',
-    'editing_current_api_key_account_rewrites_relay_key_and_base_url',
-    'chat_completions_api_key_bundle_defers_catalog',
-    'provider_gateway_model_slots',
-    'modules::codex_protocol::tests::',
-    'chat_client_discovery',
-    'chat_tool_integrity',
-    'modules::codex_native_api::websocket::bridge_tests::tool_integrity_tests::',
-    'chatgpt_plan_tools',
-    'modules::codex_native_api::chatgpt_plan_http_tests::tool_discovery::',
-    'grok_tool_search',
-    'modules::codex_native_api::grok_wire::tool_search::tests::',
-    'passive_native_takeover_preserves_chat_tool_negotiation',
-    'parity22_http_responses_chat_restores_namespaced_custom_and_keeps_native_custom',
-    'native_provider_live_',
-    'native_credits', 'native_admission', 'native_gateway_credits',
+    'modules::codex_protocol::',
   ];
 }
 
@@ -192,7 +152,7 @@ function packageOutputs(selectedTarget) {
     const appName = 'Cockpit Tools.app';
     const app = path.join(releaseDir, 'bundle/macos', appName);
     const expected = selectedTarget === 'universal-apple-darwin' ? ['arm64', 'x86_64'] : [selectedTarget.startsWith('aarch64') ? 'arm64' : 'x86_64'];
-    for (const name of ['cockpit-tools', 'cockpit-cliproxy']) {
+    for (const name of ['cockpit-tools']) {
       const file = path.join(app, 'Contents/MacOS', name);
       const archs = execFileSync('lipo', ['-archs', file], { encoding: 'utf8' }).trim().split(/\s+/).sort();
       if (JSON.stringify(archs) !== JSON.stringify(expected)) throw new Error(`Unexpected architecture in ${name}: ${archs}`);

@@ -266,14 +266,7 @@ pub(super) fn encrypted(value: &Value) -> bool {
             if matches!(key.as_str(), "parameters" | "input_schema" | "schema") {
                 return false;
             }
-            // Old Go Chat responses used an empty placeholder on reasoning
-            // items. It carries no ciphertext; other carriers remain strict.
-            let empty_reasoning = key == "encrypted_content"
-                && values.get("type").and_then(Value::as_str) == Some("reasoning")
-                && value.as_str() == Some("");
-            (matches!(key.as_str(), "encrypted_content" | "signature")
-                && !value.is_null()
-                && !empty_reasoning)
+            (matches!(key.as_str(), "encrypted_content" | "signature") && !value.is_null())
                 || (key == "encrypted_function_args"
                     && !value.is_null()
                     && value.as_array().is_none_or(|v| !v.is_empty()))

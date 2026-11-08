@@ -191,11 +191,6 @@ jobs:
         with:
           target: windows
 
-      - name: 🐹 Go setup
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: sidecars/cockpit-cliproxy/go.mod
-          cache-dependency-path: sidecars/cockpit-cliproxy/go.sum
 
       - name: ⚙️ Node.js setup
         uses: actions/setup-node@v4
@@ -282,7 +277,7 @@ jobs:
     permissions:
       contents: write
     env:
-      COCKPIT_NATIVE_APP_BUILD: "1"
+
       GH_REPO: ${{ github.repository }}
       VERSION: ${{ needs.prepare-release.outputs.version }}
     steps:
@@ -299,11 +294,6 @@ jobs:
         with:
           target: macos-aarch64
 
-      - name: 🐹 Go setup
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: sidecars/cockpit-cliproxy/go.mod
-          cache-dependency-path: sidecars/cockpit-cliproxy/go.sum
 
       - name: ⚙️ Node.js setup
         uses: actions/setup-node@v4
@@ -430,7 +420,7 @@ jobs:
     permissions:
       contents: write
     env:
-      COCKPIT_NATIVE_APP_BUILD: "1"
+
       GH_REPO: ${{ github.repository }}
       VERSION: ${{ needs.prepare-release.outputs.version }}
     steps:
@@ -447,11 +437,6 @@ jobs:
         with:
           target: macos-x86_64
 
-      - name: 🐹 Go setup
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: sidecars/cockpit-cliproxy/go.mod
-          cache-dependency-path: sidecars/cockpit-cliproxy/go.sum
 
       - name: ⚙️ Node.js setup
         uses: actions/setup-node@v4
@@ -725,11 +710,6 @@ jobs:
         with:
           target: linux-${{ matrix.label }}
 
-      - name: 🐹 Go setup
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: sidecars/cockpit-cliproxy/go.mod
-          cache-dependency-path: sidecars/cockpit-cliproxy/go.sum
 
       - name: ⚙️ Node.js setup
         uses: actions/setup-node@v4

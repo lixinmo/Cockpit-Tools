@@ -2562,17 +2562,6 @@
       "windowHint": "Eşikler gerçek süreye göre belirlenir: bir hafta veya daha uzun süre haftalık eşiği kullanır. Yalnızca haftalık kotası olan hesaplarda sadece bu kota kontrol edilir. Süre yoksa birincil/ikincil pencere eşlemesi korunur.",
       "rule": "Kısa dönem kalan <= {{shortCycle}}% veya haftalık kalan <= {{weekly}}%"
     },
-    "credits": {
-      "title": "Kredi kullanım denetimi",
-      "policy": "Genel politika (hemen kaydedilir)",
-      "default": "Varsayılan",
-      "prefer": "Normal kotaya öncelik ver",
-      "strict": "Yalnızca normal kota",
-      "allow": "Kredilere izin ver",
-      "description": "Varsayılan mod mevcut yönlendirmeyi korur. Normal kotaya öncelik ver modu, yalnızca geçerli API anahtarı havuzundaki tüm Codex hesaplarının normal kotası tükendiğinde kredilere izin verir. Yalnızca normal kota modu kredileri engeller. Bir hesap için kredilerin kapatılması her zaman önceliklidir.",
-      "boundary": "Kota anlık görüntüleri 5 dakika geçerlidir. Kotası bilinmeyen, güncelliğini yitirmiş veya sıfırlanmış kısıtlı hesaplar seçilmeden önce otomatik olarak yenilenir (en fazla 9 saniye; eşzamanlı okumalar birleştirilir). Yenileme başarısız olursa hesap güvenli şekilde duraklatılır; ayrıntılar için hesap havuzu tanılamasına bakın. Devam eden istekler geri alınamaz. Kota sınırını aşan bir istek veya diğer istemcilerin eşzamanlı kullanımı sağlayıcıda yine de kredi harcayabilir; kesin harcama sınırları sağlayıcı tarafında ayarlanmalıdır.",
-      "strictHint": "Yalnızca normal kota modu tüm hesaplar için kredileri engeller. Hesap anahtarlarının ayarları diğer politikalar için korunur."
-    },
     "launchConfirmation": {
       "title": "Başlatma doğrulanmadı",
       "description": "Başlatma istendi, ancak istemcinin durumu henüz doğrulanmadı. Zaten açık olabilir. Lütfen tekrar başlatmayın.",
@@ -2894,16 +2883,6 @@
       "savedPath": "Kaydedilen yol"
     },
     "localAccess": {
-      "gatewayEngineNative": "Yerel Rust",
-      "gatewayEngineSidecar": "Go (mevcut)",
-      "gatewayEngineHint": "Varsayılan motor Rust olur. İlk güncellemede Rust’a geçilir; sonraki seçimler korunur. Geçiş API hizmetini yeniden başlatır ve etkin istekleri kesebilir; Codex pencereleri açık kalır.",
-      "gatewayEngineSwitching": "Motor değiştiriliyor…",
-      "gatewayEngineSwitchFailed": "Motor değiştirilemedi: {{error}}",
-      "gatewayEngineReadbackFailed": "Geçerli motor doğrulanamadı. Yeniden denemeden önce durumu yenileyin: {{error}}",
-      "gatewayEngineReadbackTimeout": "Durum yenileme zaman aşımına uğradı",
-      "gatewayEngineOperationBusy": "Başka bir hizmet işlemi sürüyor. Kısa süre sonra tekrar deneyin.",
-      "gatewayEngineSwitchRestored": "Geçiş başarısız oldu. Önceki motor geri yüklendi.",
-      "gatewayEngineRestoreFailed": "Geçiş başarısız oldu ve önceki motor geri yüklenemedi. Tekrar denemeden önce hizmet durumunu kontrol edin.",
       "title": "API Hizmeti",
       "accountCount": "{{count}} hesap",
       "baseUrl": "Adres",
@@ -3383,9 +3362,6 @@
       "resetCredits": "Sıfırlama {{count}}",
       "resetCreditsTitle": "5 saatlik pencere için kalan sıfırlama: {{count}}",
       "resetCreditConfirm": "Onayla?",
-      "autoConsumeResetDescription": "Anahtar ve eşik yalnızca bu Codex hesabı için geçerlidir. Cockpit Tools çalışırken ve bilgisayar uyku modunda değilken kota arka planda yaklaşık dakikada bir kontrol edilir. Haftalık kalan yüzde eşikte veya altındaysa son kullanma tarihi en yakın olan bir Banked Reset kullanılır. 5 saatlik kota dikkate alınmaz; kullanılabilir sıfırlama yoksa hiçbir işlem yapılmaz. Bir sonraki otomatik kullanım için yenilenen haftalık kalan kotanın önce eşiğin üzerine çıkması gerekir. Varsayılan olarak kapalıdır.",
-      "autoConsumeResetThreshold": "Haftalık kalan kota eşiği",
-      "autoConsumeResetInvalidThreshold": "0 ile 99 arasında bir tam sayı girin.",
       "resetCreditDialogTitle": "Kullanım sıfırlansın mı?",
       "resetCreditDialogDesc": "Hız sınırını sıfırlayarak kesintisiz çalışmaya devam edin. Kullanılabilir sıfırlama: {{count}}.",
       "resetCreditDialogAction": "Kullanımı sıfırla",
@@ -6080,15 +6056,6 @@
       "defaultReasoning": "Varsayılan düzey",
       "defaultReasoningFollow": "Varsayılanı kullan",
       "defaultReasoningHint": "Modelin varsayılan düzeyini kullanmak için boş bırakın. Seçilen düzey desteklenmelidir.",
-      "reasoningNone": "Kapalı",
-      "reasoningMinimal": "En düşük",
-      "providerPolicyHint": "Bu sağlayıcının model yeteneklerini burada yapılandırın. Model eklemek veya kaldırmak için hesabının model listesini düzenleyin; örnek ayarlarını içe aktarma burada geçerli değildir.",
-      "providerPolicyDescription": "Sağlayıcının bilinen yetenekleri kullanılır; bilgi yoksa uyumluluk düzeyleri sunulur. Bunları elle yapılandırabilirsiniz.",
-      "providerPolicyFollow": "Sağlayıcıyı izle",
-      "providerPolicyCustom": "Özel",
-      "providerPolicyConfirm": "Bu sağlayıcı için ayrı model ayarlarını kaydedin. Diğer hesaplar değişmeyecek.",
-      "inheritReasoning": "Modeli izle",
-      "noReasoning": "Akıl yürütme düzeyi ayarlanamaz",
       "defaultReasoningInvalid": "Varsayılan akıl yürütme düzeyi bu model tarafından desteklenmelidir."
     },
     "modelConfig": {
@@ -6207,6 +6174,17 @@
     },
     "officialApi": {
       "hint": "Gerçek bağlantı adresine göre tanımlanan resmî OpenAI API anahtarı hesabı."
+    },
+    "credits": {
+      "title": "Kredi kullanım denetimi",
+      "policy": "Genel politika (hemen kaydedilir)",
+      "default": "Varsayılan",
+      "prefer": "Normal kotaya öncelik ver",
+      "strict": "Yalnızca normal kota",
+      "allow": "Kredilere izin ver",
+      "description": "Varsayılan mod mevcut yönlendirmeyi korur. Normal kotaya öncelik ver modu, yalnızca geçerli API anahtarı havuzundaki tüm Codex hesaplarının normal kotası tükendiğinde kredilere izin verir. Yalnızca normal kota modu kredileri engeller. Bir hesap için kredilerin kapatılması her zaman önceliklidir.",
+      "boundary": "Kota anlık görüntüleri 5 dakika geçerlidir. Kotası bilinmeyen, güncelliğini yitirmiş veya sıfırlanmış kısıtlı hesaplar seçilmeden önce otomatik olarak yenilenir (en fazla 9 saniye; eşzamanlı okumalar birleştirilir). Yenileme başarısız olursa hesap güvenli şekilde duraklatılır; ayrıntılar için hesap havuzu tanılamasına bakın. Devam eden istekler geri alınamaz. Kota sınırını aşan bir istek veya diğer istemcilerin eşzamanlı kullanımı sağlayıcıda yine de kredi harcayabilir; kesin harcama sınırları sağlayıcı tarafında ayarlanmalıdır.",
+      "strictHint": "Yalnızca normal kota modu tüm hesaplar için kredileri engeller. Hesap anahtarlarının ayarları diğer politikalar için korunur."
     }
   },
   "githubCopilot": {

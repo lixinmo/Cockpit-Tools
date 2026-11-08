@@ -1,6 +1,6 @@
 # GitHub Actions 构建与维护
 
-本分支在公开仓库 [lixinmo/Cockpit-Tools](https://github.com/lixinmo/Cockpit-Tools) 使用 GitHub Actions 标准托管 runner 构建。日常使用只构建这台 Intel Mac 的版本；源码继续支持 macOS、Windows 和 Linux。Rust Native、匹配架构的 Go sidecar、现有功能和上游 Git 历史均保留。
+本分支在公开仓库 [lixinmo/Cockpit-Tools](https://github.com/lixinmo/Cockpit-Tools) 使用 GitHub Actions 标准托管 runner 构建。日常使用只构建这台 Intel Mac 的版本；源码继续支持 macOS、Windows 和 Linux。运行时跟随上游，仅使用 Rust Native；不再打包 Go 引擎。上游 Git 历史保留。
 
 本机只负责编辑、Git 同步、触发云端工作流、下载和验证 App。这里的规则取代旧的本机构建、保留本地编译缓存和专用工具链要求；`docs/local-patches/` 中已有构建记录作为历史验证证据保留，运行时合约不变。不新增完整备份。
 
@@ -48,16 +48,15 @@ node scripts/build-cloud.cjs --help
 
 ## 云端验证、缓存与正式发布
 
-Cloud Build 在云端运行 TypeScript 检查及相关测试，并验证同账号重试、Native 重试、Credits 与 Auto Reset 合约。不得因为换到云端而省略 Native 验证，或切回旧引擎规避失败。变更影响的检查必须通过后才能交付。
+Cloud Build 在云端运行 TypeScript 检查及相关测试，并验证 Native 同账号连接重试、Credits 保护，以及上游账号、工具调用和重置卡功能。不得因为换到云端而省略 Native 验证，或跳过相关检查规避失败。变更影响的检查必须通过后才能交付。
 
-Rust、Go、npm 缓存按平台、架构和依赖输入复用。macOS Universal 使用同一次运行已经生成的两个架构输入合并，避免额外重复编译。缓存只存放构建依赖和编译结果，不存放任何本机账号或运行配置。沿用 GitHub 默认的每仓库 10 GB 免费缓存容量；只使用公开仓库的免费标准托管 runner，不启用 larger runner、付费服务、付费缓存扩容或收费额度，不为构建设置付款方式。GitHub 自身的容量与保留策略仍适用。
+Rust、npm 缓存按平台、架构和依赖输入复用。macOS Universal 使用同一次运行已经生成的两个架构输入合并，避免额外重复编译。缓存只存放构建依赖和编译结果，不存放任何本机账号或运行配置。沿用 GitHub 默认的每仓库 10 GB 免费缓存容量；只使用公开仓库的免费标准托管 runner，不启用 larger runner、付费服务、付费缓存扩容或收费额度，不为构建设置付款方式。GitHub 自身的容量与保留策略仍适用。
 
 受信任分支的 Rust 依赖缓存也保留失败运行中已完成的依赖编译，方便修正源码后复用；
 仍不缓存 workspace App 成品或运行配置，也不会发布未通过验证的包。
 下述增量状态缓存也保留失败检查产生的编译状态；Cargo 会重新验证输入，所有测试仍需重跑通过。
 普通 Mac 构建先执行 Native 集成回归，再优化和打包 App；测试使用相同目标与
-release 依赖，测试 crate 自身保持较低优化等级。构建脚本会在需要时准备匹配
-架构的 Go sidecar，因此也支持不依赖已有 App 的回归检查。
+release 依赖，测试 crate 自身保持较低优化等级；回归检查不依赖已有 App。
 
 Cloud Build 额外为受信任分支的 `push` / `workflow_dispatch` 保留编译状态。
 既有 Rust 缓存继续提供依赖底座；新的状态缓存只包含 host 与目标架构 release
@@ -104,7 +103,7 @@ Fork 用户先在自己的仓库启用 Actions，再使用 Cloud Build 选择平
 - `~/Library/Application Support/cockpit-tools`、相关 WebKit/应用数据，以及各客户端原有账号目录。
 - SSH/GitHub 凭据、`.env`、签名私钥、导出的账号文件、应用生成的备份和任意自定义 `COCKPIT_TOOLS_DATA_DIR`。
 
-只有在云端构建成功、下载校验通过、确认 App 架构和 sidecar 匹配并完成启动验证后，才删除本机不再需要的 `target/`、`node_modules/`、`dist/`、生成的 sidecar、专用工具链、旧归档、已确认干净且历史仍保留的旧源码副本和重复 App。记录删除前后大小；不把账号/配置目录当作构建缓存清理。全局 Rust/Go/npm 工具链与缓存如果被其他项目使用，应保留。仓库的 `.git`、补丁说明、源码以及当前使用的 App 必须保留。
+只有在云端构建成功、下载校验通过、确认 App 架构并完成启动验证后，才删除本机不再需要的 `target/`、`node_modules/`、`dist/`、专用工具链、旧归档、已确认干净且历史仍保留的旧源码副本和重复 App。记录删除前后大小；不把账号/配置目录当作构建缓存清理。全局 Rust/Go/npm 工具链与缓存如果被其他项目使用，应保留。仓库的 `.git`、补丁说明、源码以及当前使用的 App 必须保留。
 
 ## 同步上游
 
@@ -120,102 +119,6 @@ git push origin main
 
 对于已经公开的分支，优先合并以保留历史。合并时逐项检查 `docs/local-patches/`，继续复用上游协议、continuation 和 quota-reserve 实现；不得增加第二套 plaintext marker 策略，或在切换引擎/身份时绕过 Credits。
 
-每次上游同步后，按照 `same-account-connect-retry.md` 的 duplicate-retry review 比较上游和本地重试机制，避免两层重试叠加；保持 `CT-CONNECT-RETRY-001` v1.0 和 Go 参考合约。云端运行 `scripts/verify-cockpit-connect-retry.sh`，更新 Native transport 或 patched reqwest/hyper-util 时还要运行 `scripts/verify-native-connect-retry.sh`，并运行受影响的 Credits/Auto Reset 检查。默认不需要 `--cross-platform`；涉及额外平台行为时在云端增加对应验证。最后审查相对 `upstream/main` 的补丁差异，并在提交或发布记录中写明上游基线和通过的云端运行。
+每次上游同步后，按照 `same-account-connect-retry.md` 和 `native-connect-retry.md` 检查连接建立重试，避免与上游应用层重试叠加。固定三次尝试、200/400 ms 间隔和禁止发送后重放的约定保持不变。云端运行 `scripts/verify-native-connect-retry.sh`、Credits harness 和上游 Native 集成检查。个人 Intel 构建不要求额外发布矩阵；其它平台的正式发布能力保持。最后审查相对 `upstream/main` 的差异，并记录基线与云端验证。
 
-## 增量缓存验证记录（2026-10-26）
-
-此前的 [40118990052](https://github.com/lixinmo/Cockpit-Tools/actions/runs/40118990052)
-并非完全从零构建：Rust、Go、npm 均命中依赖缓存。当时仓库有 6 份 main 缓存，
-共 1,896,670,255 字节，但修复分支不保存新 Rust 缓存，workspace 产物不保留，
-增量编译被关闭。App 的 Cargo 编译耗时 30 分 45 秒，验收程序 13 分 27 秒；
-Intel job 总计 48 分 47 秒，全流程约 51 分钟。
-
-新增状态缓存的前两次尝试均通过了 App 和保护检查，但没有成功保存增量状态，
-不能当作已验证提速：
-
-- [40199297468](https://github.com/lixinmo/Cockpit-Tools/actions/runs/40199297468)
-  被过严的路径检查拦截。[40205452637](https://github.com/lixinmo/Cockpit-Tools/actions/runs/40205452637)
-  用标准 Intel runner 仅编译实际 Swift 菜单组件，确认是 SwiftPM 的内部相对
-  `release` 链接。后续加入了有边界的合法链接支持；外部、绝对、断链和循环仍拒绝。
-- [40207258305](https://github.com/lixinmo/Cockpit-Tools/actions/runs/40207258305)
-  完成扫描，但全套编译状态为 7,724,820,815 字节，超过 6 GiB 上限而跳过保存。
-  其中实际增量数据只有 4,618,067,069 字节。因此最终改为依赖与增量分层保存，
-  不重复缓存整套 build/deps/fingerprint，也不提高 GitHub 容量或启用付费服务。
-
-Swift 诊断 [40207227529](https://github.com/lixinmo/Cockpit-Tools/actions/runs/40207227529)
-与 [40211785410](https://github.com/lixinmo/Cockpit-Tools/actions/runs/40211785410) 均通过。
-这些只是编译路径检查，没有生成可交付 App，不能替代完整构建、缓存保存或复用验证。
-
-仅增量策略在 [40211902253](https://github.com/lixinmo/Cockpit-Tools/actions/runs/40211902253)
-首次建立可用状态缓存，构建提交为 `74bcf67d2bb947c38ac99ddabc40d3d3ae6b88b0`。
-扫描得到 4,618,067,064 字节、327 个增量文件，`save=true`，保存耗时 38 秒；
-实际 GitHub 缓存条目为 1,516,255,304 字节，归属当前修复分支，命名空间为
-`ct-cloud-incremental-v1-macos-x86_64-full-`，清理结果为 `keep_latest_one`。
-本轮尚未恢复新增量缓存，App Cargo 编译 32 分 41 秒、验收程序 12 分 56 秒，
-全流程 54 分 04 秒；Native 275 项、重试 18 项、Credits 31 项、Auto Reset
-71 项及 Go 合同均通过。这证明状态已经保存，不单独证明提速。
-
-后续复用验证使用仅修改本说明的新提交，因此编译器、依赖和程序源码保持不变，
-提交号变化会走兼容前缀恢复，而不是依赖完全相同的缓存 key。结果只能作为
-跨 runner、跨提交缓存恢复的实测；实际程序改动仍需重编受影响部分。
-
-[40216823078](https://github.com/lixinmo/Cockpit-Tools/actions/runs/40216823078)
-已验证该恢复链路：新 runner 明确恢复了 74bc seed 的 4,618,067,064 字节／327 个
-增量文件，App 与 probe 都使用增量编译和 CGU=16。App Cargo 7 分 40 秒、probe
-7 分 31 秒，全流程 23 分 58 秒，所有既有检查通过。但后续扫描按路径累计为
-9,146,639,926 字节／578 个文件，旧计量触发上限，新快照未保存，原 seed 保留。
-该结果证明复用和本次提速，尚不能证明每次构建后的滚动更新都已验证。
-
-云端实际 Rust 1.99.1（提交 `58cf8f9c35b355199727627d07ae34a4e2846d67`）会用
-硬链接复用上一会话文件，且可保留当前与上一会话。后续计量修正按 BigInt
-设备号/inode 计算唯一内容，另报逻辑大小和重复链接数；不盲删编译器状态，
-该次计量修正仍保持 6 GiB 门槛。实际唯一大小与新快照保存仍以后续云端结果为准。
-
-[40220605418](https://github.com/lixinmo/Cockpit-Tools/actions/runs/40220605418)
-随后确认硬链接重复计量确实存在，但不是全部增长来源：逻辑 9,146,639,975 字节，
-去重后仍为 7,840,522,529 字节，578 条路径中有 326 个独立文件、252 个硬链接。
-该轮全部检查通过，旧 seed 正确恢复，全流程 27 分 39 秒；6 GiB 门槛再次阻止
-新快照保存。基于此实测，将本地计量的未压缩内容门槛调整为 8 GiB，保留编译器
-需要的会话，不删除其内部状态。GitHub 仓库免费总容量和最新一份的清理策略均
-未提高；实际压缩缓存占用及滚动保存需另行核实。
-
-完整滚动验证最终在
-[40223738056](https://github.com/lixinmo/Cockpit-Tools/actions/runs/40223738056)
-通过，构建提交 `ebc68f798b99ae439a70f82bc425e3c5c170808a`。正确恢复旧 seed，
-两编译步骤均为增量=1、CGU=16；Native 275 项、重试 18 项、Credits 31 项、
-Auto Reset 71 项和 Go 合同全部通过。
-
-| 对照 | App Cargo | Probe Cargo | 完整流程 |
-| --- | --- | --- | --- |
-| 原依赖缓存基线 40118990052 | 30分45秒 | 13分27秒 | 约51分钟 |
-| 跨提交复用 40216823078 | 7分40秒 | 7分31秒 | 23分58秒 |
-| 恢复并滚动保存 40223738056 | 15分32秒 | 8分53秒 | 38分03秒 |
-
-本轮 9,146,639,817 字节逻辑数据对应 7,840,522,371 字节唯一内容，低于 8 GiB，
-`save=true`，实际保存耗时 97 秒。新缓存压缩后 2,744,592,937 字节；清理任务
-只删除旧 seed 一项，同分支、同平台、同模式命名空间只剩新缓存。删除后直接
-列举仓库缓存得到 9 项、5,690,586,572 字节；usage 汇总接口一度仍报删除前的
-10 项／7,206,841,876 字节，所以以实际条目核对清理，不把汇总延迟当成未删除。
-仓库容量和计费设置未改变。复用结果存在 runner、下载和编译耗时波动；这些是
-程序源码不变时的跨提交测量，不能承诺任意源码修改都固定在上述时间内。
-
-最终 App 和 probe 下载后核对了来源提交、SHA-256、x86_64 架构和签名。
-独立 Codex CLI 0.162.1 经该 probe 的生产 Native 路径完成 Step 5 新会话、带旧
-空加密字段的 Step 5 续接、同会话切到 Step 3.7 三轮验收：13 次工具请求均为
-200，7 次 shell、3 次文件修改成功，10 对调用/结果匹配，文件与最终随机值
-一致；另外三次 high/缺省 effort 转发控制均通过。两模型仍采用未知能力的
-128K/115200 上下文；六份原账号/配置文件哈希不变，临时 profile 和历史已删除。
-
-App 已安装并重启，精确新进程通过 Ready/version 以及间隔五秒的两次 Pong。
-Native/prefer_regular 和旧 codex MCP 清理状态保持；没有切换用户当前账号。
-清理删除 467,825,954 字节下载、probe、旧 App 暂存及验收助手，其中旧 App
-181,145,568 字节。本机未留下项目 target/node_modules/dist 或临时验收 profile。
-源码、Git 历史、共享工具链、运行配置和当前 App 保留；没有本机编译或私人数据上传。
-
-最终成品 SHA-256：
-
-- App archive: `040e074a6bdc8fb62cda31fda5cc3b2a5eb68e1c1d99597a1e183f65d42b590b`。
-- Main executable: `7d64332a96fa843790d91f71f97e6de52629e60e2513b86c1d8b8339b21490de`。
-- Go sidecar: `2b78898429b9f31d4d8508f712e54efbf2bb1e36e9ed8acd4d6e914bca50c394`。
-- Native probe: `f967b275afd48074d3984af51c20da97952582084c40aa76c0943f30bff52270`。
-- Acceptance harness: `7e358563c0e6018a2c6c3d7c1edd48703d9a6d7923af4df2b6f7eb14bdff0ca4`。
+当前维护范围见 [Native-only 精简记录](local-patches/native-only-cleanup.md)。旧构建和已退役补丁记录可从 Git 历史读取。

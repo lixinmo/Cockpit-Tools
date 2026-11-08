@@ -95,36 +95,26 @@ jobs:
           if-no-files-found: error
 
   contracts:
-    name: Native and Go contracts
+    name: Native contracts
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: sidecars/cockpit-cliproxy/go.mod
-          cache-dependency-path: |
-            sidecars/cockpit-cliproxy/go.sum
-            sidecars/cockpit-cliproxy/third_party/CLIProxyAPI/go.sum
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: cloud-contracts-v1
           workspaces: |
             tests/codex-native-connect-retry -> ../../target/local-app-cache/native-connect-retry-harness/target
             tests/codex-credits-policy
-            tests/codex-auto-reset
           save-if: ${{ github.event_name != 'pull_request' && (github.ref_name == github.event.repository.default_branch || (github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/'))) }}
       - name: Fetch Native harness dependencies before offline verification
         run: cargo fetch --locked --manifest-path tests/codex-native-connect-retry/Cargo.toml
       - name: Native setup-only retry contract
         run: bash scripts/verify-native-connect-retry.sh
-      - name: Go reference retry contract
-        run: bash scripts/verify-cockpit-connect-retry.sh
-      - name: Credits policy and Auto Reset contracts
+      - name: Credits policy contract
         run: |
           cargo test --locked --manifest-path tests/codex-credits-policy/Cargo.toml
-          cargo test --locked --manifest-path tests/codex-auto-reset/Cargo.toml
 
   build:
     name: Build ${{ matrix.label }}
@@ -148,10 +138,6 @@ jobs:
         uses: ./.github/actions/host-build-cache
         with:
           target: ${{ matrix.cache_target }}
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: sidecars/cockpit-cliproxy/go.mod
-          cache-dependency-path: sidecars/cockpit-cliproxy/go.sum
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -187,8 +173,8 @@ jobs:
         if: runner.os == 'macOS' && inputs.native_probe_only != true && inputs.native_probe != true
         env:
           CLOUD_BUILD_TARGET: ${{ matrix.target }}
-          COCKPIT_NATIVE_APP_BUILD: '1'
-          COCKPIT_SKIP_CLIPROXY_BUILD: '1'
+
+
           CARGO_INCREMENTAL: ${{ steps.compilation-state.outputs.enabled == 'true' && '1' || '0' }}
         run: node scripts/ci/cloud-build.cjs native-regressions
       - name: Build selected application
@@ -196,24 +182,24 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CLOUD_BUILD_TARGET: ${{ matrix.target }}
-          COCKPIT_NATIVE_APP_BUILD: ${{ matrix.native_mac }}
-          COCKPIT_SKIP_CLIPROXY_BUILD: '0'
+
+
           CARGO_INCREMENTAL: ${{ steps.compilation-state.outputs.enabled == 'true' && '1' || '0' }}
         run: node scripts/ci/cloud-build.cjs build
       - name: Package optional local Native acceptance driver
         if: runner.os == 'macOS' && inputs.native_probe == true && inputs.native_probe_only != true
         env:
           CLOUD_BUILD_TARGET: ${{ matrix.target }}
-          COCKPIT_NATIVE_APP_BUILD: '1'
-          COCKPIT_SKIP_CLIPROXY_BUILD: '1'
+
+
           CARGO_INCREMENTAL: ${{ steps.compilation-state.outputs.enabled == 'true' && '1' || '0' }}
         run: node scripts/ci/cloud-build.cjs build-native-probe
       - name: Build and validate standalone Native acceptance driver
         if: runner.os == 'macOS' && inputs.native_probe_only == true
         env:
           CLOUD_BUILD_TARGET: ${{ matrix.target }}
-          COCKPIT_NATIVE_APP_BUILD: '1'
-          COCKPIT_SKIP_CLIPROXY_BUILD: '1'
+
+
           CARGO_INCREMENTAL: ${{ steps.compilation-state.outputs.enabled == 'true' && '1' || '0' }}
         run: node scripts/ci/cloud-build.cjs build-native-probe
       - uses: actions/upload-artifact@v4

@@ -98,8 +98,8 @@ fn load_collection_for_runtime_from_path(
         return Ok(None);
     };
     if credits_compat::needs_migration(&parsed) {
-        // Loading may persist migration only for runtime initialization. Catalog
-        // and import reads must not modify their underlying revision snapshots.
+        // Only cold runtime initialization may migrate. Catalog and import reads
+        // must not modify the configuration underlying their revision snapshots.
         return migrate_native_gateway_default_on_disk(path).map(Some);
     }
     Ok(Some(parsed))
@@ -113,15 +113,10 @@ fn migrate_native_gateway_default_on_disk(
         let current = current.ok_or_else(|| "API service configuration is missing".to_string())?;
         let collection: CodexLocalAccessCollection =
             serde_json::from_str(current).map_err(|error| error.to_string())?;
-        let raw: Value = serde_json::from_str(current).map_err(|error| error.to_string())?;
-        let content = match credits_compat::migration_target(&raw, &collection) {
-            Some(mode) => {
-                if mode == CodexLocalAccessGatewayMode::Native {
-                    logger::log_codex_api_info("[Credits] 将本地 Credits 策略迁移至 Native 引擎");
-                }
-                native_patch_mode(current, mode)?
-            }
-            None => current.to_string(),
+        let content = if credits_compat::needs_migration(&collection) {
+            native_patch_mode(current, CodexLocalAccessGatewayMode::Native)?
+        } else {
+            current.to_string()
         };
         loaded = Some(serde_json::from_str(&content).map_err(|error| error.to_string())?);
         Ok(content)
@@ -140,6 +135,9 @@ fn save_collection_to_path(
 ) -> Result<(), String> {
     update_string_atomic(path, |current| {
         let mut next = collection.clone();
+        next.gateway_mode = CodexLocalAccessGatewayMode::Native;
+        next.native_gateway_default_migrated = true;
+        next.native_credits_policy_migrated = true;
         next.image_generation_main_model =
             normalize_image_generation_main_model(next.image_generation_main_model.clone())
                 .unwrap_or(None);
@@ -185,34 +183,14 @@ fn save_collection_to_path(
                             .map_err(|_| "CHATGPT_PLAN_STORAGE_FAILED")?;
                     }
                     // A stale pre-upgrade snapshot must not clear the migration marker.
-                    next.native_credits_policy_migrated |= current
-                        .get("nativeCreditsPolicyMigrated").and_then(Value::as_bool).unwrap_or(false);
                     next.native_gateway_default_migrated |= current
                         .get("nativeGatewayDefaultMigrated")
                         .and_then(Value::as_bool)
                         .unwrap_or(false);
-                    // Only the engine-switch transaction owns this field. An older stats or
-                    // settings snapshot must never silently switch the service back.
-                    if let Some(mode) = current
-                        .get("gatewayMode")
-                        .cloned()
-                        .and_then(|value| {
-                            serde_json::from_value::<CodexLocalAccessGatewayMode>(value).ok()
-                        })
-                    {
-                        if mode == CodexLocalAccessGatewayMode::Legacy
-                            || !current.get("nativeGatewayDefaultMigrated")
-                                .and_then(Value::as_bool).unwrap_or(false)
-                        {
-                            // An old on-disk mode is not a post-migration choice.
-                            // Migrate before publishing grants or enforcing engine
-                            // policy, while the latest persisted fields are locked.
-                            next.gateway_mode = CodexLocalAccessGatewayMode::Native;
-                            next.native_gateway_default_migrated = true;
-                        } else {
-                            next.gateway_mode = mode;
-                        }
-                    }
+                    // Stale settings and statistics must never restore the retired engine.
+                    next.gateway_mode = CodexLocalAccessGatewayMode::Native;
+                    next.native_gateway_default_migrated = true;
+                    next.native_credits_policy_migrated = true;
                     // Ordinary full-snapshot writers do not own the image model directory.
                     // The dedicated field transaction alone can add/delete/restore a model.
                     if current.get("imageGenerationModels").is_some() {
@@ -277,9 +255,7 @@ fn save_collection_to_path(
         // Validate the final snapshot after preserving the engine's current
         // disk choice. This also closes joining-vs-engine-switch races.
         enforce_chatgpt_plan_image_policy(&mut next, &[]);
-        migrate_legacy_gateway_mode(&mut next);
         native_validate_chatgpt_plan_mode(&next, next.gateway_mode)?;
-        credits_compat::validate_mode(&next, next.gateway_mode)?;
         serde_json::to_string_pretty(&next)
             .map_err(|error| format!("序列化本地接入配置失败: {error}"))
     })
@@ -1671,8 +1647,8 @@ fn sanitize_collection_structure(
     changed |= prune_multi_agent_references(collection);
     changed |= enforce_chatgpt_plan_image_policy(collection, &[]);
 
-    // Persisted global collections migrate during runtime loading. Apply the
-    // same one-time default to old compatibility/profile snapshots too.
+    // Persisted global collections already migrate to native during loading.
+    // Keep the legacy fallback for unpersisted compatibility/profile snapshots.
     changed |= migrate_legacy_gateway_mode(collection);
 
     // v1.3.4 起已移除集合级 image_generation 禁用 UI。

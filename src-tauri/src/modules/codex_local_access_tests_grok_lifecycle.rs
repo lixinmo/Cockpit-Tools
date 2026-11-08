@@ -171,7 +171,6 @@ fn grok_missing_source_is_isolated_and_stale_auth_is_removed() {
                         provider_account_id: broken.id.clone(),
                         native_provider: Some("xai".to_string()),
                         provider_gateway: CodexLocalAccessProviderGateway {
-                            model_bindings: None,
                             auth_scheme: None,
                             base_url: "https://cli-chat-proxy.grok.com/v1".to_string(),
                             api_key: String::new(),

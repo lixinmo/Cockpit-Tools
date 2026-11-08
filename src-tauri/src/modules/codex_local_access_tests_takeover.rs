@@ -155,7 +155,6 @@ experimental_bearer_token = "agt_codex_test"
         let mut account_key = build_local_access_api_key(Some("DeepSeek pool"));
         account_key.id = "provider_gateway_deepseek".to_string();
         account_key.provider_gateway = Some(CodexLocalAccessProviderGateway {
-            model_bindings: None,
             auth_scheme: None,
             base_url: "https://api.deepseek.com/v1".to_string(),
             api_key: "sk-deepseek".to_string(),
@@ -604,12 +603,10 @@ experimental_bearer_token = "agt_codex_test"
         let mut collection = test_local_access_collection(Vec::new());
         let key = "deepseek-local-key".to_string();
         collection.api_keys.push(CodexLocalAccessApiKey {
-            provider_model_bindings: None,
             id: "provider_gateway_deepseek".to_string(),
             label: "Provider Gateway: DeepSeek".to_string(),
             key: key.clone(),
             provider_gateway: Some(CodexLocalAccessProviderGateway {
-                model_bindings: None,
                 auth_scheme: None,
                 base_url: "https://api.deepseek.com/v1".to_string(),
                 api_key: "sk-deepseek".to_string(),
@@ -796,7 +793,6 @@ experimental_bearer_token = "agt_codex_test"
         );
 
         let provider_gateway = CodexLocalAccessProviderGateway {
-            model_bindings: None,
             auth_scheme: None,
             base_url: "https://relay.example/v1".to_string(),
             api_key: "sk-test".to_string(),
@@ -1637,27 +1633,6 @@ experimental_bearer_token = "agt_codex_test"
     }
 
     #[test]
-    fn sanitize_collection_migrates_unmarked_modes_once_and_preserves_explicit_go() {
-        for mode in [CodexLocalAccessGatewayMode::Legacy, CodexLocalAccessGatewayMode::Sidecar, CodexLocalAccessGatewayMode::Native] {
-            let mut collection = test_local_access_collection(Vec::new());
-            collection.gateway_mode = mode;
-            collection.native_gateway_default_migrated = false;
-            sanitize_collection_with_accounts(&mut collection, &[]).unwrap();
-            assert_eq!(collection.gateway_mode, CodexLocalAccessGatewayMode::Native);
-            assert!(collection.native_gateway_default_migrated);
-            assert!(!super::migrate_legacy_gateway_mode(&mut collection), "migration is one-time");
-        }
-        let mut collection = test_local_access_collection(Vec::new());
-        collection.gateway_mode = CodexLocalAccessGatewayMode::Sidecar;
-        collection.native_gateway_default_migrated = true;
-        collection.native_credits_policy_migrated = true;
-        sanitize_collection_with_accounts(&mut collection, &[]).unwrap();
-        assert_eq!(collection.gateway_mode, CodexLocalAccessGatewayMode::Sidecar);
-        assert!(collection.native_gateway_default_migrated);
-        assert!(!super::migrate_legacy_gateway_mode(&mut collection));
-    }
-
-    #[test]
     fn legacy_disabled_image_mode_no_longer_blocks_image_capacity_after_sanitize() {
         let mut paid = test_account_with_plan("plus");
         paid.id = "oauth-plus".to_string();
@@ -1713,7 +1688,6 @@ experimental_bearer_token = "agt_codex_test"
         let mut api_key = build_local_access_api_key(Some("Provider Gateway"));
         api_key.inherit_account_pool = Some(false);
         api_key.provider_gateway = Some(CodexLocalAccessProviderGateway {
-            model_bindings: None,
             auth_scheme: None,
             base_url: "https://api.deepseek.com/v1".to_string(),
             api_key: "sk-test".to_string(),
@@ -1767,7 +1741,6 @@ experimental_bearer_token = "agt_codex_test"
         let mut api_key = build_local_access_api_key(Some("Provider Gateway"));
         api_key.inherit_account_pool = Some(false);
         api_key.provider_gateway = Some(CodexLocalAccessProviderGateway {
-            model_bindings: None,
             auth_scheme: None,
             base_url: "https://api.deepseek.com/v1".to_string(),
             api_key: "sk-test".to_string(),
@@ -1904,7 +1877,6 @@ experimental_bearer_token = "agt_codex_test"
             &profile_dir,
             runtime_id,
             &super::ProviderGatewayProfileState {
-                model_bindings: None,
                 api_key: "persisted-gateway-key".to_string(),
                 port: Some(occupied_port),
                 created_at: 0,

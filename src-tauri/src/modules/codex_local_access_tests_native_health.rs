@@ -91,13 +91,7 @@ fn native_health_snapshot_tracks_expiry_success_reset_and_cooling_disable() {
         .is_empty());
     runtime.running = true;
     runtime.collection.as_mut().unwrap().gateway_mode = CodexLocalAccessGatewayMode::Sidecar;
-    // Go remains selectable in this fork; its view must not inherit a retained
-    // Native host's cooldowns after an engine switch.
-    assert!(build_account_health_snapshot(&runtime)[0]
-        .cooldowns
-        .is_empty());
-    assert!(!host.cooldowns.lock().unwrap().is_empty());
-    runtime.collection.as_mut().unwrap().gateway_mode = CodexLocalAccessGatewayMode::Native;
+    // A stale engine selection must not hide the active Rust scheduler state.
     assert!(!build_account_health_snapshot(&runtime)[0]
         .cooldowns
         .is_empty());

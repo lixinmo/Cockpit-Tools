@@ -18,7 +18,7 @@ function fixture() {
   const run = { id: 1234, head_repository: { full_name: repository }, head_branch: 'main',
     event: 'push', path: '.github/workflows/build-matrix.yml', status: 'completed',
     conclusion: 'failure', head_sha: 'a'.repeat(40) };
-  const jobs = ['plan', 'frontend', 'Native and Go contracts'].map(name => ({ name, conclusion: 'success' }));
+  const jobs = ['plan', 'frontend', 'Native contracts'].map(name => ({ name, conclusion: 'success' }));
   jobs.push({ name: 'Build macos-x86_64', conclusion: 'success', steps: [
     'Build selected application', 'Archive application and write provenance',
     'Native gateway capability, chat bridge and Credits regressions',
@@ -47,7 +47,7 @@ test('cannot use canceled, unfinished or unverified builds', () => {
     const f = fixture();
     assert.throws(() => validateSourceRun({ ...f.run, ...patch }, f.jobs, [], f.repository), /completed/);
   }
-  for (const name of ['plan', 'frontend', 'Native and Go contracts', 'Build macos-x86_64']) {
+  for (const name of ['plan', 'frontend', 'Native contracts', 'Build macos-x86_64']) {
     const f = fixture(); f.jobs.find(job => job.name === name).conclusion = 'failure';
     assert.throws(() => validateSourceRun(f.run, f.jobs, [], f.repository), /did not pass|build failed/);
   }

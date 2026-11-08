@@ -1639,10 +1639,6 @@ fn write_local_access_profile_model_catalog(
     write_local_access_profile_client_models(profile_dir, supports_websockets, client_models)
 }
 
-fn build_local_access_profile_client_models(definitions: &[ProfileModelDefinition]) -> Value {
-    build_local_access_profile_catalog(definitions)
-}
-
 fn build_local_access_profile_catalog(definitions:&[ProfileModelDefinition])->Value {
     let pairs = definitions
         .iter()
@@ -1948,33 +1944,12 @@ fn write_local_access_profile_model_catalog_with_definitions(
 fn write_local_access_profile_client_models(
     profile_dir: &Path,
     supports_websockets: bool,
-    client_models: Value,
-) -> Result<(), String> {
-    write_profile_client_models(profile_dir, Some(supports_websockets), client_models, true)
-}
-
-fn write_profile_client_models(
-    profile_dir: &Path,
-    supports_websockets: Option<bool>,
-    client_models: Value,
-    add_reserve: bool,
-) -> Result<(), String> {
-    write_profile_client_models_with_native_policy(
-        profile_dir, supports_websockets, client_models, add_reserve, None,
-    )
-}
-
-fn write_profile_client_models_with_native_policy(
-    profile_dir: &Path,
-    supports_websockets: Option<bool>,
     mut client_models: Value,
-    add_reserve: bool,
-    native_policy: Option<(&CodexLocalAccessCollection, Option<&CodexLocalAccessApiKey>, &[CodexAccount])>,
 ) -> Result<(), String> {
     // 只有目录里已经有官方 GPT / Codex 模型（或用户显式列出 gpt-reserve）时才追加额度兜底
     // 条目。账号池没有能承接官方模型的账号时（例如只加了 DeepSeek + Grok 账号），客户端
     // 选择器里不应再出现 GPT-5.6 Reserve。
-    if add_reserve && profile_catalog_allows_reserve(&client_models) {
+    if profile_catalog_allows_reserve(&client_models) {
         codex_protocol::ensure_codex_reserve_fallback(&mut client_models);
     }
     apply_profile_model_ordering(&mut client_models);
@@ -1983,9 +1958,7 @@ fn write_profile_client_models_with_native_policy(
         .and_then(Value::as_array_mut)
     {
         for model in models {
-            if let Some(supports_websockets) = supports_websockets {
-                model["prefer_websockets"] = json!(supports_websockets);
-            }
+            model["prefer_websockets"] = json!(supports_websockets);
         }
     }
     let catalog = json!({
@@ -2000,16 +1973,6 @@ fn write_profile_client_models_with_native_policy(
     // Apply profile overrides after templates and pool models have been merged;
     // startup and passive reconciliation must use the same final values.
     let content = codex_account::decorate_managed_model_catalog_for_profile(profile_dir, &content)?;
-    // Apply the provider-specific layer last, before the only file/cache write.
-    // Startup and passive maintenance must not alternate between base and final
-    // metadata or overwrite a provider rule with an instance-level rule.
-    let content = if let Some((collection, key, accounts)) = native_policy {
-        let mut catalog = serde_json::from_str::<Value>(&content)
-            .map_err(|_| "NATIVE_PROVIDER_POLICY_CATALOG_INVALID".to_string())?;
-        native_decorate_provider_models(profile_dir, collection, key, accounts, &mut catalog)?;
-        serde_json::to_string_pretty(&catalog)
-            .map_err(|_| "NATIVE_PROVIDER_POLICY_CATALOG_INVALID".to_string())?
-    } else { content };
     let catalog_file = CODEX_MANAGED_MODEL_CATALOG_FILE;
     let catalog_changed = write_string_atomic_if_changed(&profile_dir.join(catalog_file), &content)
         .map_err(|e| format!("写入 Codex API 服务模型目录失败: {}", e))?;
@@ -2528,7 +2491,6 @@ fn normalize_api_key_label(label: Option<&str>, fallback: &str) -> String {
 fn build_local_access_api_key(label: Option<&str>) -> CodexLocalAccessApiKey {
     let now = now_ms();
     CodexLocalAccessApiKey {
-        provider_model_bindings: None,
         id: generate_local_api_key_id(),
         label: normalize_api_key_label(label, &default_local_api_key_label()),
         key: generate_local_api_key(),
@@ -2563,7 +2525,6 @@ fn normalize_collection_api_keys(collection: &mut CodexLocalAccessCollection) ->
             collection.api_key.trim().to_string()
         };
         collection.api_keys.push(CodexLocalAccessApiKey {
-            provider_model_bindings: None,
             id: generate_local_api_key_id(),
             label: default_local_api_key_label(),
             key,

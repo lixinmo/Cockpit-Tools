@@ -113,27 +113,6 @@ async fn ensure_native_gateway_locked(
 
 
 
-async fn set_runtime_gateway_mode(mode: CodexLocalAccessGatewayMode) {
-    if let Some(collection) = gateway_runtime().lock().await.collection.as_mut() {
-        collection.gateway_mode = mode;
-        collection.native_gateway_default_migrated = true;
-    }
-}
-
-async fn persist_native_gateway_selection(mode: CodexLocalAccessGatewayMode) -> Result<(), String> {
-    let path = local_access_file_path()?;
-    tokio::task::spawn_blocking(move || {
-        update_string_atomic(&path, |current| {
-            native_patch_mode(
-                current.ok_or_else(|| "API service configuration is missing".to_string())?,
-                mode,
-            )
-        })
-    })
-    .await
-    .map_err(|error| error.to_string())?
-}
-
 fn native_patch_mode(current: &str, mode: CodexLocalAccessGatewayMode) -> Result<String, String> {
     let mut value: Value = serde_json::from_str(current).map_err(|error| error.to_string())?;
     if !value.is_object() {
@@ -143,7 +122,15 @@ fn native_patch_mode(current: &str, mode: CodexLocalAccessGatewayMode) -> Result
     {
         return Err("CHATGPT_PLAN_NATIVE_REQUIRED".into());
     }
-    credits_compat::patch_gateway_mode(current, mode, now_ms())
+    if mode == CodexLocalAccessGatewayMode::Native {
+        return credits_compat::patch_native_mode(current, now_ms());
+    }
+    // Retain upstream's legacy field transaction for old-writer compatibility
+    // tests; production initialization and saves always normalize to Native.
+    value["gatewayMode"] = serde_json::to_value(mode).map_err(|error| error.to_string())?;
+    value["nativeGatewayDefaultMigrated"] = json!(true);
+    value["updatedAt"] = json!(now_ms());
+    serde_json::to_string_pretty(&value).map_err(|error| error.to_string())
 }
 
 fn native_json_has_chatgpt_plan_reference(value: &Value) -> bool {
@@ -199,76 +186,6 @@ fn native_validate_chatgpt_plan_mode(
     {
         return Err("CHATGPT_PLAN_NATIVE_REQUIRED".into());
     }
-    Ok(())
-}
-
-async fn switch_native_aware_gateway(mode: CodexLocalAccessGatewayMode) -> Result<(), String> {
-    ensure_runtime_loaded_without_start().await?;
-    let mode = if mode == CodexLocalAccessGatewayMode::Legacy {
-        CodexLocalAccessGatewayMode::Sidecar
-    } else {
-        mode
-    };
-    let _guard = timeout(Duration::from_secs(30), gateway_lifecycle_lock().lock())
-        .await
-        .map_err(|_| "NATIVE_API_SWITCH_BUSY".to_string())?;
-    let previous = {
-        let runtime = gateway_runtime().lock().await;
-        let collection = runtime
-            .collection
-            .as_ref()
-            .ok_or_else(|| "API service configuration is missing".to_string())?;
-        // Reject before pausing or stopping the existing listener. Neither a
-        // failed switch nor a stopped service may activate the sidecar grant.
-        native_validate_chatgpt_plan_mode(collection, mode)?;
-        credits_compat::validate_mode(collection, mode)?;
-        let previous = collection.gateway_mode;
-        if previous == mode {
-            return Ok(());
-        }
-        if runtime
-            .native_handle
-            .as_ref()
-            .is_some_and(|handle| !handle.pause_if_idle())
-        {
-            return Err("NATIVE_API_BUSY".into());
-        }
-        previous
-    };
-    advance_gateway_lifecycle_generation();
-    let (endpoint, stopped) = stop_gateway_locked_checked("engine_switch").await;
-    let result = async {
-        stopped?;
-        if let Some(endpoint) = endpoint {
-            wait_for_gateway_port_release(&endpoint.bind_host, endpoint.port).await?;
-        }
-        set_runtime_gateway_mode(mode).await;
-        // Deliberately bypass the random-port recovery wrapper: the public endpoint must remain stable.
-        ensure_gateway_matches_runtime_once_locked().await?;
-        persist_native_gateway_selection(mode).await
-    }
-    .await;
-    if let Err(error) = result {
-        let (endpoint, _) = stop_gateway_locked_checked("engine_switch_rollback").await;
-        if let Some(endpoint) = endpoint {
-            let _ = wait_for_gateway_port_release(&endpoint.bind_host, endpoint.port).await;
-        }
-        set_runtime_gateway_mode(previous).await;
-        let restored = ensure_gateway_matches_runtime_once_locked().await;
-        let restored_ok = restored.is_ok();
-        let message = match restored {
-            Ok(()) => format!("NATIVE_API_SWITCH_FAILED: {error}"),
-            Err(rollback) => format!("NATIVE_API_ROLLBACK_FAILED: {error}; {rollback}"),
-        };
-        gateway_runtime().lock().await.last_error = if restored_ok {
-            None
-        } else {
-            Some(message.clone())
-        };
-        emit_local_access_state_updated();
-        return Err(message);
-    }
-    emit_local_access_state_updated();
     Ok(())
 }
 
@@ -738,33 +655,12 @@ fn native_model_for_key(
             "Model is not allowed for this API key",
         ));
     }
-    let provider_gateway = key.and_then(|key| key.provider_gateway.as_ref());
-    let bindings = key.and_then(|key| key.provider_model_bindings.as_ref())
-        .or_else(|| provider_gateway.and_then(|gateway| gateway.model_bindings.as_ref()))
-        .map(|bindings| normalize_provider_model_bindings(bindings))
-        .transpose().map_err(|_| native_error(400, "invalid_provider_model_binding",
-            "Provider model bindings contain conflicting or invalid identities"))?;
-    let scoped_binding = bindings.as_ref().and_then(|bindings|
-        bindings.iter().find(|binding| binding.client_model.eq_ignore_ascii_case(base_model))
-            .map(|binding| (provider_gateway, binding)));
-    let canonical = if let Some((gateway, binding)) = scoped_binding {
-        let target = binding.upstream_model.as_deref().ok_or_else(|| native_error(
-            409, "provider_model_binding_unresolved",
-            "This legacy model alias has no verified target; select a provider model by its original name",
-        ))?;
-        if gateway.is_some_and(|gateway| native_gateway_models(gateway).iter().any(|id| id.eq_ignore_ascii_case(base_model)))
-            && !target.eq_ignore_ascii_case(base_model)
-        {
-            return Err(native_error(409, "provider_model_binding_conflict",
-                "A provider model conflicts with a retained legacy alias; resolve the binding explicitly"));
-        }
-        target
-    } else {
-        collection.model_aliases.iter()
-            .find(|alias| alias.alias.eq_ignore_ascii_case(base_model))
-            .map(|alias| alias.source_model.as_str())
-            .unwrap_or(base_model)
-    };
+    let canonical = collection
+        .model_aliases
+        .iter()
+        .find(|alias| alias.alias.eq_ignore_ascii_case(base_model))
+        .map(|alias| alias.source_model.as_str())
+        .unwrap_or(base_model);
     if native_excluded(&collection.excluded_models, canonical)
         || key.is_some_and(|key| native_excluded(&key.excluded_models, canonical))
     {
@@ -1708,10 +1604,6 @@ mod native_live_protocol;
 #[cfg(test)]
 #[path = "codex_local_access_native_live_pool.rs"]
 mod native_live_pool;
-
-#[cfg(test)]
-#[path = "codex_local_access_native_live_provider.rs"]
-mod native_live_provider;
 
 #[cfg(test)]
 #[path = "codex_local_access_native_credits_tests.rs"]

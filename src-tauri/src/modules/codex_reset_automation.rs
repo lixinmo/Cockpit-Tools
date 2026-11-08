@@ -1,5 +1,5 @@
 //! Account-scoped reset-card rules and a durable redemption journal.
-use super::{atomic_write, codex_account, codex_auto_reset, codex_quota, config, logger};
+use super::{atomic_write, codex_account, codex_quota, config, logger};
 use crate::models::codex::CodexQuota;
 use codex_quota::ResetCreditConsumeOutcome;
 use serde::{Deserialize, Serialize};
@@ -60,15 +60,10 @@ struct Pending {
     request_id: String,
     reason: String,
     evidence: Option<String>,
-    #[serde(default)]
-    credit_id: Option<String>,
-    #[serde(default)]
-    rule: Option<Rule>,
 }
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 struct Document {
-    legacy_settings_migrated: bool,
     revision: u64,
     public_rule: Rule,
     accounts: HashMap<String, AccountRule>,
@@ -112,24 +107,6 @@ fn read(path: &Path) -> Result<Document, String> {
         Err(e) => Err(format!("{}: {e}", message("storageError"))),
     }
 }
-// One-time import: never broaden an existing opt-in to the new expiry trigger,
-// and never overwrite settings already saved through the upstream UI.
-fn migrate_legacy_preferences(d: &mut Document, old: &codex_auto_reset::Preferences) {
-    if d.legacy_settings_migrated { return; }
-    for (id, settings) in old.entries() {
-        d.accounts.entry(id.clone()).or_insert_with(|| AccountRule::Custom {
-            rule: Rule {
-                enabled: settings.enabled && (0..=99).contains(&settings.threshold),
-                expiry_enabled: false,
-                quota_enabled: true,
-                remaining_percent: settings.threshold.clamp(0, 99) as u8,
-                ..Rule::default()
-            },
-        });
-    }
-    d.legacy_settings_migrated = true;
-}
-
 fn update_at<T>(
     path: &Path,
     edit: impl FnOnce(&mut Document) -> Result<T, String>,
@@ -146,48 +123,15 @@ fn update_at<T>(
     Ok(result)
 }
 fn update<T>(edit: impl FnOnce(&mut Document) -> Result<T, String>) -> Result<T, String> {
-    let legacy = config::get_user_config().codex_auto_reset;
-    let result = update_at(&path()?, |d| {
-        migrate_legacy_preferences(d, &legacy);
-        edit(d)
-    })?;
+    let result = update_at(&path()?, edit)?;
     if let Some(app) = APP.get() {
         let _ = app.emit(EVENT, ());
     }
     Ok(result)
 }
 pub fn view() -> Result<View, String> {
-    let path = path()?;
-    {
-        let _guard = STORAGE.lock().map_err(|_| message("storageError"))?;
-        let d = read(&path)?;
-        if d.legacy_settings_migrated { return Ok(d.into()); }
-    }
-    let legacy = config::get_user_config().codex_auto_reset;
-    update_at(&path, |d| {
-        migrate_legacy_preferences(d, &legacy);
-        Ok(d.clone().into())
-    })
-}
-pub(crate) fn remaining_threshold(id: &str) -> Result<i32, String> {
-    let _ = view()?;
-    let d = read(&path()?)?;
-    Ok(match d.accounts.get(id) {
-        Some(AccountRule::Custom { rule }) => i32::from(rule.remaining_percent),
-        _ => i32::from(d.public_rule.remaining_percent),
-    })
-}
-// Recheck after token preparation and again on an authentication retry.
-pub(crate) fn authorize_redemption(id: &str, request_id: &str, identity: &str) -> Result<(), String> {
-    let d = read(&path()?)?;
-    let pending = d.pending.get(id).ok_or_else(|| message("conflict"))?;
-    if pending.request_id != request_id || pending.identity != identity {
-        return Err(message("conflict"));
-    }
-    if pending.reason != "manual" && pending.rule.as_ref().is_none_or(|rule| effective(&d, id) != Some(rule)) {
-        return Err(message("conflict"));
-    }
-    Ok(())
+    let _guard = STORAGE.lock().map_err(|_| message("storageError"))?;
+    Ok(read(&path()?)?.into())
 }
 fn validate(rule: &Rule) -> Result<(), String> {
     if rule.expiry_enabled && (rule.before_seconds == 0 || rule.before_seconds > i64::MAX as u64) {
@@ -309,14 +253,23 @@ fn trigger(
     if !rule.quota_enabled {
         return None;
     }
-    let mut q = quota?.clone();
-    if q.hourly_reset_time.is_some_and(|at| at <= now) { q.hourly_window_present = Some(false); }
-    if q.weekly_reset_time.is_some_and(|at| at <= now) { q.weekly_window_present = Some(false); }
-    codex_auto_reset::weekly_remaining(&q)
-        .is_some_and(|remaining| remaining <= i32::from(rule.remaining_percent))
-        .then_some("quota")
+    let q = quota?;
+    let low = |value: i32, present: Option<bool>, reset: Option<i64>| {
+        present != Some(false)
+            && (present == Some(true) || reset.is_some())
+            && reset.is_none_or(|at| at > now)
+            && (0..=100).contains(&value)
+            && value <= i32::from(rule.remaining_percent)
+    };
+    // Legacy `window` JSON fields are obsolete and ignored by serde. Preserve
+    // every threshold/switch while applying the requested weekly-only behavior.
+    low(
+        q.weekly_percentage,
+        q.weekly_window_present,
+        q.weekly_reset_time,
+    )
+    .then_some("quota")
 }
-
 fn evidence(cards: &codex_quota::CodexResetCreditsSnapshot) -> Result<String, String> {
     // Sort identities, so changing response order is not a new observation.
     let mut identities: Vec<_> = cards
@@ -345,24 +298,15 @@ fn record(d: &mut Document, id: &str, reason: &str, status: &str, detail: Option
     );
     d.records.truncate(100);
 }
-pub(crate) struct Lease {
-    id: String,
-    guard: codex_auto_reset::ResetGuard,
-}
+pub(crate) struct Lease(String);
 impl Drop for Lease {
     fn drop(&mut self) {
         if let Ok(mut active) = ACTIVE.lock() {
-            active.remove(&self.id);
+            active.remove(&self.0);
         }
     }
 }
 pub(crate) fn acquire(id: &str) -> Result<Option<Lease>, String> {
-    acquire_at(&config::get_data_dir()?, id)
-}
-fn acquire_at(data_dir: &Path, id: &str) -> Result<Option<Lease>, String> {
-    let Some(guard) = codex_auto_reset::ResetGuard::acquire(data_dir, id)? else {
-        return Ok(None);
-    };
     if !ACTIVE
         .lock()
         .map_err(|_| message("busy"))?
@@ -370,7 +314,7 @@ fn acquire_at(data_dir: &Path, id: &str) -> Result<Option<Lease>, String> {
     {
         return Ok(None);
     }
-    Ok(Some(Lease { id: id.into(), guard }))
+    Ok(Some(Lease(id.into())))
 }
 async fn blocking<T: Send + 'static>(
     f: impl FnOnce() -> Result<T, String> + Send + 'static,
@@ -401,8 +345,6 @@ fn begin_redemption(
         request_id: uuid::Uuid::new_v4().to_string(),
         reason: reason.into(),
         evidence: before,
-        credit_id: None,
-        rule: None,
     };
     d.pending.insert(id.into(), pending.clone());
     record(d, id, reason, "pending", None);
@@ -445,8 +387,6 @@ async fn redeem(
     reason: &str,
     before: Option<String>,
     expected: Option<(Rule, String)>,
-    credit_id: Option<String>,
-    lease: &Lease,
 ) -> Result<(), String> {
     let account_id = id.to_string();
     let reason = reason.to_string();
@@ -462,33 +402,16 @@ async fn redeem(
             }) {
                 return Err(message("conflict"));
             }
-            let resuming = d.pending.get(&account_id).is_some_and(|pending| pending.identity == identity);
-            let mut pending = begin_redemption(d, &account_id, &identity, &reason, before);
-            // Once recorded, an ambiguous retry keeps the exact original payload,
-            // including an absent credit_id in an older upstream journal entry.
-            if !resuming { pending.credit_id = credit_id; }
-            pending.rule = expected.as_ref().map(|(rule, _)| rule.clone());
-            if reason == "manual" { pending.reason = reason.clone(); }
-            d.pending.insert(account_id.clone(), pending.clone());
-            Ok(pending)
+            Ok(begin_redemption(d, &account_id, &identity, &reason, before))
         })
     })
     .await?;
-    let threshold = remaining_threshold(id)?;
-    let threshold = lease.guard.pending()?.map_or(threshold, |old| old.threshold.max(threshold));
-    lease.guard.record(&codex_auto_reset::Attempt {
-        credit_id: pending.credit_id.clone(),
-        redeem_request_id: pending.request_id.clone(),
-        threshold,
-        awaiting_refresh: true,
-    })?;
     let result = tokio::time::timeout(
         Duration::from_secs(60),
         codex_quota::consume_reset_credit_with_request_id(
             id,
             &pending.request_id,
             &pending.identity,
-            pending.credit_id.as_deref(),
         ),
     )
     .await
@@ -499,17 +422,11 @@ async fn redeem(
     result.and_then(ResetCreditConsumeOutcome::into_result)
 }
 pub async fn consume_manual(id: &str) -> Result<(), String> {
-    let _ = view()?;
-    let lease = acquire(id)?.ok_or_else(|| message("busy"))?;
-    if lease.guard.pending()?.is_some_and(|pending| pending.awaiting_refresh) {
-        let quota = codex_quota::refresh_account_quota_for_reset(id).await?
-            .ok_or_else(|| message("busy"))?;
-        lease.guard.observe_recovery(&quota, remaining_threshold(id)?)?;
-    }
-    redeem(id, "manual", None, None, None, &lease).await
+    let _lease = acquire(id)?.ok_or_else(|| message("busy"))?;
+    redeem(id, "manual", None, None).await
 }
 async fn check_account(id: &str) -> Result<(), String> {
-    let Some(lease) = acquire(id)? else {
+    let Some(_lease) = acquire(id)? else {
         return Ok(());
     };
     let id_owned = id.to_string();
@@ -523,7 +440,10 @@ async fn check_account(id: &str) -> Result<(), String> {
         };
         let account =
             codex_account::load_account(&id_owned).ok_or_else(|| message("accountMissing"))?;
-        if !codex_auto_reset::supports_account(&account) {
+        if account.is_api_key_auth()
+            || account.is_agent_identity_auth()
+            || account.is_web_session_auth()
+        {
             return Ok(None);
         }
         Ok(Some((rule, account_identity(&account))))
@@ -532,25 +452,16 @@ async fn check_account(id: &str) -> Result<(), String> {
     let Some((rule, identity)) = rule else {
         return Ok(());
     };
-    // An old unresolved POST and every new redemption share one durable latch.
-    // Hold its file lock before GET; cached results never release it or trigger POST.
-    if lease.guard.pending()?.is_some() {
-        if let Some(quota) = codex_quota::refresh_account_quota_for_reset(id).await? {
-            lease.guard.observe_recovery(&quota, i32::from(rule.remaining_percent))?;
-        }
-        return Ok(());
-    }
+    // Always obtain fresh evidence; unknown/missing windows are never zero.
     let cards = codex_quota::fetch_account_reset_credits(id).await?;
     let quota = if rule.quota_enabled
         && trigger(&rule, None, &cards, chrono::Utc::now().timestamp()).is_none()
         && cards.available_count.is_some_and(|count| count > 0)
     {
-        codex_quota::refresh_account_quota_for_reset(id).await?
+        Some(Box::pin(codex_quota::refresh_account_quota_background(id)).await?)
     } else {
         None
     };
-    let selected_credit_id = codex_auto_reset::earliest_credit(&cards.credits, chrono::Utc::now().timestamp())
-        .and_then(|credit| credit.id.clone());
     let observed = format!("{}:{}", identity, evidence(&cards)?);
     let id_owned = id.to_string();
     let observed_copy = observed.clone();
@@ -574,23 +485,13 @@ async fn check_account(id: &str) -> Result<(), String> {
     })
     .await?;
     if let Some((reason, rule)) = reason {
-        let Some(credit_id) = selected_credit_id else { return Ok(()); };
-        let result = redeem(id, &reason, Some(observed), Some(rule), Some(credit_id), &lease).await;
-        // Even failed/ambiguous POSTs retain the durable barrier until fresh quota.
-        if let Some(quota) = codex_quota::refresh_account_quota_for_reset(id).await? {
-            lease.guard.observe_recovery(&quota, remaining_threshold(id)?)?;
-        }
-        result?;
+        redeem(id, &reason, Some(observed), Some(rule)).await?;
+        Box::pin(codex_quota::refresh_account_quota_background(id)).await?;
     }
     Ok(())
 }
 pub async fn run(app: AppHandle) {
     if APP.set(app).is_err() {
-        return;
-    }
-    // Persist migration before any automatic check. Storage failures fail closed.
-    if let Err(error) = blocking(|| view().map(|_| ())).await {
-        logger::log_warn(&format!("[Codex Reset Automation] migration failed: {error}"));
         return;
     }
     tokio::time::sleep(Duration::from_secs(10)).await;

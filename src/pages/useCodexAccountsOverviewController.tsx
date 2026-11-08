@@ -8,7 +8,7 @@ import { CodexResetAutomationStatus } from '../components/codex/CodexResetAutoma
 import * as codexService from "../services/codexService";
 import * as codexLocalAccessService from "../services/codexLocalAccessService";
 import { type CodexAccountGroup } from "../services/codexAccountGroupService";
-import { hasCodexAccountStructure, hasCodexAccountName, isCodexApiKeyAccount, isCodexChatgptPlanAccount, isCodexWebSessionAccount, isCodexNewApiAccount, isCodexTeamLikePlan } from "../types/codex";
+import { hasCodexAccountStructure, hasCodexAccountName, isCodexApiKeyAccount, isCodexChatgptPlanAccount, isCodexAgentIdentityAccount, isCodexWebSessionAccount, isCodexNewApiAccount, isCodexTeamLikePlan } from "../types/codex";
 import { summarizeCodexQuotaErrorMessage } from "../utils/codexQuotaError";
 import { buildCodexAccountPresentation } from "../presentation/platformAccountPresentation";
 import { formatCodexWindowStatsText } from "../utils/codexWindowStats";
@@ -1656,7 +1656,7 @@ export function useCodexAccountsOverviewController(context: Pick<ReturnType<type
     );
   
     const renderResetCreditControls = (account: CodexAccount, mode: 'controls' | 'expiry' = 'controls') => {
-      if (isCodexApiKeyAccount(account))
+      if (isCodexApiKeyAccount(account) || isCodexAgentIdentityAccount(account))
         return null;
   
       const creditDetails = getResetCreditDetails(account);

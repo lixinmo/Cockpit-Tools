@@ -168,10 +168,7 @@ async fn send_inner(
             }
             if chat {
                 if compact || super::anthropic_compact::triggered(&body) { super::anthropic_compact::prepare(&mut body)?; }
-                super::chat_upstream::validate_client_tools(&body)?;
-                // Shared upstream lowering also handles explicit historical client calls
-                // when current tools=[] intentionally disables new discovery.
-                super::chatgpt_plan_tools::prepare(&mut body)?;
+                if super::chatgpt_plan_tools::has_client_declaration(&body) { super::chatgpt_plan_tools::prepare(&mut body)?; }
                 super::chat_upstream::responses_to_chat(&body)?
             } else { body }
         };

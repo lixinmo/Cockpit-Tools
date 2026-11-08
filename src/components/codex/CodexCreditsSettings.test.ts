@@ -81,12 +81,12 @@ test('failed policy save surfaces error and does not claim the new policy is act
 });
 
 test('Go compatibility rejection keeps the current policy and account switch visible', async () => {
-  const message = 'CREDITS_REQUIRES_NATIVE: Switch API service and related instances to Native first';
+  const message = 'SETTINGS_WRITE_FAILED: Unable to persist the requested policy';
   const { render } = setup(async () => { throw new Error(message); }, { gatewayMode: 'sidecar' });
   render().find(n => n.type === 'input')!.props.onChange({ target: { checked: false } });
   await settlePromises();
   const tree = render();
   assert.equal(tree.find(n => n.type === 'select')!.props.value, 'default');
   assert.equal(tree.find(n => n.type === 'input')!.props.checked, true);
-  assert.match(tree.find(n => n.props.role === 'alert')!.props.children, /CREDITS_REQUIRES_NATIVE/);
+  assert.match(tree.find(n => n.props.role === 'alert')!.props.children, /SETTINGS_WRITE_FAILED/);
 });

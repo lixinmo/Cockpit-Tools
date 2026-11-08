@@ -327,7 +327,7 @@ fn native_mode_patch_preserves_latest_unrelated_fields_and_rejects_nonobjects() 
 }
 
 #[test]
-fn native_engine_selection_survives_stale_stats_writes_in_both_directions() {
+fn native_engine_selection_cannot_be_reverted_by_stale_stats() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("collection.json");
     let mut stale_sidecar = native_test_collection();
@@ -358,7 +358,7 @@ fn native_engine_selection_survives_stale_stats_writes_in_both_directions() {
     save_collection_to_path(&path, &stale_native).unwrap();
     let latest: CodexLocalAccessCollection =
         serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-    assert_eq!(latest.gateway_mode, CodexLocalAccessGatewayMode::Sidecar);
+    assert_eq!(latest.gateway_mode, CodexLocalAccessGatewayMode::Native);
     assert_eq!(latest.port, 16666);
 }
 
@@ -1085,9 +1085,6 @@ async fn native_context_rebuild_stale_false_does_not_survive_collection_save() {
     for mode in [CodexLocalAccessGatewayMode::Native, CodexLocalAccessGatewayMode::Sidecar] {
         let mut stale = native_test_collection();
         stale.gateway_mode = mode;
-        // This is a later explicit engine choice, not an unmarked legacy file.
-        stale.native_gateway_default_migrated = true;
-        stale.native_credits_policy_migrated = true;
         let mut original = serde_json::to_value(&stale).unwrap();
         original["nativeAccountSwitchRebuild"] = json!(false);
         std::fs::write(&path, serde_json::to_vec(&original).unwrap()).unwrap();
@@ -1096,7 +1093,7 @@ async fn native_context_rebuild_stale_false_does_not_survive_collection_save() {
         let persisted: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
         assert!(persisted.get("nativeAccountSwitchRebuild").is_none());
         let restored: CodexLocalAccessCollection = serde_json::from_value(persisted).unwrap();
-        assert_eq!(restored.gateway_mode, mode, "No automatic engine switch");
+        assert_eq!(restored.gateway_mode, CodexLocalAccessGatewayMode::Native, "Retired engines must migrate to Rust");
         assert_eq!(restored.port, 16666);
         assert_eq!(restored.account_ids, stale.account_ids);
         assert_eq!(restored.api_key, stale.api_key);

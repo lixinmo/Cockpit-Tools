@@ -29,7 +29,6 @@ pub mod codebuddy_oauth;
 pub mod codebuddy_session;
 pub mod codebuddy_session_transfer;
 pub mod codex_account;
-pub mod codex_provider_metadata;
 pub mod codex_device_restrictions;
 pub mod chatgpt_plan;
 pub mod chatgpt_plan_service;
@@ -66,7 +65,6 @@ pub mod codex_official_app_server;
 pub mod codex_protocol;
 pub(crate) mod codex_model_catalog;
 pub mod codex_quota;
-pub(crate) mod codex_auto_reset; // Legacy settings/barrier compatibility only.
 pub(crate) mod codex_reset_automation;
 pub(crate) mod codex_quota_sync;
 pub mod codex_temp_login;

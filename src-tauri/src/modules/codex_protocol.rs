@@ -551,65 +551,6 @@ fn filter_responses_lite_tools_in_object(object: &mut Map<String, Value>) -> boo
 }
 
 fn build_codex_client_model(model_id: &str, index: usize) -> Value {
-    build_codex_client_model_with_provider_defaults(model_id, index, false)
-}
-
-/// A provider's client schema must not depend on whether its exposed name
-/// happens to match a GPT alias. Runtime adapters apply protocol capabilities;
-/// account/provider metadata supplies real model limits separately.
-pub(crate) fn build_provider_client_model(model_id: &str, index: usize) -> Value {
-    let mut model = build_codex_client_model_with_provider_defaults(model_id, index, true);
-    // Client safety fallback, not a claim about the upstream model's limit.
-    // Match the existing provider profile fallback until explicit metadata wins.
-    model["context_window"] = json!(128_000);
-    model["max_context_window"] = json!(128_000);
-    model["auto_compact_token_limit"] = json!(derived_auto_compact_token_limit(128_000));
-    model["available_in_plans"] = json!([]);
-    model["auto_review_model_override"] = Value::Null;
-    model["model_specialty"] = Value::Null;
-    model["default_service_tier"] = Value::Null;
-    model["support_verbosity"] = json!(false);
-    model["default_verbosity"] = Value::Null;
-    model["supports_reasoning_summary_parameter"] = json!(false);
-    model["supports_reasoning_summaries"] = json!(false);
-    // Compatibility choices for providers that do not publish effort metadata.
-    // They are not a claim that the upstream supports all GPT intensities.
-    model["default_reasoning_level"] = json!("medium");
-    model["cockpit_reasoning_known"] = json!(false);
-    model["supported_reasoning_levels"] = json!([
-        {"effort":"low","description":"Low (provider compatibility)"},
-        {"effort":"medium","description":"Medium (provider compatibility)"},
-        {"effort":"high","description":"High (provider compatibility)"},
-        {"effort":"xhigh","description":"Extra high (provider compatibility)"},
-        {"effort":"max","description":"Max (provider compatibility)"},
-        {"effort":"ultra","description":"Ultra (provider compatibility)"}
-    ]);
-    model["supports_search_tool"] = json!(false);
-    model["web_search_tool_type"] = json!("text");
-    model["supports_parallel_tool_calls"] = json!(false);
-    neutralize_provider_instruction_identity(&mut model["base_instructions"]);
-    neutralize_provider_instruction_identity(&mut model["model_messages"]);
-    model
-}
-
-fn neutralize_provider_instruction_identity(value: &mut Value) {
-    match value {
-        Value::String(text) if text.starts_with("You are Codex, an agent based on GPT-") => {
-            if let Some(end) = text.find(". ") {
-                text.replace_range(..=end, "You are Codex, a coding agent.");
-            }
-        }
-        Value::Array(items) => items.iter_mut().for_each(neutralize_provider_instruction_identity),
-        Value::Object(object) => object.values_mut().for_each(neutralize_provider_instruction_identity),
-        _ => {}
-    }
-}
-
-fn build_codex_client_model_with_provider_defaults(
-    model_id: &str,
-    index: usize,
-    provider: bool,
-) -> Value {
     let visibility = if matches!(
         model_id,
         CODEX_AUTO_REVIEW_MODEL_ID
@@ -624,11 +565,7 @@ fn build_codex_client_model_with_provider_defaults(
         "list"
     };
 
-    let (mut model, is_catalog_model) = if provider {
-        (codex_client_model_template(CODEX_MODEL_CATALOG_TEMPLATE_SLUG).0, false)
-    } else {
-        codex_client_model_template(model_id)
-    };
+    let (mut model, is_catalog_model) = codex_client_model_template(model_id);
     let object = model
         .as_object_mut()
         .expect("Codex client model template should be a JSON object");
@@ -678,9 +615,7 @@ fn build_codex_client_model_with_provider_defaults(
             Value::Array(Vec::new()),
         );
         object.insert("service_tiers".to_string(), Value::Array(Vec::new()));
-        if !provider {
-            inherit_routed_gpt_capabilities(object, model_id);
-        }
+        inherit_routed_gpt_capabilities(object, model_id);
         // Grok 平台模型由第三方 executor 承接，官方模型目录没有对应条目。
         // 缺少 multi_agent_version 时 Codex 客户端不会为这些模型注入子智能体
         // 协作工具（spawn/send/wait 等），会话里就表现为「找不到协作工具」。

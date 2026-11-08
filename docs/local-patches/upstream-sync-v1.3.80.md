@@ -1,3 +1,7 @@
+> Historical integration record. Its optional Go, legacy Reset compatibility and
+> provider extensions were subsequently retired by the user. Current scope is
+> documented in [Native-only cleanup](native-only-cleanup.md).
+
 # Upstream integration: v1.3.80
 
 ## Source and update channel
@@ -22,7 +26,7 @@ fork; it does not install upstream binaries over the maintained policies.
 | Area | Upstream changes and retained behavior |
 | --- | --- |
 | Local projects after account switches | Adopt upstream's account-state/project recovery and safe handling of malformed global state. No second local project-recovery implementation is added. |
-| Automatic Reset cards | Use upstream's rule UI, worker and redemption journal. Migrate existing account opt-ins and thresholds without enabling an expiry trigger; honor pending legacy consumption barriers. See `auto-consume-reset.md`. |
+| Automatic Reset cards | Use upstream's rule UI, worker and redemption journal. Migrate existing account opt-ins and thresholds without enabling an expiry trigger; honor pending legacy consumption barriers. The old detailed record remains in Git history. |
 | Chat provider tools | Use upstream tool discovery and protocol restoration. Preserve only the additional provider capability declarations and legacy-history compatibility that upstream does not cover. |
 | Provider catalog and reasoning | Combine upstream catalog refresh, protocol/auth-scheme and image metadata with generic configurable reasoning/context metadata and atomic profile publication. Do not restore provider-specific model heuristics. |
 | Credits and API-key budgets | Upstream API-key monetary/concurrency budgets do not replace the local OpenAI Credits admission policy. Both apply at their respective boundaries. |

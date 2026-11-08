@@ -351,7 +351,6 @@ export function CodexLaunchPreviewModal({
         : undefined),
     [instanceId, instances],
   );
-  const providerConfigAccountId = mode !== "apiService" && account && isCodexApiKeyAccount(account) ? account.id : undefined;
   const previewTargetKey = JSON.stringify([instanceId, accountId]);
   const instanceConfigKey = codexLaunchPreviewInstanceConfigKey(selectedInstance);
   const instanceConfigChanged = loadedInstanceKey !== null && loadedInstanceKey !== instanceConfigKey;
@@ -482,7 +481,7 @@ export function CodexLaunchPreviewModal({
       setLoadedInstanceKey(null);
     }
     setError(null);
-    const cached = getCachedCodexLaunchPreviewConfig(instanceId, providerConfigAccountId);
+    const cached = getCachedCodexLaunchPreviewConfig(instanceId);
     // A retry after a slow pre-save read keeps the user's draft. Only an
     // explicit reload after a conflict replaces it with the latest snapshot.
     if (!retained) {
@@ -514,7 +513,7 @@ export function CodexLaunchPreviewModal({
       setRoutingRoutes(loadedRoutes);
     }
     const startedAt = performance.now();
-    void loadCodexLaunchPreviewConfig(instanceId, mode === "apiService", providerConfigAccountId)
+    void loadCodexLaunchPreviewConfig(instanceId, mode === "apiService")
       .then((config) => {
         if (active && session === configSession.current) {
           const latest = configLoadInputs.current;
@@ -532,7 +531,7 @@ export function CodexLaunchPreviewModal({
           setLoadedInstanceKey(latest.selectedInstance ? codexLaunchPreviewInstanceConfigKey(latest.selectedInstance) : null);
           setRoutingEnabled(Boolean(latestRouting?.enabled));
           setRoutingRoutes(latestRoutes);
-          if (latestRouting?.enabled && latestRoutes.length && !providerConfigAccountId) {
+          if (latestRouting?.enabled && latestRoutes.length) {
             setModels(
               syncExperimentalModelsWithRouting(
                 config.experimental_model_catalog_models,
@@ -558,7 +557,7 @@ export function CodexLaunchPreviewModal({
       active = false;
       configSession.current += 1;
     };
-  }, [previewTargetKey, configReload, applyLoadedConfig, instanceId, providerConfigAccountId, setError]);
+  }, [previewTargetKey, configReload, applyLoadedConfig, instanceId, setError]);
 
   // An initially empty instance cache can arrive after the configuration read.
   // Initialize routing once; later runtime-only refreshes never replace drafts.
@@ -642,14 +641,13 @@ export function CodexLaunchPreviewModal({
     [normalizedRoutingRoutes, routingEnabledForSave],
   );
   const routingDirty = useMemo(
-    () => !providerConfigAccountId && (
+    () =>
       !areCodexModelRoutingsEqual(selectedInstance?.modelRouting, nextModelRouting) ||
       routingBindingNeedsRepair ||
-      mixedRoutingBindAccountId !== undefined),
+      mixedRoutingBindAccountId !== undefined,
     [
       mixedRoutingBindAccountId,
       nextModelRouting,
-      providerConfigAccountId,
       routingBindingNeedsRepair,
       selectedInstance?.modelRouting,
     ],
@@ -702,7 +700,6 @@ export function CodexLaunchPreviewModal({
       const latest = await loadCodexLaunchPreviewConfig(
         instanceId,
         mode === "apiService",
-        providerConfigAccountId,
       );
       if (session !== configSession.current) return false;
       const currentInstance = configLoadInputs.current.selectedInstance;
@@ -825,7 +822,7 @@ export function CodexLaunchPreviewModal({
       }
       const nextCatalog = resolveRoutingCatalog(nextModels, catalogEnabled, defaultModelId);
       let saved: CodexQuickConfig;
-      if (routingDirty && !providerConfigAccountId) {
+      if (routingDirty) {
         const result = await saveCodexInstanceConfiguration({
           instanceId,
           bindAccountId: mixedRoutingBindAccountId,
@@ -854,10 +851,9 @@ export function CodexLaunchPreviewModal({
           nextCatalog.enabled,
           nextCatalog.models,
           nextCatalog.defaultModelId,
-          providerConfigAccountId,
         );
       }
-      rememberCodexLaunchPreviewConfig(instanceId, saved, providerConfigAccountId);
+      rememberCodexLaunchPreviewConfig(instanceId, saved);
       // A dispatched write may finish after Close. Keep shared snapshots current,
       // but do not revive the dismissed preview or continue its launch/switch.
       if (session !== configSession.current) return false;
@@ -909,7 +905,6 @@ export function CodexLaunchPreviewModal({
     loadedInstanceKey,
     models,
     modelsError,
-    providerConfigAccountId,
     instanceId,
     mode,
     nextModelRouting,
@@ -1224,9 +1219,7 @@ export function CodexLaunchPreviewModal({
     // with mixed routing enabled, otherwise the backend discards the draft.
     if (!catalogEnabled) {
       const confirmed = await confirmDialog(
-        providerConfigAccountId
-          ? t("codex.experimentalModels.providerPolicyConfirm", "Save a separate model policy for this provider. Other accounts are unchanged.")
-          : t("codex.modelManagement.enableConfirmDescription"),
+        t("codex.modelManagement.enableConfirmDescription"),
         {
           title: t("codex.modelManagement.enableConfirmTitle", "开启模型管理？"),
           okLabel: t("codex.modelManagement.enableConfirmAction", "开启并配置"),
@@ -1258,7 +1251,6 @@ export function CodexLaunchPreviewModal({
   }, [
     configBusy,
     catalogEnabled,
-    providerConfigAccountId,
     defaultModelId,
     models,
     routingRoutes,
@@ -1353,7 +1345,7 @@ export function CodexLaunchPreviewModal({
     setContextConfigReloading(true);
     setContextConfigError(null);
     try {
-      const config = await loadCodexLaunchPreviewConfig(instanceId, mode === "apiService", providerConfigAccountId);
+      const config = await loadCodexLaunchPreviewConfig(instanceId, mode === "apiService");
       if (session !== configSession.current || request !== contextReloadRequest.current) return;
       const latest = configLoadInputs.current;
       const routing = latest.selectedInstance?.modelRouting;
@@ -1363,7 +1355,7 @@ export function CodexLaunchPreviewModal({
       setLoadedInstanceKey(latest.selectedInstance ? codexLaunchPreviewInstanceConfigKey(latest.selectedInstance) : null);
       setRoutingEnabled(Boolean(routing?.enabled));
       setRoutingRoutes(routes);
-      if (routing?.enabled && routes.length && !providerConfigAccountId) {
+      if (routing?.enabled && routes.length) {
         setModels(syncExperimentalModelsWithRouting(config.experimental_model_catalog_models, routes, latest.accounts, true));
       }
       setContextConfigSnapshot({
@@ -1386,7 +1378,7 @@ export function CodexLaunchPreviewModal({
         setContextConfigReloading(false);
       }
     }
-  }, [applyLoadedConfig, busy, checkingConfig, contextConfigSaving, instanceId, loading, mode, previewTargetKey, providerConfigAccountId, setError, t]);
+  }, [applyLoadedConfig, busy, checkingConfig, contextConfigSaving, instanceId, loading, mode, previewTargetKey, setError, t]);
 
   /** 「应用上下文」直接落盘：立即写入 model_context_window / 自动压缩阈值，
    *  失败时保留弹框并在弹框内提示，避免用户以为已保存但 config.toml 没有变化。 */
@@ -1436,7 +1428,6 @@ export function CodexLaunchPreviewModal({
       const latest = await loadCodexLaunchPreviewConfig(
         instanceId,
         mode === "apiService",
-        providerConfigAccountId,
       );
       if (session !== configSession.current) return;
       if (
@@ -1454,9 +1445,8 @@ export function CodexLaunchPreviewModal({
         catalogEnabled,
         models,
         defaultModelId,
-        providerConfigAccountId,
       );
-      rememberCodexLaunchPreviewConfig(instanceId, saved, providerConfigAccountId);
+      rememberCodexLaunchPreviewConfig(instanceId, saved);
       if (session !== configSession.current) return;
       applyLoadedConfig(saved);
       setContextConfigSnapshot(null);
@@ -1487,7 +1477,6 @@ export function CodexLaunchPreviewModal({
     loadedConfig,
     mode,
     models,
-    providerConfigAccountId,
   ]);
 
   const handleAuxiliaryAction = useCallback(
@@ -2239,16 +2228,14 @@ export function CodexLaunchPreviewModal({
                   <div className="codex-launch-preview-tool-copy">
                     <h3>{t("codex.modelManagement.title", "模型管理")}</h3>
                     <p>
-                      {providerConfigAccountId
-                        ? t("codex.experimentalModels.providerPolicyDescription", "Use known provider capabilities, with compatibility levels when unavailable. You can configure them manually.")
-                        : catalogEnabled
+                      {catalogEnabled
                         ? t("codex.modelManagement.enabledDescription")
                         : t(
                             "codex.modelManagement.disabledDescription",
                             "默认关闭；关闭时模型列表、顺序、默认模型和推理强度均跟随官方。",
                           )}
                     </p>
-                    {routingEnabled && !providerConfigAccountId && (
+                    {routingEnabled && (
                       <p>
                         {t(
                           "codex.modelManagement.routingManagedHint",
@@ -2260,13 +2247,9 @@ export function CodexLaunchPreviewModal({
                       <span className={catalogEnabled ? "is-enabled" : ""}>
                         {loading
                           ? t("common.loading", "加载中...")
-                          : providerConfigAccountId
-                            ? catalogEnabled
-                              ? t("codex.experimentalModels.providerPolicyCustom", "Custom")
-                              : t("codex.experimentalModels.providerPolicyFollow", "Follow provider")
-                            : catalogEnabled
-                              ? t("codex.modelManagement.enabled", "已开启")
-                              : t("codex.modelManagement.disabled", "跟随官方")}
+                          : catalogEnabled
+                            ? t("codex.modelManagement.enabled", "已开启")
+                            : t("codex.modelManagement.disabled", "跟随官方")}
                       </span>
                       {catalogEnabled && (
                         <span>
@@ -2725,9 +2708,7 @@ export function CodexLaunchPreviewModal({
               <div>
                 <h2>{t("codex.modelManagement.title", "模型管理")}</h2>
                 <p>
-                  {providerConfigAccountId
-                    ? t("codex.experimentalModels.providerPolicyDescription", "Use known provider capabilities, with compatibility levels when unavailable. You can configure them manually.")
-                    : routingEnabled && !catalogEnabled
+                  {routingEnabled && !catalogEnabled
                     ? t(
                         "codex.modelManagement.routingManagedHint",
                         "混合模型路由只在实例运行时临时使用这份模型目录，停止后自动恢复；它不会改动这里的开关状态。",
@@ -2752,7 +2733,6 @@ export function CodexLaunchPreviewModal({
               />
               <CodexExperimentalModelEditor
                 instanceId={instanceId}
-                providerAccountId={providerConfigAccountId}
                 models={models}
                 defaultModelId={defaultModelId}
                 resetModels={loadedConfig?.experimental_model_catalog_reset_models}

@@ -2793,17 +2793,6 @@
       "windowHint": "Thresholds follow actual durations: a week or longer uses the weekly threshold. Weekly-only accounts check only that quota. Missing durations keep the primary/secondary mapping.",
       "rule": "Short-cycle remaining <= {{shortCycle}}% or weekly remaining <= {{weekly}}%"
     },
-    "credits": {
-      "title": "Credits usage control",
-      "policy": "Global policy (saved immediately)",
-      "default": "Default",
-      "prefer": "Prefer regular quota",
-      "strict": "Regular quota only",
-      "allow": "Allow credits",
-      "description": "Default preserves existing routing. Prefer regular quota allows credits only after every Codex account in the current API key pool exhausts its regular quota. Regular quota only blocks credits. A disabled account switch always takes precedence.",
-      "boundary": "Quota snapshots remain valid for 5 minutes. Restricted accounts with unknown, stale, or reset quota are automatically refreshed before selection (up to 9 seconds, with concurrent reads coalesced). Failed refreshes safely pause the account; see account pool diagnostics for details. In-flight requests cannot be recalled. A request crossing a quota boundary or concurrent use by other clients may still spend credits upstream; absolute spending limits must be configured upstream.",
-      "strictHint": "Regular-quota-only mode blocks credits for every account. Account switches are retained for other policies."
-    },
     "launchConfirmation": {
       "title": "Launch unconfirmed",
       "description": "The launch was requested, but the client status is not confirmed. It may already be open. Please avoid launching it again.",
@@ -3256,16 +3245,6 @@
       "cardHint": "Notes saved. Finish OAuth to use this account."
     },
     "localAccess": {
-      "gatewayEngineNative": "Rust native",
-      "gatewayEngineSidecar": "Go (current)",
-      "gatewayEngineHint": "Rust is the default. The first upgrade switches to Rust; later choices are retained. Switching restarts API Service and may interrupt active requests; Codex windows stay open.",
-      "gatewayEngineSwitching": "Switching engine…",
-      "gatewayEngineSwitchFailed": "Could not switch engine: {{error}}",
-      "gatewayEngineReadbackFailed": "Could not confirm the current engine. Refresh before retrying: {{error}}",
-      "gatewayEngineReadbackTimeout": "Status refresh timed out",
-      "gatewayEngineOperationBusy": "Another service operation is in progress. Try again shortly.",
-      "gatewayEngineSwitchRestored": "Switching failed. The previous engine was restored.",
-      "gatewayEngineRestoreFailed": "Switching failed and the previous engine could not be restored. Check the service status before retrying.",
       "title": "API Service",
       "entryAction": "Add to API Service",
       "removeAction": "Remove from API",
@@ -4281,9 +4260,6 @@
       "resetCreditExpiryNormal": "Expires {{time}} · {{duration}}",
       "resetCreditsTitle": "Resets left for the 5-hour window: {{count}}",
       "resetCreditConfirm": "Confirm?",
-      "autoConsumeResetDescription": "The switch and threshold apply only to this Codex account. While Cockpit Tools is running and the computer is awake, quota is checked in the background about once a minute. Weekly remaining at or below the threshold uses one Banked Reset with the earliest expiry. Ignores 5h quota; skips when none are available. Another automatic use requires refreshed weekly quota above the threshold first. Off by default.",
-      "autoConsumeResetThreshold": "Weekly remaining threshold",
-      "autoConsumeResetInvalidThreshold": "Enter a whole number from 0 to 99.",
       "resetCreditDialogTitle": "Reset your usage?",
       "resetCreditDialogDesc": "Reset the rate limit so you can keep working without interruption. Available resets: {{count}}.",
       "resetCreditDialogAction": "Reset usage",
@@ -6311,15 +6287,6 @@
       "defaultReasoning": "Default effort",
       "defaultReasoningFollow": "Inherit",
       "defaultReasoningHint": "Leave empty to inherit the model default. The selected effort must be supported.",
-      "reasoningNone": "Off",
-      "reasoningMinimal": "Minimal",
-      "providerPolicyHint": "Configure this provider's model capabilities here. Edit its account model list to add or remove models; instance imports do not apply here.",
-      "providerPolicyDescription": "Use known provider capabilities, with compatibility levels when unavailable. You can configure them manually.",
-      "providerPolicyFollow": "Follow provider",
-      "providerPolicyCustom": "Custom",
-      "providerPolicyConfirm": "Save a separate model policy for this provider. Other accounts are unchanged.",
-      "inheritReasoning": "Follow model",
-      "noReasoning": "No adjustable effort",
       "defaultReasoningInvalid": "The default reasoning effort must be supported by this model."
     },
     "modelConfig": {
@@ -6438,6 +6405,17 @@
     },
     "officialApi": {
       "hint": "OpenAI API key account, identified by its actual endpoint."
+    },
+    "credits": {
+      "title": "Credits usage control",
+      "policy": "Global policy (saved immediately)",
+      "default": "Default",
+      "prefer": "Prefer regular quota",
+      "strict": "Regular quota only",
+      "allow": "Allow credits",
+      "description": "Default preserves existing routing. Prefer regular quota allows credits only after every Codex account in the current API key pool exhausts its regular quota. Regular quota only blocks credits. A disabled account switch always takes precedence.",
+      "boundary": "Quota snapshots remain valid for 5 minutes. Restricted accounts with unknown, stale, or reset quota are automatically refreshed before selection (up to 9 seconds, with concurrent reads coalesced). Failed refreshes safely pause the account; see account pool diagnostics for details. In-flight requests cannot be recalled. A request crossing a quota boundary or concurrent use by other clients may still spend credits upstream; absolute spending limits must be configured upstream.",
+      "strictHint": "Regular-quota-only mode blocks credits for every account. Account switches are retained for other policies."
     }
   },
   "codebuddy": {

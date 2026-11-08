@@ -2609,17 +2609,6 @@
       "windowHint": "Ambang mengikuti durasi sebenarnya: seminggu atau lebih memakai ambang mingguan. Akun dengan kuota mingguan saja hanya memeriksa kuota itu. Tanpa durasi, pemetaan jendela utama dan sekunder tetap dipakai.",
       "rule": "Sisa jangka pendek <= {{shortCycle}}% atau mingguan <= {{weekly}}%"
     },
-    "credits": {
-      "title": "Kontrol penggunaan kredit",
-      "policy": "Kebijakan global (langsung disimpan)",
-      "default": "Bawaan",
-      "prefer": "Utamakan kuota reguler",
-      "strict": "Hanya kuota reguler",
-      "allow": "Izinkan kredit",
-      "description": "Mode bawaan mempertahankan perutean yang ada. Utamakan kuota reguler hanya mengizinkan kredit setelah semua akun Codex dalam kumpulan kunci API saat ini menghabiskan kuota regulernya. Hanya kuota reguler memblokir kredit. Menonaktifkan kredit pada suatu akun selalu diutamakan.",
-      "boundary": "Snapshot kuota berlaku selama 5 menit. Kuota akun yang dibatasi akan diperbarui otomatis sebelum dipilih jika tidak diketahui, kedaluwarsa, atau telah direset (maksimal 9 detik, dengan pembacaan serentak digabungkan). Jika pembaruan gagal, akun dijeda dengan aman; lihat diagnostik kumpulan akun untuk detailnya. Permintaan yang sedang berjalan tidak dapat ditarik kembali. Permintaan yang melewati batas kuota atau penggunaan bersamaan oleh klien lain masih dapat menghabiskan kredit di penyedia; batas pengeluaran mutlak harus diatur di penyedia.",
-      "strictHint": "Mode Hanya kuota reguler memblokir kredit untuk semua akun. Pengaturan sakelar tiap akun tetap disimpan untuk kebijakan lain."
-    },
     "launchConfirmation": {
       "title": "Peluncuran belum pasti",
       "description": "Peluncuran telah diminta, tetapi status aplikasi belum terkonfirmasi. Aplikasi mungkin sudah terbuka. Jangan meluncurkannya lagi.",
@@ -2944,16 +2933,6 @@
       "savedPath": "Path tersimpan"
     },
     "localAccess": {
-      "gatewayEngineNative": "Rust bawaan",
-      "gatewayEngineSidecar": "Go (lama)",
-      "gatewayEngineHint": "Rust adalah mesin bawaan. Peningkatan pertama beralih ke Rust; pilihan berikutnya tetap disimpan. Pergantian memulai ulang layanan API dan dapat mengganggu permintaan aktif; jendela Codex tetap terbuka.",
-      "gatewayEngineSwitching": "Mengganti mesin…",
-      "gatewayEngineSwitchFailed": "Gagal mengganti mesin: {{error}}",
-      "gatewayEngineReadbackFailed": "Mesin saat ini belum dapat dipastikan. Segarkan sebelum mencoba lagi: {{error}}",
-      "gatewayEngineReadbackTimeout": "Pembaruan status kehabisan waktu",
-      "gatewayEngineOperationBusy": "Operasi layanan lain sedang berjalan. Coba lagi sebentar.",
-      "gatewayEngineSwitchRestored": "Pergantian gagal. Mesin sebelumnya telah dipulihkan.",
-      "gatewayEngineRestoreFailed": "Pergantian gagal dan mesin sebelumnya tidak dapat dipulihkan. Periksa status layanan sebelum mencoba lagi.",
       "title": "Layanan API",
       "accountCount": "{{count}} akun",
       "baseUrl": "Alamat",
@@ -3564,9 +3543,6 @@
       "resetCredits": "Reset {{count}}",
       "resetCreditsTitle": "Sisa reset untuk jendela 5 jam: {{count}}",
       "resetCreditConfirm": "Konfirmasi?",
-      "autoConsumeResetDescription": "Sakelar dan ambang batas hanya berlaku untuk akun Codex ini. Selama Cockpit Tools berjalan dan komputer tidak dalam mode tidur, kuota diperiksa di latar belakang sekitar sekali setiap menit. Jika sisa kuota mingguan sama dengan atau di bawah ambang batas, satu Banked Reset dengan tanggal kedaluwarsa terdekat akan digunakan. Kuota 5 jam diabaikan; tidak ada tindakan jika reset tidak tersedia. Penggunaan otomatis berikutnya hanya dapat terjadi setelah sisa kuota mingguan yang diperbarui kembali di atas ambang batas. Nonaktif secara default.",
-      "autoConsumeResetThreshold": "Ambang batas sisa kuota mingguan",
-      "autoConsumeResetInvalidThreshold": "Masukkan bilangan bulat dari 0 hingga 99.",
       "resetCreditDialogTitle": "Reset penggunaan Anda?",
       "resetCreditDialogDesc": "Setel ulang batas laju agar Anda bisa terus bekerja tanpa gangguan. Reset tersedia: {{count}}.",
       "resetCreditDialogAction": "Reset penggunaan",
@@ -6127,15 +6103,6 @@
       "defaultReasoning": "Tingkat bawaan",
       "defaultReasoningFollow": "Ikuti bawaan",
       "defaultReasoningHint": "Biarkan kosong untuk mengikuti tingkat bawaan model. Tingkat yang dipilih harus didukung.",
-      "reasoningNone": "Nonaktif",
-      "reasoningMinimal": "Sangat rendah",
-      "providerPolicyHint": "Atur kemampuan model penyedia ini di sini. Untuk menambah atau menghapus model, edit daftar model pada akunnya; impor pengaturan instans tidak berlaku di sini.",
-      "providerPolicyDescription": "Gunakan kemampuan penyedia yang diketahui, atau tingkat kompatibilitas jika informasinya tidak tersedia. Anda dapat mengaturnya secara manual.",
-      "providerPolicyFollow": "Ikuti penyedia",
-      "providerPolicyCustom": "Kustom",
-      "providerPolicyConfirm": "Simpan pengaturan model terpisah untuk penyedia ini. Akun lain tidak akan berubah.",
-      "inheritReasoning": "Ikuti model",
-      "noReasoning": "Tingkat penalaran tidak dapat diatur",
       "defaultReasoningInvalid": "Tingkat penalaran bawaan harus didukung oleh model ini."
     },
     "modelConfig": {
@@ -6254,6 +6221,17 @@
     },
     "officialApi": {
       "hint": "Akun dengan kunci API resmi OpenAI, dikenali berdasarkan alamat koneksi yang digunakan."
+    },
+    "credits": {
+      "title": "Kontrol penggunaan kredit",
+      "policy": "Kebijakan global (langsung disimpan)",
+      "default": "Bawaan",
+      "prefer": "Utamakan kuota reguler",
+      "strict": "Hanya kuota reguler",
+      "allow": "Izinkan kredit",
+      "description": "Mode bawaan mempertahankan perutean yang ada. Utamakan kuota reguler hanya mengizinkan kredit setelah semua akun Codex dalam kumpulan kunci API saat ini menghabiskan kuota regulernya. Hanya kuota reguler memblokir kredit. Menonaktifkan kredit pada suatu akun selalu diutamakan.",
+      "boundary": "Snapshot kuota berlaku selama 5 menit. Kuota akun yang dibatasi akan diperbarui otomatis sebelum dipilih jika tidak diketahui, kedaluwarsa, atau telah direset (maksimal 9 detik, dengan pembacaan serentak digabungkan). Jika pembaruan gagal, akun dijeda dengan aman; lihat diagnostik kumpulan akun untuk detailnya. Permintaan yang sedang berjalan tidak dapat ditarik kembali. Permintaan yang melewati batas kuota atau penggunaan bersamaan oleh klien lain masih dapat menghabiskan kredit di penyedia; batas pengeluaran mutlak harus diatur di penyedia.",
+      "strictHint": "Mode Hanya kuota reguler memblokir kredit untuk semua akun. Pengaturan sakelar tiap akun tetap disimpan untuk kebijakan lain."
     }
   },
   "codebuddy": {

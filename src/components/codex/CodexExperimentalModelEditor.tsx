@@ -54,7 +54,6 @@ export interface CodexAvailableChannel {
 
 interface CodexExperimentalModelEditorProps {
   instanceId?: string;
-  providerAccountId?: string;
   models: CodexExperimentalModelDefinition[];
   defaultModelId?: string | null;
   resetModels?: CodexExperimentalModelDefinition[];
@@ -334,7 +333,6 @@ function nextModelDefinition(
 
 export function CodexExperimentalModelEditor({
   instanceId = "__default__",
-  providerAccountId,
   models,
   defaultModelId = null,
   resetModels = [],
@@ -393,7 +391,7 @@ export function CodexExperimentalModelEditor({
   useEffect(() => {
     let cancelled = false;
     setReasoningLoadFailed(false);
-    void getCodexModelReasoningEfforts(JSON.parse(reasoningRequestKey), instanceId, providerAccountId).then((result) => {
+    void getCodexModelReasoningEfforts(JSON.parse(reasoningRequestKey), instanceId).then((result) => {
       if (cancelled) return;
       setEffectiveEfforts(result);
       const latest = modelsRef.current;
@@ -405,7 +403,7 @@ export function CodexExperimentalModelEditor({
       if (next.some((model, index) => model !== latest[index])) onChangeRef.current(next);
     }).catch(() => { if (!cancelled) setReasoningLoadFailed(true); });
     return () => { cancelled = true; };
-  }, [reasoningRequestKey, reasoningReload, instanceId, providerAccountId]);
+  }, [reasoningRequestKey, reasoningReload, instanceId]);
   const [openReasoningIndex, setOpenReasoningIndex] = useState<number | null>(
     null,
   );
@@ -736,21 +734,12 @@ export function CodexExperimentalModelEditor({
     }
   };
 
-  const reasoningLabel = (effort: CodexReasoningEffort) => effort === "none"
-    ? t("codex.experimentalModels.reasoningNone", "Off")
-    : effort === "minimal" ? t("codex.experimentalModels.reasoningMinimal", "Minimal")
-      : t(`codex.wakeup.reasoningEfforts.${effort}`, effort.toUpperCase());
-
-  const reasoningSelectionLabel = (model: CodexExperimentalModelDefinition) =>
-    model.reasoning_efforts === undefined
-      ? t("codex.experimentalModels.inheritReasoning", "Follow model")
-      : model.reasoning_efforts.length === 0
-        ? t("codex.experimentalModels.noReasoning", "No adjustable effort")
-        : sortCodexReasoningEfforts(model.reasoning_efforts).map(reasoningLabel).join("、");
+  const reasoningLabel = (effort: CodexReasoningEffort) =>
+    t(`codex.wakeup.reasoningEfforts.${effort}`, effort.toUpperCase());
 
   const updateReasoningEfforts = (
     index: number,
-    effort: CodexReasoningEffort | "official" | "unsupported",
+    effort: CodexReasoningEffort | "official",
   ) => {
     onChange(
       models.map((model, modelIndex) => {
@@ -759,7 +748,6 @@ export function CodexExperimentalModelEditor({
           // The capability read below retains valid explicit defaults and clears unsupported ones.
           return { ...model, reasoning_efforts: undefined };
         }
-        if (effort === "unsupported") return withSupportedReasoningEfforts(model, []);
         const current = model.reasoning_efforts ?? [];
         if (current.includes(effort)) {
           if (current.length === 1) return model;
@@ -768,7 +756,7 @@ export function CodexExperimentalModelEditor({
         return withSupportedReasoningEfforts(model, [...current, effort]);
       }),
     );
-    if (effort === "official" || effort === "unsupported") closePicker();
+    if (effort === "official") closePicker();
   };
 
   const applyContextPreset = (
@@ -907,9 +895,8 @@ export function CodexExperimentalModelEditor({
 
   const showModelSource = Boolean(resolveModelSource);
   const transferButton = <button type="button" className="btn btn-secondary codex-experimental-model-transfer-btn"
-    onClick={() => setTransferOpen(true)} disabled={disabled || Boolean(providerAccountId)}
-    title={providerAccountId ? t("codex.experimentalModels.providerPolicyHint", "Configure this provider's model capabilities here. Edit its account model list to add or remove models; instance imports do not apply here.") : undefined}>{t("codex.modelConfig.transfer")}</button>;
-  const transferDialog = transferOpen && !providerAccountId && <CodexModelConfigTransferModal instanceId={instanceId}
+    onClick={() => setTransferOpen(true)} disabled={disabled}>{t("codex.modelConfig.transfer")}</button>;
+  const transferDialog = transferOpen && <CodexModelConfigTransferModal instanceId={instanceId}
     onClose={() => setTransferOpen(false)} onImported={(nextModels, nextDefaultId) => {
       const previousIds = new Set(models.map((model) => model.model_id.toLowerCase()));
       const nextIds = new Set(nextModels.map((model) => model.model_id.toLowerCase()));
@@ -957,7 +944,7 @@ export function CodexExperimentalModelEditor({
                 handleAddBlankModel();
               }
             }}
-            disabled={disabled || Boolean(providerAccountId)}
+            disabled={disabled}
             title={t("codex.experimentalModelCatalog.models.add", "添加模型")}
             aria-expanded={addMenuOpen}
           >
@@ -1157,7 +1144,7 @@ export function CodexExperimentalModelEditor({
                   onChange={(event) =>
                     updateModel(index, "model_id", event.target.value)
                   }
-                  disabled={disabled || Boolean(source?.managed) || Boolean(providerAccountId)}
+                  disabled={disabled || Boolean(source?.managed)}
                   className={rowErrors[index]?.modelId ? "has-error" : ""}
                   placeholder="custom-model"
                 />
@@ -1236,9 +1223,23 @@ export function CodexExperimentalModelEditor({
                     disabled={disabled}
                     aria-haspopup="listbox"
                     aria-expanded={openReasoningIndex === index}
-                    title={reasoningSelectionLabel(model)}
+                    title={
+                      model.reasoning_efforts?.length
+                        ? sortCodexReasoningEfforts(model.reasoning_efforts).map(reasoningLabel).join("、")
+                        : t(
+                            "codex.experimentalModelCatalog.models.followOfficial",
+                            "跟随官方",
+                          )
+                    }
                   >
-                    <span>{reasoningSelectionLabel(model)}</span>
+                    <span>
+                      {model.reasoning_efforts?.length
+                        ? sortCodexReasoningEfforts(model.reasoning_efforts).map(reasoningLabel).join("、")
+                        : t(
+                            "codex.experimentalModelCatalog.models.followOfficial",
+                            "跟随官方",
+                          )}
+                    </span>
                     <ChevronDown size={14} />
                   </button>
                   {pickerOpen && openReasoningIndex === index && createPortal(
@@ -1252,12 +1253,10 @@ export function CodexExperimentalModelEditor({
                       <button
                         type="button"
                         role="option"
-                        key="official"
-                        data-effort="inherit"
-                        aria-selected={model.reasoning_efforts === undefined}
+                        aria-selected={!model.reasoning_efforts?.length}
                         tabIndex={-1}
                         className={`codex-experimental-model-editor__reasoning-option${
-                          model.reasoning_efforts === undefined
+                          !model.reasoning_efforts?.length
                             ? " is-selected"
                             : " is-muted"
                         }`}
@@ -1269,22 +1268,12 @@ export function CodexExperimentalModelEditor({
                           className="codex-experimental-model-editor__check"
                           aria-hidden="true"
                         >
-                          {model.reasoning_efforts === undefined ? "✓" : ""}
+                          {!model.reasoning_efforts?.length ? "✓" : ""}
                         </span>
                         {t(
-                          "codex.experimentalModels.inheritReasoning",
-                          "Follow model",
+                          "codex.experimentalModelCatalog.models.followOfficial",
+                          "跟随官方",
                         )}
-                      </button>
-                      <button key="unsupported" type="button" role="option" tabIndex={-1}
-                        data-effort="unsupported"
-                        aria-selected={model.reasoning_efforts?.length === 0}
-                        className={`codex-experimental-model-editor__reasoning-option${model.reasoning_efforts?.length === 0 ? " is-selected" : " is-muted"}`}
-                        onClick={() => updateReasoningEfforts(index, "unsupported")}>
-                        <span className="codex-experimental-model-editor__check" aria-hidden="true">
-                          {model.reasoning_efforts?.length === 0 ? "✓" : ""}
-                        </span>
-                        {t("codex.experimentalModels.noReasoning", "No adjustable effort")}
                       </button>
                       {CODEX_REASONING_EFFORT_ORDER.map((effort) => {
                         const selected =
@@ -1292,7 +1281,6 @@ export function CodexExperimentalModelEditor({
                         return (
                           <button
                             key={effort}
-                            data-effort={effort}
                             type="button"
                             role="option"
                             aria-selected={selected}
@@ -1329,7 +1317,7 @@ export function CodexExperimentalModelEditor({
                   className="codex-experimental-model-default-effort-select"
                   options={[{ value: "", label: t("codex.experimentalModels.defaultReasoningFollow") },
                     ...sortCodexReasoningEfforts(effectiveEfforts[model.model_id] ?? model.reasoning_efforts ?? []).map((effort) => ({ value: effort, label: reasoningLabel(effort) }))]}
-                  disabled={disabled || reasoningLoadFailed || !(model.reasoning_efforts ?? effectiveEfforts[model.model_id])?.length}
+                  disabled={disabled || reasoningLoadFailed || !effectiveEfforts[model.model_id]}
                   ariaLabel={t("codex.experimentalModels.defaultReasoning")}
                   onChange={(value) => onChange(models.map((item, itemIndex) => itemIndex === index
                     ? { ...item, default_reasoning_effort: value ? value as CodexReasoningEffort : undefined } : item))} />
@@ -1470,7 +1458,7 @@ export function CodexExperimentalModelEditor({
                         onDefaultModelChange?.(null);
                       onModelRemoved?.(targetModelId);
                     }}
-                    disabled={disabled || models.length === 1 || Boolean(providerAccountId)}
+                    disabled={disabled || models.length === 1}
                     title={t(
                       "codex.experimentalModelCatalog.models.remove",
                       "删除模型",
@@ -1490,7 +1478,7 @@ export function CodexExperimentalModelEditor({
         })}
       </div>
       <p className="codex-experimental-model-editor__hint">
-        {providerAccountId ? t("codex.experimentalModels.providerPolicyHint", "Configure this provider's model capabilities here. Edit its account model list to add or remove models; instance imports do not apply here.") : t(
+        {t(
           "codex.experimentalModelCatalog.models.inheritHint",
           "官方模型保留原有能力字段；自定义模型使用通用能力模板。可见模型可直接新增或删除。",
         )}
@@ -1597,7 +1585,12 @@ export function CodexExperimentalModelEditor({
                   </span>
                 )}
                 <span className="codex-experimental-model-summary__reasoning">
-                  {reasoningSelectionLabel(model)}
+                  {model.reasoning_efforts?.length
+                    ? sortCodexReasoningEfforts(model.reasoning_efforts).map(reasoningLabel).join("、")
+                    : t(
+                        "codex.experimentalModelCatalog.models.followOfficial",
+                        "跟随官方",
+                      )}
                 </span>
                 <span className="codex-experimental-model-summary__reasoning">
                   {model.default_reasoning_effort ? reasoningLabel(model.default_reasoning_effort)

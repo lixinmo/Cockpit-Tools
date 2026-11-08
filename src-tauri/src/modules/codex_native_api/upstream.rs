@@ -34,9 +34,11 @@ pub(super) async fn canonical_stream(
     let anthropic = route.wire_api == WireApi::Anthropic;
     let mut search_context = None;
     let chat_context = if chat {
-        let mut tools_body = request_body.clone();
-        search_context = Some(super::chatgpt_plan_tools::prepare(&mut tools_body)?);
-        super::chat_upstream::ToolContext::from_responses(&tools_body)
+        if super::chatgpt_plan_tools::has_client_declaration(request_body) {
+            let mut tools_body = request_body.clone();
+            search_context = Some(super::chatgpt_plan_tools::prepare(&mut tools_body)?);
+            super::chat_upstream::ToolContext::from_responses(&tools_body)
+        } else { super::chat_upstream::ToolContext::from_responses(request_body) }
     } else { super::chat_upstream::ToolContext::default() };
     let convert = response.status().is_success()
         && (chat || anthropic

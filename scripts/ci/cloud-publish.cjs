@@ -66,7 +66,7 @@ function main({ commit = process.env.GITHUB_SHA, runId = process.env.GITHUB_RUN_
       throw new Error(existing.stderr || 'Could not inspect the rolling release');
     }
     const note = path.join(directory, '..', `${platform.label}-notes.md`);
-    fs.writeFileSync(note, `# Development build: ${platform.label}\n\nVersion: ${provenance.version}\n\nSource: [${commit}](https://github.com/${repository}/commit/${commit})\n\n[Cloud build and verification](${provenance.workflowRun})\n\nThis rolling prerelease keeps only the latest verified build for this platform. SHA256SUMS.txt and provenance.json accompany the download. Native retry, Go reference retry, Credits policy, Auto Reset and frontend checks passed in this run.\n\nMac applications are ad-hoc signed, without Apple notarization. Development builds do not include signed automatic updater packages.\n`);
+    fs.writeFileSync(note, `# Development build: ${platform.label}\n\nVersion: ${provenance.version}\n\nSource: [${commit}](https://github.com/${repository}/commit/${commit})\n\n[Cloud build and verification](${provenance.workflowRun})\n\nThis rolling prerelease keeps only the latest verified build for this platform. SHA256SUMS.txt and provenance.json accompany the download. Native retry, Credits policy, upstream Reset integration and frontend checks passed in this run.\n\nMac applications are ad-hoc signed, without Apple notarization. Development builds do not include signed automatic updater packages.\n`);
     if (!previous) {
       gh(['release', 'create', tag, '--repo', repository, '--target', commit, '--title', `Cloud development · ${platform.label}`, '--notes-file', note, '--prerelease', '--latest=false']);
     }

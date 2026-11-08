@@ -11,7 +11,6 @@ import { CODEX_ACCOUNT_SERVICE_APPLIED, type CodexAccountServiceApplied } from "
 import { CodexServiceMemberAuthorization } from "./codex/CodexServiceMemberAuthorization";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatCodexGatewayModeError } from "../utils/codexGatewayError";
-import { CodexGatewayModeControl } from "./codex/CodexGatewayModeControl";
 import {
   Activity,
   Bug,
@@ -250,7 +249,6 @@ export function CodexLocalAccessModal({
   isOpen,
   mode,
   state,
-  onStateChange,
   addressKind,
   addressOptions,
   onAddressKindChange,
@@ -289,8 +287,8 @@ export function CodexLocalAccessModal({
   sidecarRestarting,
 }: CodexLocalAccessModalProps) {
   const { t } = useTranslation();
-  const [gatewaySaving, setGatewaySaving] = useState(false);
-  const saving = externalSaving || gatewaySaving;
+
+  const saving = externalSaving;
   const collection = state?.collection ?? null;
   const localAccessStatus = resolveCodexLocalAccessRuntimeStatus(state?.collection, state);
   const [query, setQuery] = useState("");
@@ -2297,7 +2295,7 @@ export function CodexLocalAccessModal({
             {error && (
               <div className="codex-local-access-inline-error">
                 <CircleAlert size={14} />
-                <span>{formatCodexGatewayModeError(t, error)}</span>
+                <span>{String(error)}</span>
               </div>
             )}
 
@@ -2470,9 +2468,6 @@ export function CodexLocalAccessModal({
                       {t("codex.localAccess.configTitle", "服务配置")}
                     </span>
                   </div>
-                  <CodexGatewayModeControl state={state} onState={onStateChange}
-                    disabled={actionBusy || sidecarRestarting} onError={setError}
-                    onNotice={setNotice} onSavingChange={setGatewaySaving} />
                   {collection ? (
                     <div className="codex-local-access-config-grid">
                       <div className="codex-local-access-config-card codex-local-access-config-card-base">

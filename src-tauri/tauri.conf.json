@@ -50,9 +50,6 @@
     "active": true,
     "targets": "all",
     "createUpdaterArtifacts": true,
-    "externalBin": [
-      "../sidecars/cockpit-cliproxy/bin/cockpit-cliproxy"
-    ],
     "windows": {
       "nsis": {
         "installMode": "currentUser",

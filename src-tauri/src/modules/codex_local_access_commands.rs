@@ -465,7 +465,6 @@ pub async fn update_local_access_credits_policy(
         if let Some(policy) = policy {
             collection.credits_policy = policy;
         }
-        credits_compat::validate_mode(&collection, collection.gateway_mode)?;
         collection.updated_at = now_ms();
         save_collection_to_disk(&collection)?;
         native_publish_credits_settings(&collection);
@@ -808,13 +807,6 @@ pub async fn update_local_access_upstream_proxy_config(
 }
 
 
-
-pub async fn update_local_access_gateway_mode(
-    gateway_mode: CodexLocalAccessGatewayMode,
-) -> Result<CodexLocalAccessState, String> {
-    switch_native_aware_gateway(gateway_mode).await?;
-    snapshot_state().await
-}
 
 pub async fn update_local_access_debug_logs(
     debug_logs: bool,
@@ -1376,7 +1368,6 @@ pub async fn update_local_access_api_key_with_budget(
     if let Some(budget) = budget {
         validate_key_budget(&budget)?;
         collection.api_keys[index].budget = budget;
-        credits_compat::validate_mode(&collection, collection.gateway_mode)?;
     }
     if let Some(enabled) = enabled {
         collection.api_keys[index].enabled = enabled;

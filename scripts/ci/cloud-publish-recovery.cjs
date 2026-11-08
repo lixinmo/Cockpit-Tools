@@ -22,7 +22,7 @@ function validateSourceRun(run, jobs, changedFiles, repository) {
       || !/^[a-f\d]{40}$/i.test(run.head_sha || '')) {
     throw new Error('Source build must be completed with a valid commit');
   }
-  for (const name of ['plan', 'frontend', 'Native and Go contracts']) {
+  for (const name of ['plan', 'frontend', 'Native contracts']) {
     const matches = jobs.filter(job => job.name === name);
     if (matches.length !== 1 || matches[0].conclusion !== 'success') {
       throw new Error(`Required verification did not pass: ${name}`);
