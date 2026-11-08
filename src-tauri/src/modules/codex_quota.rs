@@ -973,6 +973,23 @@ async fn refresh_account_tokens(account: &mut CodexAccount, reason: &str) -> Res
 
 /// 查询单个账号的配额
 pub async fn fetch_quota(account: &CodexAccount) -> Result<FetchQuotaResult, String> {
+    fetch_quota_with_options(account, false).await
+}
+
+/// Read-only usage GET for Credits admission. It shares transport, identity
+/// validation and device-restriction observations with ordinary quota fetching;
+/// only the parser preserves explicit exhaustion in an incomplete window.
+/// This path never enters quota refresh scheduling or Reset consumption.
+pub(crate) async fn fetch_quota_for_credits(
+    account: &CodexAccount,
+) -> Result<FetchQuotaResult, String> {
+    fetch_quota_with_options(account, true).await
+}
+
+async fn fetch_quota_with_options(
+    account: &CodexAccount,
+    credits_admission: bool,
+) -> Result<FetchQuotaResult, String> {
     use crate::modules::codex_device_restrictions as restrictions;
     let observation_started = restrictions::now();
     let account_id = account.account_id.clone().or_else(|| {

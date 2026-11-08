@@ -239,6 +239,8 @@ fn native_credits_host_reread_cannot_renew_a_get_that_preceded_exhaustion() {
     );
 }
 
+// These admission/affinity fixtures have no verified conversation rebuild.
+// Route selection therefore receives rebuild_available=false, as ordinary routing does.
 fn request() -> native_contract::RouteRequest {
     native_contract::RouteRequest {
         model: "gpt-6.1-sol".into(),
@@ -308,7 +310,7 @@ async fn native_credits_actual_route_keeps_full_four_account_diagnostics_after_r
             Instant::now(),
         );
     }
-    let error = match native_select_route_once(&host, &caller, request()).await {
+    let error = match native_select_route_once(&host, &caller, request(), false).await {
         Err(error) => error,
         Ok(_) => panic!("expected unavailable pool"),
     };
@@ -362,7 +364,7 @@ async fn native_credits_actual_route_mixed_unknown_exhausted_prioritizes_unconfi
         .unwrap_err();
     let mut host = host(Policy::StrictRegular, &[unknown, exhausted]);
     let caller = scoped_caller(&mut host);
-    let error = match native_select_route_once(&host, &caller, request()).await {
+    let error = match native_select_route_once(&host, &caller, request(), false).await {
         Err(error) => error,
         Ok(_) => panic!("expected policy rejection"),
     };
@@ -409,7 +411,7 @@ async fn native_credits_actual_route_concurrency_never_reintroduces_blocked_acco
         .unwrap();
     let mut request = request();
     request.requires_permit = true;
-    let error = match native_select_route_once(&host, &caller, request).await {
+    let error = match native_select_route_once(&host, &caller, request, false).await {
         Err(error) => error,
         Ok(_) => panic!("blocked account must not provide its free slot"),
     };
@@ -431,7 +433,7 @@ async fn native_credits_actual_route_rejects_revoked_key_before_quota_refresh() 
     let mut host = host(Policy::StrictRegular, &[unknown]);
     let mut caller = scoped_caller(&mut host);
     caller.id = "revoked-key".into();
-    let error = match native_select_route_once(&host, &caller, request()).await {
+    let error = match native_select_route_once(&host, &caller, request(), false).await {
         Err(error) => error,
         Ok(_) => panic!("revoked key"),
     };
@@ -465,7 +467,7 @@ async fn native_credits_actual_route_refreshed_capacity_keeps_affinity_until_exh
         .unwrap();
     let mut request = request();
     request.session_id = Some(uuid::Uuid::new_v4().to_string());
-    let route = native_select_route_once(&host, &caller, request.clone())
+    let route = native_select_route_once(&host, &caller, request.clone(), false)
         .await
         .unwrap();
     assert_eq!(route.account_id, first.id);
@@ -474,7 +476,7 @@ async fn native_credits_actual_route_refreshed_capacity_keeps_affinity_until_exh
         .unwrap()
         .custom_routing_rules
         .clear();
-    let again = native_select_route_once(&host, &caller, request.clone())
+    let again = native_select_route_once(&host, &caller, request.clone(), false)
         .await
         .unwrap();
     assert_eq!(again.account_id, first.id);
@@ -489,7 +491,7 @@ async fn native_credits_actual_route_refreshed_capacity_keeps_affinity_until_exh
         again.send_guard.as_ref().unwrap().check().unwrap_err().code,
         "credits_policy_blocked"
     );
-    let replacement = native_select_route_once(&host, &caller, request)
+    let replacement = native_select_route_once(&host, &caller, request, false)
         .await
         .unwrap();
     assert_eq!(replacement.account_id, second.id);
