@@ -1472,7 +1472,7 @@ model_catalog_json = "cockpit-local-access-model-catalog.json"
     }
 
     #[test]
-    fn deepseek_official_runtime_writes_extra_instance_provider_catalog_and_clears_cache() {
+    fn deepseek_direct_runtime_replaces_extra_instance_catalog_and_clears_cache() {
         let instance_dir = make_temp_dir("codex-extra-instance-deepseek-official-catalog");
         fs::write(
             instance_dir.join("config.toml"),
@@ -1513,12 +1513,14 @@ model_catalog_json = "cockpit-provider-model-catalog.json"
         );
         account.api_wire_api = Some("responses".to_string());
         account.api_sync_model_catalog_to_codex = true;
+        account.api_instance_access_mode = Some("direct".to_string());
 
         write_account_bundle_to_dir(&instance_dir, &account).expect("write extra instance bundle");
 
         let catalog_path = super::deepseek_official_model_catalog_path(&instance_dir);
         let config = fs::read_to_string(instance_dir.join("config.toml")).expect("read config");
-        assert!(config.contains("model = \"gpt-5.6-luna\""));
+        assert!(config.contains("model = \"deepseek-v4-flash\""));
+        assert!(config.contains("model_provider = \"deepseek\""));
         assert!(config.contains("model_catalog_json = \"cockpit-model-catalog.json\""));
         assert_eq!(
             catalog_path.file_name().and_then(|name| name.to_str()),
@@ -1537,8 +1539,8 @@ model_catalog_json = "cockpit-provider-model-catalog.json"
             .expect("models");
         let flash = models
             .iter()
-            .find(|model| model.get("slug").and_then(serde_json::Value::as_str) == Some("gpt-5.6-luna"))
-            .expect("flash shell slug");
+            .find(|model| model.get("slug").and_then(serde_json::Value::as_str) == Some("deepseek-v4-flash"))
+            .expect("raw Flash model");
         assert_eq!(
             flash
                 .get("display_name")
@@ -1556,7 +1558,7 @@ model_catalog_json = "cockpit-provider-model-catalog.json"
             Some("freeform")
         );
         assert!(models.iter().any(|model| {
-            model.get("slug").and_then(serde_json::Value::as_str) == Some("gpt-5.6-sol")
+            model.get("slug").and_then(serde_json::Value::as_str) == Some("deepseek-v4-pro")
                 && model
                     .get("display_name")
                     .and_then(serde_json::Value::as_str)
@@ -1604,8 +1606,10 @@ model_catalog_json = "cockpit-provider-model-catalog.json"
         fs::remove_dir_all(&instance_dir).expect("cleanup extra instance dir");
     }
 
-    #[test]
-    fn deepseek_gateway_bundle_writes_startup_shell_model() {
+    #[tokio::test]
+    async fn deepseek_gateway_publishes_startup_model_with_native_catalog() {
+        let _lock = crate::modules::test_support::env_lock().lock().expect("lock test env");
+        let env = TestEnvGuard::new("native-deepseek-catalog-publication");
         let instance_dir = make_temp_dir("codex-deepseek-gateway-startup-model");
         let mut account = CodexAccount::new_api_key(
             "deepseek-api-key".to_string(),
@@ -1625,14 +1629,21 @@ model_catalog_json = "cockpit-provider-model-catalog.json"
         account.api_instance_access_mode = Some("gateway".to_string());
         account.api_startup_model = Some("deepseek-v4-pro".to_string());
 
-        write_account_bundle_to_dir(&instance_dir, &account).expect("write gateway bundle");
+        let catalog = publish_native_catalog_fixture(&env, &instance_dir, &account).await;
 
         let config = fs::read_to_string(instance_dir.join("config.toml")).expect("read config");
-        assert!(config.contains("model = \"gpt-5.6-sol\""));
+        assert!(config.contains("model = \"deepseek-v4-pro\""));
         assert!(config.contains("model_catalog_json"));
         assert!(instance_dir
             .join(super::CODEX_MANAGED_MODEL_CATALOG_FILE)
             .exists());
+
+        let visible = catalog["models"].as_array().unwrap().iter()
+            .filter(|model| model["visibility"] == "list")
+            .map(|model| model["slug"].as_str().unwrap()).collect::<Vec<_>>();
+        assert!(visible.contains(&"deepseek-v4-flash"));
+        assert!(visible.contains(&"deepseek-v4-pro"));
+        assert!(!visible.iter().any(|id| id.starts_with("gpt-")));
 
         fs::remove_dir_all(&instance_dir).expect("cleanup extra instance dir");
     }
@@ -2146,8 +2157,10 @@ multi_agent = true
 
     /// 第三方（API Key）账号必须使用自己的模型目录：既不能被「模型管理」的受管目录覆盖，
     /// 也不能反过来改动用户的模型管理开关与模型清单。
-    #[test]
-    fn api_key_account_catalog_is_independent_from_model_management() {
+    #[tokio::test]
+    async fn api_key_account_catalog_is_independent_from_model_management() {
+        let _lock = crate::modules::test_support::env_lock().lock().expect("lock test env");
+        let env = TestEnvGuard::new("native-deepseek-catalog-publication");
         let managed_dir = make_temp_dir("codex-api-key-managed-catalog-isolation");
         let baseline_dir = make_temp_dir("codex-api-key-managed-catalog-baseline");
 
@@ -2182,19 +2195,18 @@ multi_agent = true
         account.api_instance_access_mode = Some("gateway".to_string());
         account.api_startup_model = Some("deepseek-v4-pro".to_string());
 
-        write_account_bundle_to_dir(&managed_dir, &account).expect("write managed dir bundle");
-        write_account_bundle_to_dir(&baseline_dir, &account).expect("write baseline bundle");
-
-        let catalog_file = super::CODEX_MANAGED_MODEL_CATALOG_FILE;
-        let managed_catalog =
-            fs::read_to_string(managed_dir.join(catalog_file)).expect("read managed catalog");
-        let baseline_catalog =
-            fs::read_to_string(baseline_dir.join(catalog_file)).expect("read baseline catalog");
+        let policy_before = fs::read(&policy_path).expect("read saved model-management policy");
+        let managed_catalog = publish_native_catalog_fixture(&env, &managed_dir, &account).await;
+        let baseline_catalog = publish_native_catalog_fixture(&env, &baseline_dir, &account).await;
         assert_eq!(
             managed_catalog, baseline_catalog,
             "第三方账号的模型目录不能受模型管理影响"
         );
         assert!(policy_path.is_file(), "API Key 账号不能改动模型管理开关");
+        assert_eq!(fs::read(&policy_path).unwrap(), policy_before,
+            "provider activation preserves the complete instance policy");
+        assert!(managed_catalog["models"].as_array().unwrap().iter().any(|model|
+            model["slug"] == "deepseek-v4-pro" && model["visibility"] == "list"));
         let definitions_after = super::read_experimental_model_definitions(&managed_dir);
         assert_eq!(
             definitions_after.len(),

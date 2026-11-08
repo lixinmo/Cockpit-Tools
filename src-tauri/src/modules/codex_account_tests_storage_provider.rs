@@ -1931,8 +1931,10 @@ supports_websockets = false
         let _ = remove_accounts(&[oauth_account.id]);
     }
 
-    #[test]
-    fn responses_api_key_bundle_syncs_saved_model_catalog_when_enabled() {
+    #[tokio::test]
+    async fn responses_api_key_bundle_syncs_saved_model_catalog_when_enabled() {
+        let _lock = crate::modules::test_support::env_lock().lock().expect("lock test env");
+        let env = TestEnvGuard::new("native-catalog-publication");
         let base_dir = make_temp_dir("codex-api-key-managed-model-catalog-test");
         fs::write(base_dir.join("config.toml"), "model = \"legacy-model\"\n")
             .expect("write stale selected model");
@@ -1953,28 +1955,22 @@ supports_websockets = false
         account.api_wire_api = Some("responses".to_string());
         account.api_sync_model_catalog_to_codex = true;
 
-        write_account_bundle_to_dir(&base_dir, &account).expect("write account bundle");
+        let catalog = publish_native_catalog_fixture(&env, &base_dir, &account).await;
 
         let config = fs::read_to_string(base_dir.join("config.toml")).expect("read config");
         assert!(config.contains("model_catalog_json = \"cockpit-model-catalog.json\""));
-        // Catalog sync maps custom display models onto official slugs. HTTP-only relays
-        // must keep their managed provider so supports_websockets=false stays effective.
-        assert!(config.contains("model = \"gpt-5.6-sol\""));
+        // Native exposes the provider inventory directly through its loopback Responses endpoint.
+        assert!(config.contains("model = \"custom-a\""));
         assert!(config.contains("model_provider = \"codex_local_access\""));
-        assert!(config.contains("base_url = \"https://relay.example.com/v1\""));
+        assert!(!config.contains("base_url = \"https://relay.example.com/v1\""));
         assert!(config.contains("supports_websockets = false"));
         assert!(!config.contains("openai_base_url"));
-        let catalog: serde_json::Value = serde_json::from_str(
-            &fs::read_to_string(base_dir.join(super::CODEX_MANAGED_MODEL_CATALOG_FILE))
-                .expect("read managed catalog"),
-        )
-        .expect("parse managed catalog");
         let models = catalog
             .get("models")
             .and_then(serde_json::Value::as_array)
             .expect("models should be an array");
         assert!(models.iter().any(|model| {
-            model.get("slug").and_then(serde_json::Value::as_str) == Some("gpt-5.6-sol")
+            model.get("slug").and_then(serde_json::Value::as_str) == Some("custom-a")
                 && model
                     .get("display_name")
                     .and_then(serde_json::Value::as_str)
@@ -1982,7 +1978,7 @@ supports_websockets = false
                 && model.get("visibility").and_then(serde_json::Value::as_str) == Some("list")
         }));
         assert!(models.iter().any(|model| {
-            model.get("slug").and_then(serde_json::Value::as_str) == Some("gpt-5.6-terra")
+            model.get("slug").and_then(serde_json::Value::as_str) == Some("custom-b")
                 && model
                     .get("display_name")
                     .and_then(serde_json::Value::as_str)
@@ -1990,11 +1986,17 @@ supports_websockets = false
                 && model.get("visibility").and_then(serde_json::Value::as_str) == Some("list")
         }));
 
+        assert_eq!(models.iter().filter(|model| model["visibility"] == "list")
+            .map(|model| model["slug"].as_str().unwrap()).collect::<Vec<_>>(),
+            vec!["custom-a", "custom-b"]);
+
         fs::remove_dir_all(&base_dir).expect("cleanup temp dir");
     }
 
-    #[test]
-    fn responses_api_key_bundle_defaults_missing_wire_api_to_http_only_provider() {
+    #[tokio::test]
+    async fn responses_api_key_bundle_defaults_missing_wire_api_to_http_only_provider() {
+        let _lock = crate::modules::test_support::env_lock().lock().expect("lock test env");
+        let env = TestEnvGuard::new("native-catalog-publication");
         let base_dir = make_temp_dir("codex-api-key-default-wire-api-http-only-test");
         let mut account = CodexAccount::new_api_key(
             "custom-api-key".to_string(),
@@ -2010,23 +2012,28 @@ supports_websockets = false
         account.api_supports_websockets = false;
         account.api_sync_model_catalog_to_codex = true;
 
-        write_account_bundle_to_dir(&base_dir, &account).expect("write account bundle");
+        let catalog = publish_native_catalog_fixture(&env, &base_dir, &account).await;
 
         let config = fs::read_to_string(base_dir.join("config.toml")).expect("read config");
         assert!(config.contains("model_provider = \"codex_local_access\""));
         assert!(config.contains("model_catalog_json = \"cockpit-model-catalog.json\""));
-        assert!(config.contains("base_url = \"https://relay.example.com/v1\""));
+        assert!(!config.contains("base_url = \"https://relay.example.com/v1\""));
         assert!(config.contains("supports_websockets = false"));
         assert!(!config.contains("openai_base_url"));
         assert!(base_dir
             .join(super::CODEX_MANAGED_MODEL_CATALOG_FILE)
             .exists());
 
+        assert!(catalog["models"].as_array().unwrap().iter()
+            .any(|model| model["slug"] == "custom-a" && model["visibility"] == "list"));
+
         fs::remove_dir_all(&base_dir).expect("cleanup temp dir");
     }
 
-    #[test]
-    fn responses_api_key_bundle_replaces_stale_local_access_catalog() {
+    #[tokio::test]
+    async fn responses_api_key_bundle_replaces_stale_local_access_catalog() {
+        let _lock = crate::modules::test_support::env_lock().lock().expect("lock test env");
+        let env = TestEnvGuard::new("native-catalog-publication");
         let base_dir = make_temp_dir("codex-api-key-replace-local-access-catalog-test");
         fs::write(
             base_dir.join("config.toml"),
@@ -2047,7 +2054,7 @@ supports_websockets = false
         account.api_wire_api = Some("responses".to_string());
         account.api_sync_model_catalog_to_codex = true;
 
-        write_account_bundle_to_dir(&base_dir, &account).expect("write account bundle");
+        let catalog = publish_native_catalog_fixture(&env, &base_dir, &account).await;
 
         let config = fs::read_to_string(base_dir.join("config.toml")).expect("read config");
         assert!(config.contains("model_catalog_json = \"cockpit-model-catalog.json\""));
@@ -2056,11 +2063,14 @@ supports_websockets = false
             .join(super::CODEX_MANAGED_MODEL_CATALOG_FILE)
             .exists());
 
+        assert!(catalog["models"].as_array().unwrap().iter()
+            .any(|model| model["slug"] == "custom-a" && model["visibility"] == "list"));
+
         fs::remove_dir_all(&base_dir).expect("cleanup temp dir");
     }
 
-    #[test]
-    fn api_key_upsert_without_sync_preference_preserves_instance_model_catalog() {
+    #[tokio::test]
+    async fn api_key_upsert_without_sync_preference_preserves_instance_model_catalog() {
         let _lock = crate::modules::test_support::env_lock()
             .lock()
             .expect("lock test env");
@@ -2108,22 +2118,26 @@ supports_websockets = false
         assert!(updated.api_sync_model_catalog_to_codex);
 
         let profile_dir = env.home_dir.join("instance-profile");
-        write_account_bundle_to_dir(&profile_dir, &updated)
-            .expect("write multi-instance account projection");
+        let catalog = publish_native_catalog_fixture(&env, &profile_dir, &updated).await;
         let config = fs::read_to_string(profile_dir.join("config.toml")).expect("read config");
         assert!(config.contains("model_catalog_json = \"cockpit-model-catalog.json\""));
-        // Catalog sync maps custom display models onto official slugs. HTTP-only relays
-        // must keep their managed provider so supports_websockets=false stays effective.
-        assert!(config.contains("model = \"gpt-5.6-sol\""));
+        // Upserting account preferences must not revert the provider's Native catalog.
+        assert!(config.contains("model = \"custom-b\""));
         assert!(config.contains("model_provider = \"codex_local_access\""));
-        assert!(config.contains("base_url = \"https://relay.example.com/v1\""));
+        assert!(!config.contains("base_url = \"https://relay.example.com/v1\""));
         assert!(config.contains("supports_websockets = false"));
         assert!(!config.contains("openai_base_url"));
         let auth: serde_json::Value = serde_json::from_str(
             &fs::read_to_string(profile_dir.join("auth.json")).expect("read instance auth"),
         )
         .expect("parse instance auth");
-        assert_eq!(auth["OPENAI_API_KEY"], "sk-upsert-model-catalog");
+        assert_ne!(auth["OPENAI_API_KEY"], "sk-upsert-model-catalog");
+        assert_eq!(load_account(&updated.id).unwrap().openai_api_key.as_deref(),
+            Some("sk-upsert-model-catalog"));
+        assert!(catalog["models"].as_array().unwrap().iter()
+            .any(|model| model["slug"] == "custom-b" && model["visibility"] == "list"));
+        assert!(!catalog["models"].as_array().unwrap().iter()
+            .any(|model| model["slug"] == "custom-a"));
         assert!(profile_dir
             .join(super::CODEX_MANAGED_MODEL_CATALOG_FILE)
             .exists());

@@ -393,18 +393,33 @@ fn chatgpt_plan_legacy_config_migrates_to_native_before_saving_grants() {
         );
     }
     assert!(native_patch_mode(&original, CodexLocalAccessGatewayMode::Native).is_ok());
-    // Saving a grant migrates the old engine before publishing the collection.
-    let mut existing = collection.clone();
-    existing.account_ids.clear();
-    existing.gateway_mode = CodexLocalAccessGatewayMode::Sidecar;
-    let existing = serde_json::to_string(&existing).unwrap();
-    std::fs::write(&path, &existing).unwrap();
-    save_collection_to_path(&path, &collection).unwrap();
-    let migrated = load_collection_for_runtime_from_path(&path).unwrap().unwrap();
-    assert_eq!(migrated.gateway_mode, CodexLocalAccessGatewayMode::Native);
-    assert_eq!(migrated.account_ids, collection.account_ids);
-    assert_eq!(migrated.api_key, collection.api_key);
-    assert_eq!(migrated.port, collection.port);
+    // Saving a grant migrates only an old, unmarked engine before publishing.
+    for old_mode in [CodexLocalAccessGatewayMode::Legacy, CodexLocalAccessGatewayMode::Sidecar] {
+        let mut existing = collection.clone();
+        existing.account_ids.clear();
+        existing.gateway_mode = old_mode;
+        let existing = serde_json::to_string(&existing).unwrap();
+        std::fs::write(&path, &existing).unwrap();
+        save_collection_to_path(&path, &collection).unwrap();
+        let migrated = load_collection_for_runtime_from_path(&path).unwrap().unwrap();
+        assert_eq!(migrated.gateway_mode, CodexLocalAccessGatewayMode::Native);
+        assert!(migrated.native_gateway_default_migrated);
+        assert_eq!(migrated.account_ids, collection.account_ids);
+        assert_eq!(migrated.api_key, collection.api_key);
+        assert_eq!(migrated.port, collection.port);
+    }
+
+    // A user who already chose Go must not be silently switched by a stale
+    // Native grant writer; reject the grant and preserve the exact disk state.
+    let mut selected_go = collection.clone();
+    selected_go.account_ids.clear();
+    selected_go.gateway_mode = CodexLocalAccessGatewayMode::Sidecar;
+    selected_go.native_gateway_default_migrated = true;
+    selected_go.native_credits_policy_migrated = true;
+    let selected_go = serde_json::to_string(&selected_go).unwrap();
+    std::fs::write(&path, &selected_go).unwrap();
+    assert_eq!(save_collection_to_path(&path, &collection).unwrap_err(), "CHATGPT_PLAN_NATIVE_REQUIRED");
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), selected_go);
 }
 
 #[test]

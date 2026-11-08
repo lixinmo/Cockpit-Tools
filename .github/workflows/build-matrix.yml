@@ -253,10 +253,10 @@ jobs:
       # Save before rust-cache's post step removes workspace/incremental files.
       - name: Measure cloud compilation state
         id: compilation-state-size
-        if: steps.compilation-state.outputs.enabled == 'true'
+        if: always() && !cancelled() && steps.compilation-state.outputs.enabled == 'true'
         run: node scripts/ci/cloud-build-state-cache.cjs measure "${{ matrix.label }}" "${{ inputs.native_probe_only == true && 'probe' || 'full' }}"
       - name: Save cloud compilation state
-        if: steps.compilation-state-size.outputs.save == 'true' && steps.restore-compilation-state.outputs.cache-hit != 'true'
+        if: always() && !cancelled() && steps.compilation-state-size.outputs.save == 'true' && steps.restore-compilation-state.outputs.cache-hit != 'true'
         continue-on-error: true
         uses: actions/cache/save@v4
         with:
@@ -267,6 +267,7 @@ jobs:
     name: Retain current branch compilation state
     needs: [plan, build]
     if: >-
+      always() && !cancelled() && needs.plan.result == 'success' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       startsWith(github.ref, 'refs/heads/')
     runs-on: ubuntu-24.04

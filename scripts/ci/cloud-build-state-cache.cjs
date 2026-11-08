@@ -298,7 +298,7 @@ if (require.main === module) main(process.argv.slice(2)).catch(error => {
   if (process.env.GITHUB_ACTIONS !== 'true') { console.error('GitHub Actions only'); process.exitCode = 1; }
   else {
     outputs({ enabled: false, save: false, reason: 'cache_maintenance_failed' });
-    console.log('::warning::Build-state cache maintenance failed; validated build results are unchanged.');
+    console.log('::warning::Build-state cache maintenance failed; build and test results are unchanged.');
   }
 });
 

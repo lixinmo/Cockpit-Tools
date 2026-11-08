@@ -98,8 +98,8 @@ fn load_collection_for_runtime_from_path(
         return Ok(None);
     };
     if credits_compat::needs_migration(&parsed) {
-        // Only cold runtime initialization may migrate. Catalog and import reads
-        // must not modify the configuration underlying their revision snapshots.
+        // Loading may persist migration only for runtime initialization. Catalog
+        // and import reads must not modify their underlying revision snapshots.
         return migrate_native_gateway_default_on_disk(path).map(Some);
     }
     Ok(Some(parsed))
@@ -199,9 +199,19 @@ fn save_collection_to_path(
                         .and_then(|value| {
                             serde_json::from_value::<CodexLocalAccessGatewayMode>(value).ok()
                         })
-                        .filter(|mode| *mode != CodexLocalAccessGatewayMode::Legacy)
                     {
-                        next.gateway_mode = mode;
+                        if mode == CodexLocalAccessGatewayMode::Legacy
+                            || !current.get("nativeGatewayDefaultMigrated")
+                                .and_then(Value::as_bool).unwrap_or(false)
+                        {
+                            // An old on-disk mode is not a post-migration choice.
+                            // Migrate before publishing grants or enforcing engine
+                            // policy, while the latest persisted fields are locked.
+                            next.gateway_mode = CodexLocalAccessGatewayMode::Native;
+                            next.native_gateway_default_migrated = true;
+                        } else {
+                            next.gateway_mode = mode;
+                        }
                     }
                     // Ordinary full-snapshot writers do not own the image model directory.
                     // The dedicated field transaction alone can add/delete/restore a model.
@@ -267,6 +277,7 @@ fn save_collection_to_path(
         // Validate the final snapshot after preserving the engine's current
         // disk choice. This also closes joining-vs-engine-switch races.
         enforce_chatgpt_plan_image_policy(&mut next, &[]);
+        migrate_legacy_gateway_mode(&mut next);
         native_validate_chatgpt_plan_mode(&next, next.gateway_mode)?;
         credits_compat::validate_mode(&next, next.gateway_mode)?;
         serde_json::to_string_pretty(&next)
@@ -1660,8 +1671,8 @@ fn sanitize_collection_structure(
     changed |= prune_multi_agent_references(collection);
     changed |= enforce_chatgpt_plan_image_policy(collection, &[]);
 
-    // Persisted global collections already migrate to native during loading.
-    // Keep the legacy fallback for unpersisted compatibility/profile snapshots.
+    // Persisted global collections migrate during runtime loading. Apply the
+    // same one-time default to old compatibility/profile snapshots too.
     changed |= migrate_legacy_gateway_mode(collection);
 
     // v1.3.4 起已移除集合级 image_generation 禁用 UI。

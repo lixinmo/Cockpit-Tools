@@ -32,6 +32,54 @@ fn native_provider_wire_fixture(env: &TestEnvGuard) -> CodexAccount {
     account
 }
 
+// Catalog publication tests use the production Native transaction. Populate only
+// synthetic metadata facts so these cases never contact a real provider endpoint.
+async fn publish_native_catalog_fixture(
+    env: &TestEnvGuard,
+    profile: &Path,
+    account: &CodexAccount,
+) -> serde_json::Value {
+    let mut saved = account.clone();
+    saved.egress_proxy_disabled = true;
+    save_account(&saved).expect("save synthetic provider");
+    save_account_index(&build_test_account_index(&saved)).expect("save synthetic index");
+    let template: crate::models::codex_local_access::CodexLocalAccessCollection =
+        serde_json::from_value(serde_json::json!({
+            "enabled":false,"port":19001,"apiKey":"synthetic-catalog-global-key",
+            "accountIds":[],"createdAt":1,"updatedAt":1,
+            "gatewayMode":"native","creditsPolicy":"prefer_regular"
+        })).unwrap();
+    fs::write(
+        env.home_dir.join(".antigravity_cockpit/codex_local_access.json"),
+        serde_json::to_vec(&template).unwrap(),
+    ).expect("write synthetic Native settings");
+    for model in &saved.api_model_catalog {
+        crate::modules::codex_provider_metadata::cache_for_test(
+            &saved, model.trim(), Default::default(),
+        ).expect("seed offline metadata cache");
+    }
+    let result = super::publish_account_client_profile(profile, &saved).await;
+    crate::modules::codex_local_access::stop_provider_gateways_for_profile(profile).await;
+    result.expect("publish client profile through Native gateway");
+    let doc = crate::modules::codex_config_format::load_codex_config_doc(
+        &profile.join("config.toml"),
+    ).expect("read published client config");
+    assert_eq!(doc["model_provider"].as_str(), Some("codex_local_access"));
+    assert_eq!(doc["model_catalog_json"].as_str(), Some(super::CODEX_MANAGED_MODEL_CATALOG_FILE));
+    let provider = &doc["model_providers"]["codex_local_access"];
+    assert_eq!(provider["wire_api"].as_str(), Some("responses"));
+    let endpoint = reqwest::Url::parse(provider["base_url"].as_str().unwrap()).unwrap();
+    assert!(matches!(endpoint.host_str(), Some("127.0.0.1" | "localhost" | "::1")));
+    assert_eq!(endpoint.path(), "/v1");
+    assert_ne!(provider["experimental_bearer_token"].as_str(), saved.openai_api_key.as_deref());
+    assert_eq!(provider["supports_websockets"].as_bool(), Some(false));
+    let stored = load_account(&saved.id).expect("reload provider after publication");
+    assert_eq!(stored.api_base_url, saved.api_base_url);
+    assert_eq!(stored.openai_api_key, saved.openai_api_key);
+    serde_json::from_slice(&fs::read(profile.join(super::CODEX_MANAGED_MODEL_CATALOG_FILE))
+        .expect("read published provider catalog")).expect("parse published provider catalog")
+}
+
 fn native_provider_wire_assert_profile(profile: &Path, account: &CodexAccount) -> String {
     let doc =
         crate::modules::codex_config_format::load_codex_config_doc(&profile.join("config.toml"))

@@ -1085,6 +1085,9 @@ async fn native_context_rebuild_stale_false_does_not_survive_collection_save() {
     for mode in [CodexLocalAccessGatewayMode::Native, CodexLocalAccessGatewayMode::Sidecar] {
         let mut stale = native_test_collection();
         stale.gateway_mode = mode;
+        // This is a later explicit engine choice, not an unmarked legacy file.
+        stale.native_gateway_default_migrated = true;
+        stale.native_credits_policy_migrated = true;
         let mut original = serde_json::to_value(&stale).unwrap();
         original["nativeAccountSwitchRebuild"] = json!(false);
         std::fs::write(&path, serde_json::to_vec(&original).unwrap()).unwrap();
