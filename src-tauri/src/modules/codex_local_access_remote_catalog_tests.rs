@@ -121,7 +121,7 @@ fn remote_catalog_replaces_stale_account_catalog_and_survives_profile_and_http_v
         "accountIds":[account.id],"createdAt":1,"updatedAt":1}))
         .unwrap();
     let gateway = provider_gateway_for_account(&account).unwrap();
-    assert!(native_gateway_model(&gateway, "gpt-5.6-luna").is_err());
+    assert!(native_gateway_model(&gateway, "gpt-5.6-luna", true).is_err());
     let key: CodexLocalAccessApiKey =
         serde_json::from_value(json!({"id":"B","key":"B-key","label":"B",
         "inheritAccountPool":false,"accountIds":[account.id],"providerGateway":gateway}))
