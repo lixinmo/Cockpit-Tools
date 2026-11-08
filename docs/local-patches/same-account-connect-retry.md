@@ -14,8 +14,8 @@
 | Patch ID | `CT-CONNECT-RETRY-001` |
 | Contract | v1.0, fixed |
 | Original project baseline | commit `e6f73b3e1c21ffc60955415e4781dd111a5cee75`, Cockpit Tools v1.3.40 + cask-only commit |
-| Latest verified upstream integration | commit `5330f75ae6b3c39fbd72f528ac2188207047d49a` (release tag `v1.3.73`); Go reference, Native retry and integration checks passed 2026-10-22 |
-| Current native app build | v1.3.73 `.app` built and verified on x86_64 macOS, 2026-10-22; Rust Native migration included; not installed |
+| Latest verified upstream integration | commit `02498ace91832248f0c6d43f6ea3894a2514aed7` (`v1.3.80` plus cask update); Go reference, Native retry and integration checks passed 2026-11-08; see [integration record](upstream-sync-v1.3.80.md) |
+| Current native app build | v1.3.80 Intel `.app` built in GitHub Actions from `e1bce43d`, downloaded and verified on 2026-11-08; not installed |
 | Vendored CLIProxyAPI baseline | v7.2.155 (`7fac6b15`) with targeted v7.2.157 (`09a29bd3`) Codex/API alignment and Cockpit compatibility shims |
 | Upstream tracking ref | `upstream/main` |
 | Local integration branch | `local/ct-connect-retry-001` |
