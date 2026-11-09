@@ -50,8 +50,16 @@ passes strict ad-hoc signature verification and contains no Go API executable.
 Main executable SHA-256:
 `96ecb1b279f0807d7b1ee795bd4600f2d55c5474888c08198cb4f8441a9c62ed`.
 
-The verified App is staged in `.local-app-output/`. Project compilation output,
-dependencies, frontend output and build scratch were removed (about 3.26 GiB).
-Installation/startup verification is pending because the Mac was locked when
-the desktop-control tool attempted to access the old App. The old installed
-App and all runtime account/configuration data remain untouched.
+The verified App was installed and successfully launched on 2026-11-09 after
+the user unlocked the Mac. The running installed executable matches the build
+hash above and passes strict signature verification. Before/after checks confirm
+unchanged account inventory and current selections, API keys and membership,
+Credits policy, credential-storage key, provider configuration and application
+configuration fields. No real account switch was performed during installation;
+account-switch coverage comes from the synthetic roundtrip tests, and the live
+profile check was a read-only preview.
+
+Project compilation output, dependencies, frontend output, build scratch, the
+previous App, the duplicate staged App and private diagnostics were removed
+(about 3.53 GiB in total). Source/Git history/remotes, runtime accounts and
+configuration, shared toolchains and the current installed App remain.
