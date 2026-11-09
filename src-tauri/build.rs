@@ -29,6 +29,7 @@ fn link_swift_package_products(package_name: &str) {
 }
 
 fn main() {
+    println!("cargo:rustc-check-cfg=cfg(cockpit_project_recovery_harness)");
     println!("cargo:rerun-if-changed=build.rs");
     // Build-script cfg describes the host, not the binary being linked. Reserve
     // 8 MiB for the Windows MSVC host application even when cross-compiling.

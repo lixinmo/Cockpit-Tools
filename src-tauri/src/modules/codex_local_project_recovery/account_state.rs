@@ -403,7 +403,7 @@ pub(crate) fn prepare(home: &Path, owner: Option<&str>) -> Result<bool, String> 
         let db = open(&home.join(primary), false)?;
         db.execute_batch("BEGIN").map_err(|e| e.to_string())?;
         let projects = projects_with_limit(&db, Some(QUICK_MAX_PROJECTS))?;
-        let threads = threads_with_limit(&db, Some(QUICK_MAX_THREADS))?;
+        let threads = threads(&db)?;
         let view = local_view(home, &sources, &projects, &threads)?;
         // Finish the read transaction before writing the renderer state.
         drop(db);

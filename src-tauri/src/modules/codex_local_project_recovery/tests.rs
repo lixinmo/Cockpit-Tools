@@ -415,6 +415,7 @@ fn local_projects_use_database_membership_before_snapshot_or_directory_guessing(
 }
 
 #[test]
+#[cfg(not(cockpit_project_recovery_harness))]
 fn local_projects_preserve_project_order_ids_and_default_process_context_on_all_platforms() {
     let state = json!({"project-order":["Project-A","project-a",r"\\?\C:\Repo\",r"C:\Repo"]});
     let normalized = super::super::normalized_global_state_entries(state.as_object().unwrap());
@@ -489,22 +490,81 @@ fn quick_projects_use_current_metadata_only_and_keep_precise_backups() {
 }
 
 #[test]
-fn quick_projects_limits_defer_before_mutation_and_deep_still_repairs_every_thread() {
+fn quick_projects_repair_more_than_2048_threads_without_exposing_child_sessions() {
     let f = Fixture::new();
-    f.db().execute_batch("WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<2100)
-        INSERT INTO threads SELECT 'many-'||x,cwd,source,thread_source,NULL,has_user_event,first_user_message,archived,model_provider,updated_at FROM n JOIN threads ON id='chat'").unwrap();
+    let catalog = f.catalog();
+    f.db().execute_batch("WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<3500)
+        INSERT INTO threads SELECT 'many-'||x,cwd,CASE WHEN x%5=0 THEN 'subagent' ELSE source END,thread_source,NULL,has_user_event,first_user_message,archived,model_provider,updated_at FROM n JOIN threads ON id='chat'").unwrap();
+    Connection::open(&catalog).unwrap().execute(
+        "INSERT INTO local_thread_catalog VALUES('local','many-3499',NULL,?1)", [&f.root],
+    ).unwrap();
     let before = f.state();
-    assert!(scan_for_repair(f.home(), None, true)
-        .unwrap_err()
-        .contains("CODEX_PROJECT_QUICK_LIMIT"));
-    assert_eq!(f.state(), before);
-    assert!(f.project("chat").is_none());
-    let full = scan_for_repair(f.home(), None, false).unwrap().unwrap();
-    assert_eq!(full.counts.assignments, 2102);
-    f.apply(&full);
-    assert_eq!(f.project("many-2100").as_deref(), Some("server"));
+    let plan = scan_for_repair(f.home(), None, true).unwrap().unwrap();
+    assert_eq!(plan.counts.projects, 1);
+    assert_eq!(plan.counts.assignments, 2802);
+    assert_eq!(plan.counts.thread_rows, 2802);
+    assert_eq!(plan.counts.catalog_rows, 2);
+    assert_eq!(f.state(), before, "preview does not write");
+    f.apply(&plan); // Commit-time root-thread revalidation must be unrestricted too.
+    assert_eq!(f.project("many-3499").as_deref(), Some("server"));
+    assert!(f.project("many-3500").is_none(), "subagents remain unassigned");
+    assert!(f.project("child").is_none());
+    assert!(f.project("guardian").is_none());
+    let after = f.state();
+    assert_eq!(after["local-projects"]["server"]["name"], "Project");
+    assert_eq!(after[ASSIGN].as_object().unwrap().len(), 2802);
+    assert_eq!(after[HOSTS]["many-3499"], "local");
+    assert!(after[ASSIGN].get("many-3500").is_none());
+    assert_eq!(Connection::open(catalog).unwrap().query_row(
+        "SELECT project_id FROM local_thread_catalog WHERE host_id='local' AND thread_id='many-3499'",
+        [], |row| row.get::<_, String>(0),
+    ).unwrap(), "server");
+    assert!(!scan_for_repair(f.home(), None, true).unwrap().unwrap().changed());
 }
 
+#[test]
+fn quick_projects_accept_large_state_and_backup_with_precise_backups() {
+    for large_file in [STATE.to_string(), format!("{STATE}.bak")] {
+        let f = Fixture::new();
+        f.catalog();
+        let mut large = f.state();
+        large["large-cache"] = json!("x".repeat(2_000_001));
+        let raw = serde_json::to_vec(&large).unwrap();
+        fs::write(f.home().join(&large_file), &raw).unwrap();
+        let before = f.state();
+        let plan = scan_for_repair(f.home(), None, true).unwrap().unwrap();
+        assert_eq!(plan.counts.projects, 1, "{large_file}");
+        assert_eq!(plan.counts.assignments, 2, "{large_file}");
+        assert_eq!(plan.counts.catalog_rows, 1, "{large_file}");
+        assert_eq!(f.state(), before, "preview: {large_file}");
+        let backup = f.apply(&plan);
+        assert_eq!(fs::read(backup.join(&large_file)).unwrap(), raw);
+        assert_eq!(f.state()["large-cache"], before["large-cache"]);
+        assert_eq!(f.project("chat").as_deref(), Some("server"));
+        assert_eq!(f.state()[ASSIGN]["chat"]["projectId"], "server");
+        assert_eq!(f.state()[HOSTS]["chat"], "local");
+        assert_eq!(Connection::open(f.home().join("sqlite/codex-dev.db")).unwrap().query_row(
+            "SELECT project_id FROM local_thread_catalog WHERE host_id='local'",
+            [], |row| row.get::<_, String>(0),
+        ).unwrap(), "server");
+        assert!(!scan_for_repair(f.home(), None, true).unwrap().unwrap().changed());
+    }
+}
+
+#[test]
+fn quick_projects_keep_the_common_state_memory_limit() {
+    for large_file in [STATE.to_string(), format!("{STATE}.bak")] {
+        let f = Fixture::new();
+        let file = f.home().join(&large_file);
+        fs::File::create(&file).unwrap().set_len(MAX_STATE_BYTES + 1).unwrap();
+        assert!(scan_for_repair(f.home(), None, true).unwrap_err()
+            .contains("CODEX_PROJECT_STATE_TOO_LARGE"));
+        assert_eq!(fs::metadata(&file).unwrap().len(), MAX_STATE_BYTES + 1);
+        assert!(f.project("chat").is_none());
+    }
+}
+
+#[cfg(not(cockpit_project_recovery_harness))]
 fn integrated_options(
     mode: super::super::CodexSessionVisibilityRepairMode,
     preview: bool,
@@ -516,6 +576,7 @@ fn integrated_options(
     options
 }
 
+#[cfg(not(cockpit_project_recovery_harness))]
 fn integrated_repair(
     f: &Fixture,
     mode: super::super::CodexSessionVisibilityRepairMode,
@@ -538,6 +599,7 @@ fn integrated_repair(
 }
 
 #[test]
+#[cfg(not(cockpit_project_recovery_harness))]
 fn quick_visibility_directly_repairs_projects_and_unified_launch_uses_the_same_path() {
     use super::super::CodexSessionVisibilityRepairMode as Mode;
     let f = Fixture::new();
@@ -572,24 +634,23 @@ fn quick_visibility_directly_repairs_projects_and_unified_launch_uses_the_same_p
 }
 
 #[test]
-fn quick_visibility_preserves_large_current_state_and_full_repairs_it() {
+#[cfg(not(cockpit_project_recovery_harness))]
+fn quick_visibility_repairs_large_current_state_without_deep_history_maintenance() {
     use super::super::CodexSessionVisibilityRepairMode as Mode;
     let f = Fixture::new();
     let mut state = f.state();
-    state["large-cache"] = json!("x".repeat(2_000_000));
+    state["large-cache"] = json!("x".repeat(2_000_001));
     f.set(&state);
     let quick = integrated_repair(&f, Mode::Quick, false).unwrap();
-    assert!(quick.local_project_recovery_deferred);
-    assert_eq!(f.state(), state);
-    assert!(f.project("chat").is_none());
-    let full = integrated_repair(&f, Mode::Deep, false).unwrap();
-    assert!(!full.local_project_recovery_deferred);
-    assert_eq!(full.local_project_recovery.unwrap().assignments, 2);
+    assert!(!quick.local_project_recovery_deferred, "{}", quick.message);
+    assert_eq!(quick.local_project_recovery.unwrap().assignments, 2);
     assert_eq!(f.state()["large-cache"], state["large-cache"]);
     assert_eq!(f.project("chat").as_deref(), Some("server"));
+    assert!(quick.history_projection_count.is_none());
 }
 
 #[test]
+#[cfg(not(cockpit_project_recovery_harness))]
 fn full_visibility_includes_snapshot_and_chat_index_repair_in_one_existing_mode() {
     use super::super::CodexSessionVisibilityRepairMode as Mode;
     let f = Fixture::new();

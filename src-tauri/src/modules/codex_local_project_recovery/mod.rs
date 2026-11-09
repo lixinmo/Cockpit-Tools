@@ -16,7 +16,6 @@ const HOSTS: &str = "thread-project-membership-host-ids";
 const JOURNAL: &str = ".cockpit-local-project-recovery.json";
 const MAX_STATE_BYTES: u64 = 20_000_000;
 const QUICK_MAX_PROJECTS: usize = 256;
-const QUICK_MAX_THREADS: usize = 2048;
 const QUICK_MAX_CATALOG_ROWS: usize = 4096;
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]

@@ -173,7 +173,9 @@ struct Thread {
     root: bool,
 }
 
-fn threads_with_limit(db: &Connection, limit: Option<usize>) -> Result<Vec<Thread>, String> {
+// The existing launch deadline and SQLite interrupt bound this scan. Total
+// history size must not disable project restoration for an otherwise small registry.
+fn threads(db: &Connection) -> Result<Vec<Thread>, String> {
     let cols = super::table_columns(db, "threads")?;
     if !["id", "cwd", "project_id", "source"]
         .iter()
@@ -183,13 +185,10 @@ fn threads_with_limit(db: &Connection, limit: Option<usize>) -> Result<Vec<Threa
         return Err("CODEX_PROJECT_SCHEMA_UNSUPPORTED".into());
     }
     let sql = format!(
-        "SELECT id,project_id,cwd,source,{},{},{} FROM threads ORDER BY id{}",
+        "SELECT id,project_id,cwd,source,{},{},{} FROM threads ORDER BY id",
         column_expr(&cols, "thread_source", "NULL"),
         column_expr(&cols, "has_user_event", "0"),
         column_expr(&cols, "first_user_message", "NULL"),
-        limit
-            .map(|n| format!(" LIMIT {}", n + 1))
-            .unwrap_or_default()
     );
     let mut statement = db.prepare(&sql).map_err(|e| e.to_string())?;
     let mut rows = statement.query([]).map_err(|e| e.to_string())?;
@@ -213,9 +212,6 @@ fn threads_with_limit(db: &Connection, limit: Option<usize>) -> Result<Vec<Threa
             cwd: row.get(2).map_err(|e| e.to_string())?,
             root: !child && (user.unwrap_or(0) != 0 || first.is_some_and(|s| !s.is_empty())),
         });
-    }
-    if limit.is_some_and(|n| result.len() > n) {
-        return Err("CODEX_PROJECT_QUICK_LIMIT".into());
     }
     Ok(result)
 }
@@ -334,13 +330,6 @@ fn scan_impl(
     exists: &dyn Fn(&str) -> bool,
 ) -> Result<Plan, String> {
     check()?;
-    if quick
-        && [STATE, &format!("{STATE}.bak")]
-            .iter()
-            .any(|p| fs::metadata(home.join(p)).is_ok_and(|m| m.len() > 2_000_000))
-    {
-        return Err("CODEX_PROJECT_QUICK_LIMIT".into());
-    }
     let before_bytes = read_bytes(&home.join(STATE))?;
     let before = decode(before_bytes.as_deref())?;
     for key in ["local-projects", MAP, ASSIGN, HOSTS, MIGRATION] {
@@ -362,7 +351,7 @@ fn scan_impl(
     let db = open(&home.join(&primary), false)?;
     db.execute_batch("BEGIN").map_err(|e| e.to_string())?;
     let db_projects = projects_with_limit(&db, quick.then_some(QUICK_MAX_PROJECTS))?;
-    let db_threads = threads_with_limit(&db, quick.then_some(QUICK_MAX_THREADS))?;
+    let db_threads = threads(&db)?;
     let catalog_memberships = catalog_memberships(home, quick)?;
     let project_fingerprint = fingerprint(&db_projects);
     let mut after = before.clone();

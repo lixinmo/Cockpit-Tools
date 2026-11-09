@@ -237,7 +237,7 @@ pub(super) fn apply(plan: &Plan, backup: &Path) -> Result<(), String> {
             }
             if relative == &plan.primary {
                 let roots: HashSet<_> =
-                    threads_with_limit(&db, plan.quick.then_some(QUICK_MAX_THREADS))?
+                    threads(&db)?
                         .into_iter()
                         .filter(|t| t.root)
                         .map(|t| t.id)

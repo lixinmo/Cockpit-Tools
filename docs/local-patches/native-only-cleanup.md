@@ -1,5 +1,9 @@
 # Maintained scope after Native-only cleanup
 
+On 2026-11-09 the user additionally requested the narrow
+[large-history project recovery fix](project-recovery-large-history.md).
+The retirement and installation evidence below describes the preceding cleanup.
+
 The user narrowed this fork on 2026-11-08 to three maintained additions:
 
 1. Native same-account connection-setup retry, with the fixed three-attempt,

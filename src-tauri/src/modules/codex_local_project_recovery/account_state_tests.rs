@@ -412,6 +412,61 @@ fn account_project_switch_preserves_large_supported_state_and_original_backup() 
 }
 
 #[test]
+fn account_project_switch_restores_large_history_and_state_across_a_b_a() {
+    let f = Fixture::new();
+    let db = Connection::open(f.home().join("state_5.sqlite")).unwrap();
+    db.execute_batch("WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<3500)
+        INSERT INTO threads SELECT 'many-'||x,cwd,CASE WHEN x%5=0 THEN 'subagent' ELSE source END,project_id,has_user_event FROM n JOIN threads ON id='chat'").unwrap();
+    let before_db: Vec<(String, Option<String>, String, String, i64)> = db
+        .prepare("SELECT id,project_id,cwd,source,has_user_event FROM threads ORDER BY id")
+        .unwrap()
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)))
+        .unwrap().map(Result::unwrap).collect();
+    let mut original = f.local("legacy");
+    original[SCOPES] = json!({"owner":"a","inactive":{
+        "b":{"atoms":{"private-b":true},"globals":{"remote-projects":{"remote-b":{}}}}
+    }});
+    original[ATOMS] = json!({"private-a":true,"thread-sort-key":"updated"});
+    original["remote-projects"] = json!({"remote-a":{}});
+    original["large-cache"] = json!("x".repeat(2_000_001));
+    f.write(&original);
+    let backup = f.home().join(format!("{STATE}.bak"));
+    let backup_bytes = serde_json::to_vec(&json!({"previous-cache":"b".repeat(2_000_001)})).unwrap();
+    fs::write(&backup, &backup_bytes).unwrap();
+    for owner in ["b", "a"] {
+        assert!(prepare(f.home(), Some(owner)).unwrap());
+        let booted = native_start(f.state(), Some(owner));
+        for key in ["local-projects", "project-order", MAP, "large-cache"] {
+            assert_eq!(booted[key], original[key], "owner={owner}, key={key}");
+        }
+        assert_eq!(booted[SCOPES]["owner"], owner);
+        assert_eq!(booted[ASSIGN].as_object().unwrap().len(), 2801);
+        assert_eq!(booted[ASSIGN]["many-3499"]["projectId"], "legacy");
+        assert_eq!(booted[HOSTS]["many-3499"], "local");
+        assert!(booted[ASSIGN].get("many-3500").is_none());
+        assert!(booted[ASSIGN].get("child").is_none());
+        let private = format!("private-{owner}");
+        let remote = format!("remote-{owner}");
+        assert_eq!(booted[ATOMS][&private], true);
+        assert!(booted["remote-projects"].get(&remote).is_some());
+        let other = if owner == "a" { "b" } else { "a" };
+        assert!(booted[ATOMS].get(format!("private-{other}")).is_none());
+        assert!(booted["remote-projects"].get(format!("remote-{other}")).is_none());
+        assert_eq!(fs::read(&backup).unwrap(), backup_bytes);
+        f.write(&booted);
+        assert!(!prepare(f.home(), Some(owner)).unwrap(), "repeat launch: {owner}");
+    }
+    let after_db: Vec<(String, Option<String>, String, String, i64)> = db
+        .prepare("SELECT id,project_id,cwd,source,has_user_event FROM threads ORDER BY id")
+        .unwrap()
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)))
+        .unwrap().map(Result::unwrap).collect();
+    assert_eq!(after_db, before_db, "account-state preparation never rewrites history rows");
+    assert_eq!(f.state()[ATOMS], original[ATOMS]);
+    assert_eq!(f.state()["remote-projects"], original["remote-projects"]);
+}
+
+#[test]
 fn account_project_switch_respects_launch_deadline_without_writing() {
     let f = Fixture::new();
     f.write(&json!({SCOPES:{"owner":"b","inactive":{
