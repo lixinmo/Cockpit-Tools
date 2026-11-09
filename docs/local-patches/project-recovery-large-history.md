@@ -43,5 +43,15 @@ integration tests. Ordinary tests use synthetic profiles, never private account
 data. A separate opt-in read-only preview of the local profile completed within
 the existing 500 ms budget without applying a plan or switching accounts.
 
-The frontend build passed with one TypeScript check. The final local Intel App
-build and installation verification are pending.
+The frontend build passed with one TypeScript check. The local Intel App build
+passed from source `1fd95d27ff0c8e3db6730749fe764907eb76fe9a` in 25m 56s.
+The staged App is version 1.3.80, contains one thin x86_64 Mach-O executable,
+passes strict ad-hoc signature verification and contains no Go API executable.
+Main executable SHA-256:
+`96ecb1b279f0807d7b1ee795bd4600f2d55c5474888c08198cb4f8441a9c62ed`.
+
+The verified App is staged in `.local-app-output/`. Project compilation output,
+dependencies, frontend output and build scratch were removed (about 3.26 GiB).
+Installation/startup verification is pending because the Mac was locked when
+the desktop-control tool attempted to access the old App. The old installed
+App and all runtime account/configuration data remain untouched.
