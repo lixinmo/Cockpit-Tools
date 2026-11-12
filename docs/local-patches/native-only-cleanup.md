@@ -94,3 +94,22 @@ diagnostics and the private one-time repair workspace were removed (about
 3.78 GiB). Source/Git history/remotes, all runtime data, shared toolchains and the
 current installed App remain. No permanent history-repair tool or duplicate App
 was retained.
+
+## Upstream v1.3.81 integration (2026-11-12)
+
+Merged upstream `7ca7f0db` in `eed11d12`. The upstream recovery order and manual
+launch handling were adopted. The local large-history recovery, setup-only
+retry and Credits admission remain required. The retry review found one
+production setup-retry entry point. Subscription refresh now invalidates the
+stored quota when it reconciles the workspace identity.
+
+On App source `a3a6d60e`, 2,082 frontend tests, 18 Native setup-retry cases,
+29 Credits cases and 41 isolated project-recovery cases passed. The isolated
+recovery suite skipped its opt-in real-profile preview. The upstream notice
+was tested with simulated newer releases. The current upstream and built App
+both report `1.3.81`.
+
+The local build verified a thin `x86_64` App with an ad-hoc signature and no Go
+API executable. Its updater embeds the fork endpoints and its release notice
+queries the upstream repository. Project build intermediates were cleaned.
+The verified App is in `.local-app-output/` and awaits installation.
