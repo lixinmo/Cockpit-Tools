@@ -1,4 +1,4 @@
-import { Settings, Rocket, GaugeCircle, LayoutGrid, SlidersHorizontal, FileText, ChevronDown, PanelLeftClose, PanelLeftOpen, ShieldCheck } from 'lucide-react';
+import { Settings, Rocket, GaugeCircle, LayoutGrid, SlidersHorizontal, FileText, ChevronDown, PanelLeftClose, PanelLeftOpen, ShieldCheck, ExternalLink } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useState, useRef, useCallback, useEffect, useLayoutEffect, useMemo, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
@@ -20,6 +20,7 @@ import {
 } from '../../stores/usePlatformLayoutStore';
 import { CLASSIC_SIDEBAR_ENTRY_LIMIT, ORIGINAL_SIDEBAR_ENTRY_LIMIT, useSideNavLayoutStore } from '../../stores/useSideNavLayoutStore';
 import { useGlobalModal } from '../../hooks/useGlobalModal';
+import type { UpstreamReleaseNotice } from '../../hooks/useUpstreamRelease';
 import { getPlatformLabel, renderPlatformIcon } from '../../utils/platformMeta';
 import { useAntigravityRuntimeTarget } from '../../hooks/useAntigravityRuntimeTarget';
 import { setAntigravityRuntimeTargetFromPlatform } from '../../utils/antigravityRuntimeTarget';
@@ -38,6 +39,7 @@ interface SideNavProps {
   updateProgress: number;
   onUpdateActionClick: () => void;
   updateRemindersEnabled: boolean;
+  upstreamRelease?: UpstreamReleaseNotice | null;
   sponsorEntryVisible: boolean;
   onOpenLogViewer: () => void;
 }
@@ -143,6 +145,7 @@ export function SideNav({
   updateProgress,
   onUpdateActionClick,
   updateRemindersEnabled,
+  upstreamRelease,
   sponsorEntryVisible,
   onOpenLogViewer,
 }: SideNavProps) {
@@ -393,6 +396,7 @@ export function SideNav({
       || updateActionState === 'installing'
       || updateActionState === 'ready'
     );
+  const updateEntryVisible = shouldShowUpdateActionEntry || Boolean(upstreamRelease);
   const recalculateClassicAdaptiveScale = useCallback(() => {
     if (!isClassicLayout || typeof window === 'undefined') {
       setClassicAdaptiveScale((prev) => (prev === 1 ? prev : 1));
@@ -522,7 +526,7 @@ export function SideNav({
     classicScaleContentKey,
     isClassicLayout,
     recalculateClassicAdaptiveScale,
-    shouldShowUpdateActionEntry,
+    updateEntryVisible,
   ]);
 
   useEffect(() => {
@@ -660,7 +664,7 @@ export function SideNav({
       window.removeEventListener('resize', updateClassicHandleTop);
       resizeObserver?.disconnect();
     };
-  }, [isClassicLayout, isClassicCollapsed, shouldShowUpdateActionEntry]);
+  }, [isClassicLayout, isClassicCollapsed, updateEntryVisible]);
 
   const handleLogoClick = useCallback(() => {
     if (hasBreakoutSession) {
@@ -868,7 +872,7 @@ export function SideNav({
         style={classicScaleStyle}
         className={`side-nav${isClassicLayout ? ' side-nav-classic' : ''}${isClassicCollapsed ? ' side-nav-classic-collapsed' : ''}`}
       >
-      {shouldShowUpdateActionEntry && (
+      {shouldShowUpdateActionEntry ? (
         <div className="side-nav-update-entry" ref={updateEntryRef}>
           <button
             type="button"
@@ -897,7 +901,16 @@ export function SideNav({
             )}
           </button>
         </div>
-      )}
+      ) : upstreamRelease ? (
+        <div className="side-nav-update-entry" ref={updateEntryRef}>
+          <button type="button" className="side-nav-update-btn is-update" style={{ flexDirection: 'column' }}
+            aria-label={t('settings.about.upstreamReleaseNotice', { version: upstreamRelease.version })}
+            title={t('settings.about.viewUpstreamRelease')} onClick={upstreamRelease.openReleaseNotes}>
+            <ExternalLink size={12} aria-hidden="true" />
+            <span className="side-nav-update-text">v{upstreamRelease.version}</span>
+          </button>
+        </div>
+      ) : null}
 
       <div className="nav-brand" ref={brandRef} style={{ position: 'relative', zIndex: 10 }}>
         <div className="side-nav-brand-main">

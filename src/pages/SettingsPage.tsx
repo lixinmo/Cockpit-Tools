@@ -16,6 +16,7 @@ import {
   type CodexAccountGroup,
 } from '../services/codexAccountGroupService';
 import { usePlatformRuntimeSupport } from '../hooks/usePlatformRuntimeSupport';
+import type { UpstreamReleaseNotice } from '../hooks/useUpstreamRelease';
 import { usePlatformLayoutStore } from '../stores/usePlatformLayoutStore';
 import { useSideNavLayoutStore } from '../stores/useSideNavLayoutStore';
 import {
@@ -3746,7 +3747,7 @@ export function useSettingsPageController() {
 }
 
 /** 组合业务 Controller 与独立 View，保持原组件公开调用入口不变。 */
-export function SettingsPage() {
+export function SettingsPage({ upstreamRelease }: { upstreamRelease?: UpstreamReleaseNotice | null }) {
   const controller = useSettingsPageController();
-  return <SettingsPageView {...controller} />;
+  return <SettingsPageView {...controller} upstreamRelease={upstreamRelease} />;
 }

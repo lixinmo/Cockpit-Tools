@@ -1485,6 +1485,8 @@
       "download": "下載",
       "checkFailed": "檢查更新失敗，請稍後重試",
       "viewReleaseHistory": "更新記錄",
+      "upstreamReleaseNotice": "上游已發布 v{{version}}",
+      "viewUpstreamRelease": "查看官方發行說明",
       "releaseHistoryTitle": "更新記錄",
       "releaseHistoryLoading": "正在載入更新記錄...",
       "releaseHistoryEmpty": "暫無更新紀錄",

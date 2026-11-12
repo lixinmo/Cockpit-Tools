@@ -1485,6 +1485,8 @@
       "download": "Tải về",
       "checkFailed": "Kiểm tra cập nhật thất bại, vui lòng thử lại sau",
       "viewReleaseHistory": "Ghi chú phát hành",
+      "upstreamReleaseNotice": "Dự án gốc đã phát hành v{{version}}",
+      "viewUpstreamRelease": "Xem ghi chú phát hành chính thức",
       "releaseHistoryTitle": "Ghi chú phát hành",
       "releaseHistoryLoading": "Đang tải ghi chú phát hành...",
       "releaseHistoryEmpty": "Chưa có ghi chú phát hành",

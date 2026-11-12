@@ -1004,6 +1004,7 @@ pub fn run() {
             commands::wakeup::cancel_wakeup_task,
             commands::wakeup::check_wakeup_timeouts,
             // Update Commands
+            commands::update::check_upstream_release,
             commands::update::should_check_updates,
             commands::update::update_last_check_time,
             commands::update::get_update_settings,

@@ -1485,6 +1485,8 @@
       "download": "Télécharger",
       "checkFailed": "Échec de la vérification",
       "viewReleaseHistory": "Notes de version",
+      "upstreamReleaseNotice": "Le projet d’origine a publié la version v{{version}}",
+      "viewUpstreamRelease": "Voir les notes de version officielles",
       "releaseHistoryTitle": "Notes de version",
       "releaseHistoryLoading": "Chargement des notes de version...",
       "releaseHistoryEmpty": "Pas encore de notes de version",

@@ -1532,6 +1532,8 @@
       "download": "Unduh",
       "checkFailed": "Gagal memeriksa pembaruan, silakan coba lagi",
       "viewReleaseHistory": "Catatan Rilis",
+      "upstreamReleaseNotice": "Proyek asal merilis v{{version}}",
+      "viewUpstreamRelease": "Lihat catatan rilis resmi",
       "releaseHistoryTitle": "Catatan Rilis",
       "releaseHistoryLoading": "Memuat catatan rilis...",
       "releaseHistoryEmpty": "Belum ada catatan rilis",

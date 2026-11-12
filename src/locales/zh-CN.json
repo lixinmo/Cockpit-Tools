@@ -1929,6 +1929,8 @@
       "supportDev": "支持开发",
       "checkUpdate": "检查更新",
       "viewReleaseHistory": "更新记录",
+      "upstreamReleaseNotice": "上游已发布 v{{version}}",
+      "viewUpstreamRelease": "查看官方发布说明",
       "checking": "检查中...",
       "upToDate": "已是最新版本",
       "newVersion": "发现 v{{version}}",

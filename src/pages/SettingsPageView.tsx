@@ -8,9 +8,12 @@ import { Github, User, Rocket, Save, AlertCircle, RefreshCw, Heart, MessageSquar
 import type { PlatformId } from '../types/platform';
 import type { useSettingsPageController } from "./SettingsPage";
 import { SettingsGeneralPanel } from "./SettingsGeneralPanel";
+import type { UpstreamReleaseNotice } from '../hooks/useUpstreamRelease';
 
 
-export type SettingsPageViewProps = ReturnType<typeof useSettingsPageController>;
+export type SettingsPageViewProps = ReturnType<typeof useSettingsPageController> & {
+  upstreamRelease?: UpstreamReleaseNotice | null;
+};
 
 /** 渲染 SettingsPage 的界面；业务状态与动作统一由 Controller 提供。 */
 export function SettingsPageView(props: SettingsPageViewProps) {
@@ -68,6 +71,7 @@ export function SettingsPageView(props: SettingsPageViewProps) {
     t,
     updateChecking,
     updateCheckMessage,
+    upstreamRelease,
     wsEnabled,
     wsPort,
   } = props;
@@ -447,6 +451,16 @@ export function SettingsPageView(props: SettingsPageViewProps) {
                     {t('settings.about.viewReleaseHistory', '更新记录')}
                   </button>
                 </div>
+                {upstreamRelease && (
+                  <div className="action-message" style={{ marginTop: '10px', marginBottom: 0 }}>
+                    <span className="action-message-text">
+                      {t('settings.about.upstreamReleaseNotice', { version: upstreamRelease.version })}
+                    </span>
+                    <button type="button" className="btn btn-sm btn-ghost" onClick={upstreamRelease.openReleaseNotes}>
+                      {t('settings.about.viewUpstreamRelease')}
+                    </button>
+                  </div>
+                )}
                 {updateCheckMessage && (
                   <div
                     className={`action-message${updateCheckMessage.tone ? ` ${updateCheckMessage.tone}` : ''}`}

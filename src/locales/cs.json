@@ -1485,6 +1485,8 @@
       "download": "Stáhnout",
       "checkFailed": "Kontrola aktualizací selhala",
       "viewReleaseHistory": "Poznámky k vydání",
+      "upstreamReleaseNotice": "Původní projekt vydal v{{version}}",
+      "viewUpstreamRelease": "Zobrazit oficiální poznámky k vydání",
       "releaseHistoryTitle": "Poznámky k vydání",
       "releaseHistoryLoading": "Načítání poznámek k vydání...",
       "releaseHistoryEmpty": "Zatím žádné poznámky k vydání",

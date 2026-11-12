@@ -39,6 +39,7 @@ import { useAutoRefresh } from './hooks/useAutoRefresh';
 import { useCodexQuotaSync } from './hooks/useCodexQuotaSync';
 import { useEasterEggTrigger } from './hooks/useEasterEggTrigger';
 import { useGlobalModal } from './hooks/useGlobalModal';
+import { useUpstreamRelease } from './hooks/useUpstreamRelease';
 import { changeLanguage, getCurrentLanguage, normalizeLanguage, syncLanguage } from './i18n';
 import { useAccountStore } from './stores/useAccountStore';
 import { useCodexAccountStore } from './stores/useCodexAccountStore';
@@ -877,6 +878,7 @@ function MainApp() {
   const [updateNotificationInfo, setUpdateNotificationInfo] = useState<UpdateInfo | null>(null);
   const [updateNotificationChecking, setUpdateNotificationChecking] = useState(false);
   const [updateRemindersEnabled, setUpdateRemindersEnabled] = useState(false);
+  const { release: upstreamRelease, unread: upstreamReleaseUnread } = useUpstreamRelease();
   const [updateSkipError, setUpdateSkipError] = useState('');
   const [silentUpdateVersion, setSilentUpdateVersion] = useState<string | null>(null);
   const [updateAction, setUpdateAction] = useState<UpdateAction>({
@@ -3845,6 +3847,7 @@ function MainApp() {
         updateProgress={updateAction.progress}
         onUpdateActionClick={handleQuickUpdateActionClick}
         updateRemindersEnabled={updateRemindersEnabled}
+        upstreamRelease={updateRemindersEnabled && upstreamReleaseUnread ? upstreamRelease : null}
         sponsorEntryVisible={sponsorEntryVisible}
         onOpenLogViewer={() => setShowLogViewer(true)}
       />
@@ -3996,7 +3999,7 @@ function MainApp() {
             />
           </VisibleBootPage>
           <VisibleBootPage when={page === 'settings'}>
-            <SettingsPage />
+            <SettingsPage upstreamRelease={upstreamRelease} />
           </VisibleBootPage>
         </Suspense>
         <CodexAccountServiceHost activePage={page === 'codex' || page === 'codex-api-service'} />

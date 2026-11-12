@@ -1485,6 +1485,8 @@
       "download": "Скачать",
       "checkFailed": "Ошибка проверки обновлений",
       "viewReleaseHistory": "Примечания к выпуску",
+      "upstreamReleaseNotice": "Исходный проект выпустил версию v{{version}}",
+      "viewUpstreamRelease": "Открыть официальные примечания к выпуску",
       "releaseHistoryTitle": "Примечания к выпуску",
       "releaseHistoryLoading": "Загрузка примечаний к выпуску...",
       "releaseHistoryEmpty": "Примечаний к выпуску пока нет",

@@ -1485,6 +1485,8 @@
       "download": "ダウンロード",
       "checkFailed": "アップデートの確認に失敗しました。後でもう一度お試しください",
       "viewReleaseHistory": "リリースノート",
+      "upstreamReleaseNotice": "上流プロジェクトが v{{version}} をリリースしました",
+      "viewUpstreamRelease": "公式リリースノートを表示",
       "releaseHistoryTitle": "リリースノート",
       "releaseHistoryLoading": "リリースノートを読み込んでいます...",
       "releaseHistoryEmpty": "リリースノートはまだありません",

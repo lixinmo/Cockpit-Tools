@@ -4,6 +4,8 @@ use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
+const UPSTREAM_LATEST_RELEASE_URL: &str =
+    "https://api.github.com/repos/jlcodes99/cockpit-tools/releases/latest";
 const DEFAULT_CHECK_INTERVAL_HOURS: u64 = 1;
 const LEGACY_DEFAULT_CHECK_INTERVAL_HOURS: u64 = 24;
 const LEGACY_PREVIOUS_DEFAULT_CHECK_INTERVAL_HOURS: u64 = 6;
@@ -107,6 +109,41 @@ fn compare_versions(latest: &str, current: &str) -> bool {
     }
 
     false
+}
+
+fn newer_upstream_version<'a>(tag: &'a str, current: &str) -> Option<&'a str> {
+    let version = tag.strip_prefix('v')?;
+    let parts: Vec<_> = version.split('.').collect();
+    if parts.len() != 3
+        || !parts.iter().all(|part| {
+            part.parse::<u32>()
+                .is_ok_and(|number| number.to_string() == *part)
+        })
+    {
+        return None;
+    }
+    compare_versions(version, current).then_some(version)
+}
+
+pub async fn check_upstream_release() -> Result<Option<String>, reqwest::Error> {
+    #[derive(Deserialize)]
+    struct Release {
+        tag_name: String,
+    }
+
+    let release = reqwest::Client::builder()
+        .user_agent("Cockpit-Tools")
+        .timeout(std::time::Duration::from_secs(10))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()?
+        .get(UPSTREAM_LATEST_RELEASE_URL)
+        .header(reqwest::header::ACCEPT, "application/vnd.github+json")
+        .send()
+        .await?
+        .error_for_status()?
+        .json::<Release>()
+        .await?;
+    Ok(newer_upstream_version(&release.tag_name, CURRENT_VERSION).map(str::to_owned))
 }
 
 /// Check if enough time has passed since last check
@@ -390,6 +427,14 @@ mod tests {
         assert!(compare_versions("0.1.1", "0.1.0"));
         assert!(!compare_versions("0.1.0", "0.1.0"));
         assert!(!compare_versions("0.1.0", "0.2.0"));
+    }
+
+    #[test]
+    fn upstream_notice_requires_newer_formal_release() {
+        assert_eq!(newer_upstream_version("v1.3.81", "1.3.80"), Some("1.3.81"));
+        for tag in ["v1.3.9", "v1.3.80", "v1.3.82-rc.1", "v1.03.82", "v1.3.82/other", "cloud-macos-x86_64"] {
+            assert_eq!(newer_upstream_version(tag, "1.3.80"), None, "{tag}");
+        }
     }
 
     #[test]

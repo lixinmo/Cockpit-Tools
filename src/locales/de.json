@@ -1485,6 +1485,8 @@
       "download": "Herunterladen",
       "checkFailed": "Fehler bei der Update-Suche",
       "viewReleaseHistory": "Versionshinweise",
+      "upstreamReleaseNotice": "Das Originalprojekt hat v{{version}} veröffentlicht",
+      "viewUpstreamRelease": "Offizielle Versionshinweise ansehen",
       "releaseHistoryTitle": "Versionshinweise",
       "releaseHistoryLoading": "Versionshinweise werden geladen...",
       "releaseHistoryEmpty": "Noch keine Versionshinweise",

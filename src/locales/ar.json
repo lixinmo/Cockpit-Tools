@@ -1532,6 +1532,8 @@
       "download": "تنزيل",
       "checkFailed": "فشل التحقق من التحديثات",
       "viewReleaseHistory": "ملاحظات الإصدار",
+      "upstreamReleaseNotice": "أصدر المشروع الأصلي الإصدار v{{version}}",
+      "viewUpstreamRelease": "عرض ملاحظات الإصدار الرسمية",
       "releaseHistoryTitle": "ملاحظات الإصدار",
       "releaseHistoryLoading": "جارٍ تحميل ملاحظات الإصدار...",
       "releaseHistoryEmpty": "لا توجد ملاحظات الإصدار حتى الآن",

@@ -5,6 +5,17 @@ use crate::modules::update_checker::{
 };
 use std::time::Instant;
 
+/// This lookup only reports a newer official release version for the notice.
+#[tauri::command]
+pub async fn check_upstream_release() -> Result<Option<String>, String> {
+    if !crate::modules::config::get_user_config().external_network_enabled {
+        return Ok(None);
+    }
+    update_checker::check_upstream_release()
+        .await
+        .map_err(|error| error.to_string())
+}
+
 /// Check if we should check for updates (based on interval settings)
 #[tauri::command]
 pub fn should_check_updates() -> Result<bool, String> {

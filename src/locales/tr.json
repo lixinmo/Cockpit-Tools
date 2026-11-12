@@ -1485,6 +1485,8 @@
       "download": "İndir",
       "checkFailed": "Güncelleme kontrolü başarısız oldu",
       "viewReleaseHistory": "Sürüm Notları",
+      "upstreamReleaseNotice": "Ana proje v{{version}} sürümünü yayımladı",
+      "viewUpstreamRelease": "Resmî sürüm notlarını görüntüle",
       "releaseHistoryTitle": "Sürüm Notları",
       "releaseHistoryLoading": "Sürüm notları yükleniyor...",
       "releaseHistoryEmpty": "Henüz sürüm notu yok",

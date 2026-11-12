@@ -1485,6 +1485,8 @@
       "download": "Descargar",
       "checkFailed": "Error al buscar actualizaciones",
       "viewReleaseHistory": "Notas de la versión",
+      "upstreamReleaseNotice": "El proyecto original publicó la versión v{{version}}",
+      "viewUpstreamRelease": "Ver las notas oficiales de la versión",
       "releaseHistoryTitle": "Notas de la versión",
       "releaseHistoryLoading": "Cargando notas de la versión...",
       "releaseHistoryEmpty": "Aún no hay notas de lanzamiento",

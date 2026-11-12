@@ -1929,6 +1929,8 @@
       "supportDev": "Support Development",
       "checkUpdate": "Check Updates",
       "viewReleaseHistory": "Release Notes",
+      "upstreamReleaseNotice": "Upstream released v{{version}}",
+      "viewUpstreamRelease": "View official release notes",
       "checking": "Checking...",
       "upToDate": "Up to date",
       "newVersion": "v{{version}} available",
