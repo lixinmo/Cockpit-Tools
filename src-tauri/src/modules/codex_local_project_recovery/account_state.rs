@@ -1,4 +1,4 @@
-//! Bridge Codex Desktop's account-scoped renderer state at a stopped launch.
+//! Bridge Codex Desktop's account-scoped renderer state while the profile is stopped.
 //! Only projects and user threads verified in this profile's SQLite registry are
 //! shared. Remote/cloud state and account atoms stay in their original scope.
 use super::*;
@@ -131,6 +131,9 @@ fn local_view(
             }
         }
         by_source.push(index);
+        if threads.is_empty() {
+            continue;
+        }
         if let Some(hosts) = source[HOSTS].as_object() {
             nonlocal_threads.extend(hosts.iter().filter_map(|(id, host)| {
                 host.as_str()
@@ -326,9 +329,10 @@ fn merge_local(target: &mut Value, view: &Value) {
         .as_array()
         .cloned()
         .unwrap_or_default();
-    for id in view["project-order"].as_array().into_iter().flatten() {
-        if !order.contains(id) {
-            order.push(id.clone());
+    let mut seen = order.iter().filter_map(Value::as_str).map(str::to_owned).collect::<HashSet<_>>();
+    for id in view["project-order"].as_array().into_iter().flatten().filter_map(Value::as_str) {
+        if seen.insert(id.to_owned()) {
+            order.push(json!(id));
         }
     }
     target["project-order"] = json!(order);
@@ -402,7 +406,9 @@ pub(crate) fn prepare(home: &Path, owner: Option<&str>) -> Result<bool, String> 
     if let Some(primary) = project_database(home)? {
         let db = open(&home.join(primary), false)?;
         db.execute_batch("BEGIN").map_err(|e| e.to_string())?;
-        let projects = projects_with_limit(&db, Some(QUICK_MAX_PROJECTS))?;
+        // Project visibility is restored from the registry before optional
+        // history maintenance. The caller's deadline bounds both metadata reads.
+        let projects = projects_with_limit(&db, None)?;
         let threads = threads(&db)?;
         let view = local_view(home, &sources, &projects, &threads)?;
         // Finish the read transaction before writing the renderer state.

@@ -20,14 +20,26 @@ change Native retry, Credits, model configuration or Reset automation.
 - Existing per-operation deadline checks, SQLite interruption/busy timeouts,
   profile/process ownership, state hash comparisons, conditional row writes,
   durable transaction intent and rollback remain intact.
-- The common 20 MB file guard and other existing project/root/catalog bounds
-  remain. This change removes the two requested gates, not every resource guard.
+- The common 20 MB file guard and the quick planner's project/root/catalog bounds
+  remain. Account-state preparation follows upstream's deadline-bounded project
+  registry read before the quick planner runs.
 - Remote/cloud projects, account-private state, explicit projectless threads,
   child agents, pending deletions and ambiguous/newer assignments retain their
   existing protection. Chat bodies, credentials and history contents are not
   modified by this patch.
 - Account-state preparation precedes the generic project planner. A later
   deferred maintenance result does not undo its already committed account state.
+
+## Upstream review (2026-11-12)
+
+Upstream `v1.3.81` and `upstream/main` at `7ca7f0db` restore project groups
+earlier and prepare the stopped instance's project state for a switch followed
+by a manual launch. They still leave thread assignments out of account-state
+preparation above 2048 threads. The upstream quick planner and commit-time
+revalidation also retain the 2048-thread limit, and the planner defers on a
+state file or backup above 2 MB. The merge adopts the upstream switch and
+launch paths while retaining this patch's deadline-bounded thread reads and
+state-file handling.
 
 ## Validation
 
