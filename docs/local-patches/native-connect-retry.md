@@ -90,8 +90,9 @@ by one H2 POST, exhaustion, exact setup/H2 backoff, original final errors,
 shared timeout and deadline precedence, cancellation before polling and during
 HTTP/2 initialization, ownership of partial connections and unread request
 bodies, early response drop, exclusion of other hosts/Upgrade, and refusal to
-replay after the send boundary. All 18 passed with the main workspace's locked
-hyper 1.9.0, h2 0.4.13 and tokio 1.52.0 on 2026-10-22.
+replay after the send boundary. All 18 passed with hyper 1.9.0, h2 0.4.13 and
+tokio 1.52.0 on 2026-10-22. See the v1.3.84 review below for the updated
+workspace versions.
 
 The former Go implementation is retired; the original v1.0 reference remains in Git history.
 After any dependency/upstream refresh, inspect retry/pooling/handshake layers
@@ -128,3 +129,18 @@ also required before that fallback send. The compression regression includes a
 policy denial arriving with the rejection and expects exactly one upstream call.
 This review is static; the merge's cloud verification record supplies execution
 results for both retry verifiers and the Native integration suite.
+
+## Upstream v1.3.84 review (2026-11-14)
+
+Upstream `0c96cf74` adds HTTP/2 liveness checks, idle pool expiration and
+retirement of a failed transport. Transport renewal uses the existing Native
+application retry budgets and respects whether the failed request could have
+been sent. The single setup-retry entry still wraps the Native HTTP client
+builder and applies to eligible HTTP/1 fallback clients. Its attempt and timing
+contract and the vendor replay fence are unchanged.
+
+The standalone harness now matches the App lockfile's hyper 1.12.0, h2 0.4.20
+and tokio 1.52.0. All 18 setup-retry tests passed with these versions. Four
+isolated loopback tests using the merged client builder verified that it
+detects a stalled HTTP/2 connection and allows a healthy 50-second response to
+finish, both with and without the setup retry.

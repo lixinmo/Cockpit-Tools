@@ -109,9 +109,12 @@ import {
   type CodexStatsTimeRange,
 } from "../utils/codexStatsRange";
 import {
-  persistCodexStatsRangeSelection,
+  CODEX_LOCAL_ACCESS_STATS_RANGE_STORAGE_KEY,
   readCodexStatsRangeSelection,
+  serializeCodexStatsRangeSelection,
 } from "../utils/codexStatsRangePreference";
+import { useDurableUiSetting } from "../hooks/useDurableUiSetting";
+import { previewDurableUiSetting } from "../utils/durableUiSettings";
 import { useEscClose } from "../hooks/useEscClose";
 import {
   buildPaginationPageSizeStorageKey,
@@ -129,6 +132,7 @@ import {
   formatCompactNumber,
   formatLatencyMs,
   formatQuotaPoolLabel,
+  getLocalAccessTestModelIds,
   formatRequestResultDetail as formatLocalAccessRequestResultDetail,
   normalizeAccessScope,
   normalizeCustomRoutingPriority,
@@ -243,8 +247,6 @@ interface CodexLocalAccessModalProps {
 
 type CopyableField = "apiPortUrl" | "baseUrl" | "apiKey" | "modelId";
 
-const CODEX_LOCAL_ACCESS_STATS_RANGE_STORAGE_KEY =
-  "agtools.codex.local_access.stats_range.v1";
 export function CodexLocalAccessModal({
   isOpen,
   mode,
@@ -287,7 +289,6 @@ export function CodexLocalAccessModal({
   sidecarRestarting,
 }: CodexLocalAccessModalProps) {
   const { t } = useTranslation();
-
   const saving = externalSaving;
   const collection = state?.collection ?? null;
   const localAccessStatus = resolveCodexLocalAccessRuntimeStatus(state?.collection, state);
@@ -336,8 +337,10 @@ export function CodexLocalAccessModal({
   const [keyVisible, setKeyVisible] = useState(false);
   const [copiedField, setCopiedField] = useState<CopyableField | null>(null);
   const [selectedModelId, setSelectedModelId] = useState("");
-  const [statsSelection, setStatsSelection] = useState(() =>
-    readCodexStatsRangeSelection(CODEX_LOCAL_ACCESS_STATS_RANGE_STORAGE_KEY),
+  const savedStatsRange = useDurableUiSetting(CODEX_LOCAL_ACCESS_STATS_RANGE_STORAGE_KEY);
+  const statsSelection = useMemo(
+    () => readCodexStatsRangeSelection(savedStatsRange),
+    [savedStatsRange, isOpen],
   );
   const { key: statsRange, range: statsTimeRange } = statsSelection;
   const [filteredStatsWindow, setFilteredStatsWindow] =
@@ -374,6 +377,7 @@ export function CodexLocalAccessModal({
   const displayBaseUrl =
     addressKind === "lan" && state?.lanBaseUrl ? state.lanBaseUrl : baseUrl;
   const modelIds = state?.modelIds ?? [];
+  const testModelIds = useMemo(() => getLocalAccessTestModelIds(modelIds, collection), [modelIds, collection]);
   const stats = state?.stats;
   const quotaPoolLabels = useMemo(
     () => ({
@@ -613,20 +617,15 @@ export function CodexLocalAccessModal({
   ]);
 
   useEffect(() => {
-    if (modelIds.length === 0) {
+    const options = testDialogOpen ? testModelIds : modelIds;
+    if (options.length === 0) {
       setSelectedModelId("");
       return;
     }
     setSelectedModelId((current) =>
-      modelIds.includes(current) ? current : modelIds[0],
+      options.includes(current) ? current : options[0],
     );
-  }, [modelIds]);
-
-  useEffect(() => {
-    if (isOpen) {
-      setStatsSelection(readCodexStatsRangeSelection(CODEX_LOCAL_ACCESS_STATS_RANGE_STORAGE_KEY));
-    }
-  }, [isOpen]);
+  }, [modelIds, testDialogOpen, testModelIds]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -647,15 +646,13 @@ export function CodexLocalAccessModal({
     key: Exclude<CodexStatsRangeKey, "custom">,
     range: CodexStatsTimeRange,
   ) => {
-    const selection = { key, range };
-    setStatsSelection(selection);
-    persistCodexStatsRangeSelection(CODEX_LOCAL_ACCESS_STATS_RANGE_STORAGE_KEY, selection);
+    const saved = serializeCodexStatsRangeSelection({ key, range });
+    if (saved !== null) previewDurableUiSetting(CODEX_LOCAL_ACCESS_STATS_RANGE_STORAGE_KEY, saved);
   };
 
   const handleCustomStatsRangeApply = (range: CodexStatsTimeRange) => {
-    const selection = { key: "custom" as const, range };
-    setStatsSelection(selection);
-    persistCodexStatsRangeSelection(CODEX_LOCAL_ACCESS_STATS_RANGE_STORAGE_KEY, selection);
+    const saved = serializeCodexStatsRangeSelection({ key: "custom", range });
+    if (saved !== null) previewDurableUiSetting(CODEX_LOCAL_ACCESS_STATS_RANGE_STORAGE_KEY, saved);
   };
 
   useEffect(() => {
@@ -1448,10 +1445,15 @@ export function CodexLocalAccessModal({
     try {
       // Official membership is persisted before account metadata is refreshed.
       // Never silently drop the new endpoint while its store refresh is pending.
-      if ([...selected].some((id) => id.startsWith("chatgpt_plan_") && !localAccessAccountById.has(id))) {
+      const selectedIds = Array.from(selected);
+      if (selectedIds.some((id) => id.startsWith("chatgpt_plan_") && !localAccessAccountById.has(id))) {
         throw new Error(t("chatgptPlan.officialFlow.memberSyncPending"));
       }
-      const filtered = Array.from(selected).filter((accountId) => {
+      if (selectedIds.some((id) => !localAccessAccountById.has(id) &&
+          !(collection?.pausedAccountIds?.includes(id) && collection.accountIds.includes(id)))) {
+        throw new Error(t("codex.localAccess.noEligibleAccountsSelected"));
+      }
+      const filtered = selectedIds.filter((accountId) => {
         if (collection?.pausedAccountIds?.includes(accountId) && collection.accountIds.includes(accountId)) return true;
         const account = localAccessAccountById.get(accountId);
         if (!account) return false;
@@ -1881,7 +1883,6 @@ export function CodexLocalAccessModal({
   };
 
   const closeTestDialog = () => {
-    if (testDialogBusy) return;
     setTestDialogOpen(false);
   };
 
@@ -1968,8 +1969,9 @@ export function CodexLocalAccessModal({
                 message.id === assistantMessage.id
                   ? {
                       ...message,
+                      imageDataUrl: payload.imageDataUrl,
                       content:
-                        message.content ||
+                        payload.imageDataUrl ? "" : message.content ||
                         t(
                           "codex.localAccess.testChatEmptyResponse",
                           "响应为空",
@@ -2286,7 +2288,7 @@ export function CodexLocalAccessModal({
             {error && (
               <div className="codex-local-access-inline-error">
                 <CircleAlert size={14} />
-                <span>{String(error)}</span>
+                <span>{formatCodexGatewayModeError(t, error)}</span>
               </div>
             )}
 
@@ -3773,16 +3775,12 @@ export function CodexLocalAccessModal({
                   </span>
                 </h3>
                 <p>
-                  {t(
-                    "codex.localAccess.testDialogDesc",
-                    "通过本地 API 服务发起一次真实对话，验证本地服务、密钥和上游响应。",
-                  )}
+                  {t("codex.localAccess.testDialogDesc")}
                 </p>
               </div>
               <button
                 className="modal-close codex-local-access-test-dialog-close"
                 onClick={closeTestDialog}
-                disabled={testDialogBusy}
                 aria-label={t("common.close")}
               >
                 <X size={18} />
@@ -3795,9 +3793,9 @@ export function CodexLocalAccessModal({
                   <span>{t("codex.localAccess.testChatModel", "模型")}</span>
                   <SingleSelectDropdown
                     value={selectedModelId}
-                    options={modelIdOptions}
+                    options={testModelIds.map((id) => ({ value: id, label: id }))}
                     onChange={setSelectedModelId}
-                    disabled={modelIdOptions.length === 0 || testDialogBusy}
+                    disabled={testModelIds.length === 0 || testDialogBusy}
                     ariaLabel={t("codex.localAccess.testChatModel", "模型")}
                     placeholder={t(
                       "codex.localAccess.modelIdPlaceholder",
@@ -3823,10 +3821,7 @@ export function CodexLocalAccessModal({
               >
                 {testChatMessages.length === 0 ? (
                   <div className="codex-local-access-test-chat-empty">
-                    {t(
-                      "codex.localAccess.testChatEmpty",
-                      "输入一条消息后，会通过当前 API 服务发起真实对话。",
-                    )}
+                    {t("codex.localAccess.testChatEmpty")}
                   </div>
                 ) : (
                   testChatMessages.map((message) => (
@@ -3842,7 +3837,9 @@ export function CodexLocalAccessModal({
                             {message.failureTitle}
                           </strong>
                         )}
-                        <p>{message.content}</p>
+                        {message.imageDataUrl
+                          ? <img src={message.imageDataUrl} alt={t("codex.localAccess.testOutputTitle")} />
+                          : <p>{message.content}</p>}
                         {message.failureDetail && (
                           <span className="codex-local-access-test-chat-meta">
                             {message.failureDetail}
@@ -3917,7 +3914,6 @@ export function CodexLocalAccessModal({
               <button
                 className="btn btn-secondary"
                 onClick={closeTestDialog}
-                disabled={testDialogBusy}
               >
                 {t("common.close")}
               </button>

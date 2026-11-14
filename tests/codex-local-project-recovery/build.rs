@@ -38,6 +38,9 @@ fn main() {
         "src-tauri/src/modules/codex_session_visibility_repair_api.rs",
         &["STATE_DB_FILE", "SQLITE_DIR_NAME", "PREFERRED_SQLITE_DB_FILE"]);
     helpers.push_str(&source_items(&root,
+        "src-tauri/src/modules/codex_session_visibility_projects.rs",
+        &["QUICK_PROJECT_REPAIR_BUDGET"]));
+    helpers.push_str(&source_items(&root,
         "src-tauri/src/modules/codex_session_visibility_catalog.rs",
         &["to_desktop_workspace_path", "is_windows_workspace_path", "trim_safe_windows_trailing_separators"]));
     helpers.push_str(&source_items(&root,

@@ -113,3 +113,24 @@ The local build verified a thin `x86_64` App with an ad-hoc signature and no Go
 API executable. Its updater embeds the fork endpoints and its release notice
 queries the upstream repository. Project build intermediates were cleaned.
 The verified App is in `.local-app-output/` and awaits installation.
+
+## Upstream v1.3.84 integration (2026-11-14)
+
+Merged upstream `0c96cf74`, including the v1.3.82–v1.3.84 releases. The merge
+uses upstream's large-state recovery, project-only repair, SSH/sidebar state
+handling and transport liveness checks. The fork retains the deadline-bounded
+scan for histories over 2,048 threads, the setup-only retry contract and the
+Credits admission checks for the final credential identity. Both API Service
+error surfaces use the upstream formatter, and the official release notice
+uses the upstream release URL helper.
+
+Local checks passed for the production frontend build, 2,267 frontend tests,
+18 locale files, 130 build and publication tests, 18 Native setup-retry cases,
+four isolated HTTP/2 liveness cases, 29 Credits policy cases and 66 isolated
+project-recovery cases. The opt-in real-profile recovery preview was excluded.
+The final Intel Rust test binary passed 106 Native integration regressions and
+61 project-recovery and workspace-identity regressions in two filtered runs.
+Credits admission uses the final subscription identity, including when the
+routing and policy reads straddle an account update. Grok and API-key provider
+credentials remain outside the subscription quota policy. This synchronization
+validated source and tests; it did not bundle or install an App.

@@ -555,6 +555,7 @@ async fn native_credits_pool(
 struct NativeCreditsGuard {
     pool: NativeCreditsPool,
     account_id: String,
+    applies: bool,
     official: bool,
     identity: Option<String>,
     identity_changed: bool,
@@ -562,6 +563,9 @@ struct NativeCreditsGuard {
 
 impl native_contract::UpstreamAdmissionGuard for NativeCreditsGuard {
     fn check(&self) -> Result<(), native_contract::ServiceError> {
+        if !self.applies {
+            return Ok(());
+        }
         let settings = self.pool.settings();
         if self.identity_changed
             && credits_policy::restricted(settings.policy, settings.allows(&self.account_id))
@@ -613,12 +617,14 @@ fn native_credits_guard(
         .members
         .iter_mut()
         .find(|member| member.id == route.account_id);
-    let applicable = member.as_ref().is_none_or(|member| member.applies);
-    let identity_changed = applicable
-        && route.chatgpt
-        && member
-            .as_ref()
-            .is_none_or(|member| route.quota_identity.as_deref() != Some(member.identity.as_str()));
+    // The policy snapshot can straddle an account update. The final credential
+    // supplies its own quota identity, independently of the wire protocol.
+    let applies = route.chatgpt_plan || route.quota_identity.is_some();
+    let identity_changed = applies
+        && member.as_ref().is_none_or(|member| {
+            !member.applies || (!route.chatgpt_plan
+                && route.quota_identity.as_deref() != Some(member.identity.as_str()))
+        });
     if identity_changed {
         if let Some(member) = member {
             member.identity = route
@@ -629,12 +635,11 @@ fn native_credits_guard(
             member.refresh = "credential_identity_changed".into();
         }
     }
-    let identity = (applicable && route.chatgpt && !route.chatgpt_plan)
-        .then(|| route.quota_identity.clone())
-        .flatten();
+    let identity = route.quota_identity.clone();
     NativeCreditsGuard {
         pool,
         account_id: route.account_id.clone(),
+        applies,
         official: route.chatgpt_plan,
         identity,
         identity_changed,

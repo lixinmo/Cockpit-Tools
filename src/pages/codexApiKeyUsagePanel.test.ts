@@ -2,16 +2,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { registerHooks } from 'node:module';
+import { register } from 'node:module';
 import type { TFunction } from 'i18next';
 import type { CodexModelProvider } from '../services/codexModelProviderService';
 import type { CodexAccount } from '../types/codex';
 import type { ModelProviderUsageSummary } from '../services/modelProviderUsageService';
 import { useCodexApiKeyUsageFormatting } from './codexApiKeyUsageFormatting';
 
-registerHooks({ load(url, context, next) {
-  return url.endsWith('.css') ? { format: 'module', source: '', shortCircuit: true } : next(url, context);
-} });
+register(new URL('../../tests/helpers/ignoreCssLoader.mjs', import.meta.url));
 const { renderCodexApiKeyUsagePanel, resolveCodexAccountDailyUsage } = await import('./codexApiKeyUsagePanel');
 const t = ((key: string, fallback?: unknown) => typeof fallback === 'string' ? fallback : key) as TFunction;
 const account: CodexAccount = {
@@ -62,6 +60,33 @@ for (const variant of ['card', 'table'] as const) {
     assert.ok(html.includes('$80.00') && html.includes('Example'));
   });
 }
+test('New API card text and bar both use remaining quota', () => {
+  const html = renderSummary({ mode: 'new_api', unit: '%', quotaLimit: 100, quotaUsed: 6, quotaRemaining: 94 });
+  assert.ok(html.includes('94% / 100%'));
+  assert.ok(html.includes('width:94%'));
+  assert.ok(!html.includes('width:6%'));
+});
+
+test('Chat relay cards display confirmed quota and distinguish unsupported usage from pending', () => {
+  const provider = { ...officialProvider, baseUrl: account.api_base_url!, integrationType: 'sub2api' as const };
+  const chat = { ...account, api_wire_api: 'chat_completions' as const };
+  function render(state: { loading: boolean; unavailable?: boolean; summary?: ModelProviderUsageSummary }) {
+    function Panel() {
+      const formatting = useCodexApiKeyUsageFormatting(t, String);
+      return renderCodexApiKeyUsagePanel({ account: chat, provider, usageState: state, t, ...formatting });
+    }
+    return renderToStaticMarkup(createElement(Panel));
+  }
+  assert.match(render({
+    loading: false,
+    summary: { mode: 'sub2api', remaining: 42, unit: 'USD', modelStatsCount: 0, latencyMs: 0 },
+  }), /\$42\.00/);
+  assert.match(render({ loading: false }), /等待查询额度/);
+  const unavailable = render({ loading: false, unavailable: true });
+  assert.match(unavailable, /暂无可查询额度/);
+  assert.doesNotMatch(unavailable, /等待查询额度/);
+});
+
 test('official missing daily usage stays unknown', () => {
   const html = renderSummary({ mode: 'openai_official', balance: 40, totalCost: 120 });
   assert.equal((html.match(/<strong>—<\/strong>/g) ?? []).length, 2);

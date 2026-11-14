@@ -15,7 +15,9 @@ libc = "0.2"
 futures-util = "0.3"
 axum = "0.8"
 http-body-util = "0.1"
-hyper = { version = "1", features = ["server", "http2"] }
+# Exercise the same HTTP/2 handshake and readiness versions as the App lockfile.
+hyper = { version = "=1.12.0", features = ["server", "http2"] }
+h2 = "=0.4.20"
 rcgen = "0.13"
 tokio-rustls = "0.26"
 tower-service = "0.3"

@@ -206,7 +206,7 @@ async fn native_run_model_provider_chat_test(
         let mut builder = client
             .post(format!("http://{}/v1/responses", handle.addr))
             .bearer_auth(&collection.api_key)
-            .header(ACCEPT, "application/json");
+            .header(ACCEPT, "text/event-stream, application/json");
         for (name, value) in [
             ("x-client-request-id", client_request_id.as_str()),
             ("x-agtools-test-run-id", request.run_id.as_str()),
@@ -215,23 +215,24 @@ async fn native_run_model_provider_chat_test(
         ] {
             builder = add_model_provider_test_header(builder, name, value);
         }
-        let response = builder.json(&json!({"model":client_model,"input":[{"type":"message","role":"user","content":[{"type":"input_text","text":request.prompt}]}],"instructions":"","stream":false,"store":false,"max_output_tokens":256,
+        let response = builder.json(&json!({"model":client_model,"input":[{"type":"message","role":"user","content":[{"type":"input_text","text":request.prompt}]}],"instructions":"","stream":true,"store":false,"max_output_tokens":256,
             "metadata":{"agtools_source":"codex_model_provider_batch_test","agtools_test_run_id":request.run_id,"agtools_provider_id":request.provider_id,"agtools_provider_name":request.provider_name,"agtools_provider_api_key_id":request.api_key_id,"agtools_provider_api_key_name":request.api_key_name,"agtools_wire_api":request.wire_api,"agtools_test_model":request.model_id,"agtools_client_model":client_model,"agtools_client_request_id":client_request_id}}))
             .send().await.map_err(|error|format!("Native provider test failed: {error}"))?;
         let status = response.status();
-        let text = response.text().await.map_err(|error| error.to_string())?;
         if !status.is_success() {
+            let text = response.text().await.map_err(|error| error.to_string())?;
             return Err(format!(
                 "Native provider test failed ({}): {}",
                 status.as_u16(),
                 extract_provider_gateway_test_error_message(&text)
             ));
         }
-        let parsed: Value = serde_json::from_str(&text).map_err(|error| error.to_string())?;
+        let (parsed, first_text_ms) = native_api::provider_test_stream::read(response, started).await?;
         let reply = extract_provider_gateway_test_output_text(&parsed)
             .ok_or_else(|| "Native provider test returned no text".to_string())?;
         Ok(CodexModelProviderGatewayChatTestResult {
             duration_ms: started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64,
+            first_text_ms,
             reply,
         })
     };
@@ -279,6 +280,12 @@ async fn native_start_profile_listener(
     .map_err(|_| "NATIVE_API_INVALID_ADDRESS".to_string())?;
     let options = native_api::Options {
         session_identity_mapping_enabled: collection.session_identity_mapping_enabled,
+        request_body_timeout: Some(Duration::from_millis(
+            collection
+                .timeouts
+                .legacy_request_read_timeout_ms
+                .clamp(1000, LOCAL_ACCESS_TIMEOUT_MAX_MS),
+        )),
         request_timeout: Duration::from_millis(
             collection
                 .timeouts

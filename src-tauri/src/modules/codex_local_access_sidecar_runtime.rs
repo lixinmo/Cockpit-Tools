@@ -53,7 +53,11 @@ fn sidecar_usage_event_is_client_canceled(event: &SidecarUsageEvent) -> bool {
     if sidecar_upstream_stream_error_category(event).is_some() {
         return false;
     }
-    if event.error_category.as_deref() == Some("client_canceled") {
+    if event
+        .error_category
+        .as_deref()
+        .is_some_and(is_client_canceled_error_category)
+    {
         let message = event.error_message.as_deref().unwrap_or_default();
         let is_upstream_context_cancel = matches!(event.status, Some(408 | 500..=599))
             && message.to_ascii_lowercase().contains("context canceled")
@@ -94,7 +98,10 @@ fn sidecar_usage_event_should_auto_restart(event: &SidecarUsageEvent) -> bool {
     // A caller can cancel its own request while the Sidecar is healthy. Do not
     // restart for those downstream disconnects, even when the transport reports
     // a generic gateway status.
-    if category.contains("client_disconnect")
+    if event.status == Some(499)
+        || (is_client_canceled_error_category(&category)
+            && sidecar_usage_event_is_client_canceled(event))
+        || category.contains("client_disconnect")
         || category.contains("downstream_client")
         || message.contains("client canceled")
         || message.contains("client disconnected")
@@ -335,6 +342,13 @@ fn normalized_sidecar_error_category(event: &SidecarUsageEvent) -> Option<String
     }
     if sidecar_usage_event_is_client_canceled(event) {
         return Some("client_canceled".to_string());
+    }
+    if event
+        .error_category
+        .as_deref()
+        .is_some_and(is_client_canceled_error_category)
+    {
+        return Some("gateway_context_canceled".to_string());
     }
     if event
         .error_message
@@ -1033,6 +1047,7 @@ async fn record_sidecar_usage_event(event: SidecarUsageEvent) {
         event.latency_ms,
         sidecar_usage_capture(&event.usage),
         RequestStatsMeta {
+            connection_source: None,
             authorization_route: Some("local_gateway"),
             gateway_mode: Some(CodexLocalAccessGatewayMode::Sidecar),
             proxy_route: event.proxy_route.as_ref(),
@@ -1582,6 +1597,7 @@ struct ProfileModelDefinition {
     display_name: String,
     template: Option<Value>,
     image_capable: Option<bool>,
+    context_window: Option<i64>,
 }
 
 impl ProfileModelDefinition {
@@ -1591,6 +1607,7 @@ impl ProfileModelDefinition {
             display_name: display_name.trim().to_string(),
             template: None,
             image_capable: None,
+            context_window: None,
         }
     }
 
@@ -1628,6 +1645,43 @@ fn provider_template_for_model(
         }
     }
     None
+}
+
+fn profile_model_account_context_window(
+    accounts: &[CodexAccount],
+    model_id: &str,
+) -> Option<i64> {
+    let mut selected = None;
+    for account in accounts {
+        let Some((_, upstream)) = automatic_api_service_account_model_slots(account)
+            .into_iter()
+            .find(|(client, _)| client.eq_ignore_ascii_case(model_id))
+        else {
+            continue;
+        };
+        if let Some(window) =
+            lookup_client_model_context_window(&account.api_model_context_windows, model_id)
+                .or_else(|| {
+                    lookup_client_model_context_window(
+                        &account.api_model_context_windows,
+                        &upstream,
+                    )
+                })
+        {
+            selected = Some(window);
+        }
+    }
+    selected
+}
+
+fn apply_profile_model_account_context_windows(
+    definitions: &mut [ProfileModelDefinition],
+    accounts: &[CodexAccount],
+) {
+    for definition in definitions {
+        definition.context_window =
+            profile_model_account_context_window(accounts, &definition.model_id);
+    }
 }
 
 fn write_local_access_profile_model_catalog(
@@ -1734,6 +1788,16 @@ fn apply_profile_model_definition_overrides(
                 object.insert(key.clone(), value.clone());
             }
         }
+        if let Some(window) = definition.context_window {
+            if let Some(object) = model.as_object_mut() {
+                object.insert("context_window".to_string(), json!(window));
+                object.insert("max_context_window".to_string(), json!(window));
+                object.insert(
+                    "auto_compact_token_limit".to_string(),
+                    json!(codex_protocol::derived_auto_compact_token_limit(window)),
+                );
+            }
+        }
         // DeepSeek 官方模板可能含 null，不能覆盖最终的协作声明。
         codex_protocol::apply_deepseek_multi_agent_capability(model);
         if let Some(vision) = definition.image_capable {
@@ -1800,6 +1864,7 @@ pub(crate) fn api_service_preview_model_definitions(
                     display_name: definition.display_name,
                     reasoning_efforts: None,
                     default_reasoning_effort: None,
+                    ultra_reasoning_effort: None,
                     context_window: None,
                     auto_compact_token_limit: None,
                 },
@@ -1920,6 +1985,7 @@ fn local_access_profile_model_definitions_with_accounts(profile_dir:&Path,collec
             image_capable,
         ));
     }
+    apply_profile_model_account_context_windows(&mut definitions, &pool_accounts);
     Ok(definitions)
 }
 
@@ -1987,19 +2053,19 @@ fn write_local_access_profile_client_models(
             err
         ));
     }
-    codex_account::cleanup_legacy_managed_model_catalogs(profile_dir);
     if catalog_changed {
         invalidate_codex_model_cache(profile_dir)?;
     }
 
     let config_path = profile_config_path(profile_dir);
     let mut doc = crate::modules::codex_config_format::load_codex_config_doc(&config_path)?;
-    if doc.get("model_catalog_json").and_then(|item| item.as_str()) == Some(catalog_file) {
-        return Ok(());
+    if doc.get("model_catalog_json").and_then(|item| item.as_str()) != Some(catalog_file) {
+        doc["model_catalog_json"] = value(catalog_file);
+        let content = crate::modules::codex_config_format::codex_config_doc_to_string(&mut doc);
+        crate::modules::codex_config_format::write_codex_config_toml_atomic(&config_path, &content)?;
     }
-    doc["model_catalog_json"] = value(catalog_file);
-    let content = crate::modules::codex_config_format::codex_config_doc_to_string(&mut doc);
-    crate::modules::codex_config_format::write_codex_config_toml_atomic(&config_path, &content)
+    codex_account::cleanup_legacy_managed_model_catalogs(profile_dir);
+    Ok(())
 }
 
 /// 客户端模型目录里是否已有官方 GPT / Codex 模型（或用户显式列出的 `gpt-reserve`）。
@@ -2048,28 +2114,56 @@ fn write_local_access_realtime_sideband_override(
     collection: &CodexLocalAccessCollection,
     api_key: &str,
 ) -> Result<(), String> {
-    write_local_access_realtime_sideband_override_with_ownership(
+    if !profile_api_key_uses_oauth_realtime(collection, api_key) {
+        return Ok(());
+    }
+    write_local_access_profile_transport_config(
         profile_dir,
         collection,
         api_key,
         None,
+        false,
     )
 }
 
-fn write_local_access_realtime_sideband_override_with_ownership(
+fn write_local_access_profile_transport_config(
     profile_dir: &Path,
     collection: &CodexLocalAccessCollection,
     api_key: &str,
     managed_realtime_sideband: Option<&str>,
+    client_controls_speed: bool,
 ) -> Result<(), String> {
-    if !profile_api_key_uses_oauth_realtime(collection, api_key) {
-        return Ok(());
-    }
+    use crate::modules::codex_speed::{CLIENT_SERVICE_TIER_HEADER, CLIENT_SERVICE_TIER_VALUE};
+
     let path = profile_config_path(profile_dir);
     let content = std::fs::read_to_string(&path)
-        .map_err(|error| format!("读取 Codex 语音接管配置失败: {}", error))?;
+        .map_err(|error| format!("读取 Codex API 服务接管配置失败: {}", error))?;
     let mut doc = crate::modules::codex_config_format::read_codex_config_doc_from_str(&content)
-        .map_err(|error| format!("解析 Codex 语音接管配置失败: {}", error))?;
+        .map_err(|error| format!("解析 Codex API 服务接管配置失败: {}", error))?;
+    let mut changed = false;
+    if let Some(provider) = doc.get_mut("model_providers")
+        .and_then(|providers| providers.get_mut(CODEX_LOCAL_ACCESS_RUNTIME_PROVIDER_ID))
+        .and_then(|provider| provider.as_table_mut())
+    {
+        if client_controls_speed {
+            if provider_header_value(provider, CLIENT_SERVICE_TIER_HEADER)
+                .as_ref().and_then(toml_edit::Value::as_str) != Some(CLIENT_SERVICE_TIER_VALUE)
+            {
+                set_provider_header_value(
+                    provider, CLIENT_SERVICE_TIER_HEADER, CLIENT_SERVICE_TIER_VALUE.into(),
+                );
+                changed = true;
+            }
+        } else if let Some(headers) = provider.get_mut("http_headers") {
+            changed = if let Some(headers) = headers.as_inline_table_mut() {
+                headers.remove(CLIENT_SERVICE_TIER_HEADER).is_some()
+            } else if let Some(headers) = headers.as_table_mut() {
+                headers.remove(CLIENT_SERVICE_TIER_HEADER).is_some()
+            } else {
+                false
+            };
+        }
+    }
     // WebRTC sideband ignores model provider.base_url by default but reuses its
     // bearer. Keep call creation and sideband on the same gateway/account.
     // Explicit user overrides for call creation or sideband are outside Cockpit's ownership.
@@ -2078,24 +2172,25 @@ fn write_local_access_realtime_sideband_override_with_ownership(
             .and_then(|item| item.as_str())
             .is_some_and(|current| current.trim_end_matches('/') == managed.trim_end_matches('/'))
     });
-    if (doc.get("experimental_realtime_ws_base_url").is_some() && !sideband_is_still_owned)
-        || doc
-            .get("experimental_realtime_webrtc_call_base_url")
-            .is_some()
+    if profile_api_key_uses_oauth_realtime(collection, api_key)
+        && (doc.get("experimental_realtime_ws_base_url").is_none() || sideband_is_still_owned)
+        && doc.get("experimental_realtime_webrtc_call_base_url").is_none()
     {
+        doc["experimental_realtime_ws_base_url"] = value(build_collection_base_url(collection));
+        changed = true;
+    }
+    if !changed {
         return Ok(());
     }
-    doc["experimental_realtime_ws_base_url"] = value(build_collection_base_url(collection));
     let content = crate::modules::codex_config_format::codex_config_doc_to_string(&mut doc);
     crate::modules::codex_config_format::write_codex_config_toml_atomic(&path, &content)
 }
 
-async fn write_local_access_profile_takeover(
+async fn write_local_access_profile_credentials(
     profile_dir: &Path,
     collection: &CodexLocalAccessCollection,
     api_key: Option<&str>,
-    include_account_pool_models: bool,
-) -> Result<(), String> {
+) -> Result<(String, bool), String> {
     let bound_oauth_account_id =
         normalize_optional_account_ref(collection.bound_oauth_account_id.as_deref());
     if let Some(bound_id) = bound_oauth_account_id.as_deref() {
@@ -2130,12 +2225,25 @@ async fn write_local_access_profile_takeover(
         }
     }
     codex_account::write_account_bundle_to_dir(profile_dir, &runtime_account)?;
-    write_local_access_realtime_sideband_override_with_ownership(
+    write_local_access_profile_transport_config(
         profile_dir,
         collection,
         &runtime_api_key,
         managed_realtime_sideband.as_deref(),
+        // A profile-specific key belongs to its own provider gateway.
+        api_key.is_none(),
     )?;
+    Ok((runtime_api_key, supports_websockets))
+}
+
+async fn write_local_access_profile_takeover(
+    profile_dir: &Path,
+    collection: &CodexLocalAccessCollection,
+    api_key: Option<&str>,
+    include_account_pool_models: bool,
+) -> Result<(), String> {
+    let (runtime_api_key, supports_websockets) =
+        write_local_access_profile_credentials(profile_dir, collection, api_key).await?;
     let definitions = local_access_profile_model_definitions(
         profile_dir,
         collection,
@@ -2491,6 +2599,7 @@ fn normalize_api_key_label(label: Option<&str>, fallback: &str) -> String {
 fn build_local_access_api_key(label: Option<&str>) -> CodexLocalAccessApiKey {
     let now = now_ms();
     CodexLocalAccessApiKey {
+        max_reasoning_effort: None,
         id: generate_local_api_key_id(),
         label: normalize_api_key_label(label, &default_local_api_key_label()),
         key: generate_local_api_key(),
@@ -2525,6 +2634,7 @@ fn normalize_collection_api_keys(collection: &mut CodexLocalAccessCollection) ->
             collection.api_key.trim().to_string()
         };
         collection.api_keys.push(CodexLocalAccessApiKey {
+            max_reasoning_effort: None,
             id: generate_local_api_key_id(),
             label: default_local_api_key_label(),
             key,

@@ -165,13 +165,7 @@ async fn native_credits_send_guard_observes_exhaustion_and_preserves_other_windo
     )
     .await
     .unwrap();
-    let guard = NativeCreditsGuard {
-        pool,
-        account_id: source.id.clone(),
-        official: false,
-        identity: Some(native_credits_identity(&source)),
-        identity_changed: false,
-    };
+    let guard = native_credits_guard(&pool, &route(&source));
     use native_contract::UpstreamAdmissionGuard;
     guard.check().unwrap();
     let mut headers = axum::http::HeaderMap::new();
@@ -587,7 +581,7 @@ fn route(account: &CodexAccount) -> native_contract::Route {
         official_fallback_authorization_revision: None,
         authorization_scope_fingerprint: None,
         send_guard: None,
-        quota_identity: Some(native_credits_identity(account)),
+        quota_identity: native_credits_applies(account).then(|| native_credits_identity(account)),
         official_fallback_failure: None,
         base_url: "https://example.invalid".into(),
         model: "gpt-6.1-sol".into(),
@@ -632,6 +626,15 @@ async fn native_credits_final_identity_checks_workspace_organization_and_agent_p
     native_credits_guard(&pool, &route(&rotated))
         .check()
         .unwrap();
+    let mut provider_snapshot = pool.clone();
+    provider_snapshot.members[0].applies = false;
+    let mut local_route = route(&source);
+    assert_eq!(
+        native_attach_credits_guard(&provider_snapshot, &mut local_route)
+            .unwrap_err()
+            .code,
+        "credits_quota_unconfirmed"
+    );
     for change in 0..4 {
         let mut changed = source.clone();
         match change {
@@ -718,6 +721,7 @@ async fn native_credits_grok_final_identity_remains_exempt_and_never_supplies_co
     let final_identity = native_credits_identity(&final_account);
     let mut final_route = route(&final_account);
     assert!(final_route.chatgpt);
+    assert!(final_route.quota_identity.is_none());
     native_attach_credits_guard(&pool, &mut final_route).unwrap();
     let guard = final_route.send_guard.unwrap();
     guard.check().unwrap();

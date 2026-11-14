@@ -58,6 +58,13 @@ tao = { path = "vendor/tao" }
 hyper-util = { path = "vendor/hyper-util-0.1.20" }
 reqwest = { path = "vendor/reqwest-0.12.28" }
 
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package.cockpit-tools]
+# Keep macOS rebuilds from retaining a fresh set of .rcgu.o files (rust-lang/rust#161824).
+split-debuginfo = "packed"
+
 [profile.ci]
 inherits = "release"
 opt-level = 0

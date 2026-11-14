@@ -30,7 +30,21 @@ change Native retry, Credits, model configuration or Reset automation.
 - Account-state preparation precedes the generic project planner. A later
   deferred maintenance result does not undo its already committed account state.
 
-## Upstream review (2026-11-12)
+## Upstream review (2026-11-14)
+
+Upstream `v1.3.84` at `0c96cf74` removed the 2 MB quick-repair gate and gives
+larger state files more time within the existing launch deadline. Project-only
+repair, verified sidebar presentation, and SSH preference restoration use the
+upstream implementations. The fork still removes the total thread-count gates
+from project planning and commit-time revalidation. Account-state preparation
+reads memberships within the upstream separate budget. If the read times out,
+it uses the upstream saved-membership query with the remaining launch time.
+
+The isolated recovery suite passed 66 tests with one opt-in preview excluded.
+It covered the large-profile round trip, large state and backup files, the slow
+SQLite fallback, sidebar presentation, and SSH state and startup restoration.
+
+## Earlier upstream review (2026-11-12)
 
 Upstream `v1.3.81` and `upstream/main` at `7ca7f0db` restore project groups
 earlier and prepare the stopped instance's project state for a switch followed

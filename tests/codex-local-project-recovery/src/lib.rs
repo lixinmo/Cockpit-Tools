@@ -1,7 +1,7 @@
 //! Isolated tests of the actual local-project planner, transactional storage,
 //! account renderer-state bridge, launch deadline and atomic file writer.
 //!
-//! The recovery module and its unit tests are imported directly. Its four tests
+//! The recovery module and its unit tests are imported directly. Tests
 //! of the enclosing desktop/session orchestration remain in the full App suite;
 //! this crate does not replace them with mocks or claim to validate process-stop
 //! detection, credential-owner resolution, UI entry points or history rebuilding.
@@ -16,8 +16,12 @@ use std::{collections::HashSet, ffi::OsStr, fs, path::{Path, PathBuf}, sync::Mut
 #[path = "../../../src-tauri/src/modules/atomic_write.rs"]
 pub mod atomic_write;
 
+#[path = "../../../src-tauri/src/modules/ssh_server_identity.rs"]
+pub mod ssh_server_identity;
+
 pub mod modules {
     pub use crate::atomic_write;
+    pub use crate::ssh_server_identity;
 
     pub mod logger {
         pub fn log_warn(message: &str) {

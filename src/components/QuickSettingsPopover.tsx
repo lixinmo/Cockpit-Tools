@@ -3,6 +3,10 @@ import { resolveCodexAccountDisplayName } from "../utils/codexAccountDisplayName
 import { CodexRefreshPlanScopeControl } from './CodexRefreshPlanScopeControl';
 import { CodexRequestPayloadSetting } from './codex/CodexRequestPayloadSetting';
 import { CodexOverloadRetrySetting } from './codex/CodexOverloadRetrySetting';
+import { CodexQuotaRecoverySettings } from './codex/CodexQuotaRecoverySettings';
+import { CodexQuotaHistorySettings } from './codex/CodexQuotaHistorySettings';
+import { CodexProxyDirectHosts } from './codex/CodexProxyDirectHosts';
+import { SingleSelectDropdown } from './SingleSelectDropdown';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
@@ -16,9 +20,10 @@ import {
   Terminal,
   Zap,
   X,
-  EyeOff,
+  Wallet,
 } from 'lucide-react';
 import { useEscClose } from '../hooks/useEscClose';
+import { antigravityAppPathTarget, DEFAULT_ANTIGRAVITY_RUNTIME_TARGET, type AntigravityRuntimeTarget } from '../utils/antigravityRuntimeTarget';
 import * as accountService from '../services/accountService';
 import * as codexService from '../services/codexService';
 import { getAccountGroups, type AccountGroup } from '../services/accountGroupService';
@@ -35,7 +40,8 @@ import {
   buildAccountTierCounts,
   buildAccountTierFilterOptions,
 } from '../utils/accountFilters';
-import { getSubscriptionTier } from '../utils/account';
+import { getAntigravityTierBadge, getSubscriptionTier } from '../utils/account';
+import { CodexAccountPlanBadge } from './codex/CodexAccountPlanBadge';
 import {
   getCodexPlanBadgeStyle,
   isCodexAdditionalQuotaVisibleByDefault,
@@ -54,6 +60,7 @@ import {
   buildDefaultCurrentAccountRefreshMinutesMap,
   type CurrentAccountRefreshMinutesMap,
   type CurrentAccountRefreshPlatform,
+  CURRENT_ACCOUNT_REFRESH_PREFERENCES_CHANGED_EVENT,
   loadCurrentAccountRefreshMinutesMap,
   saveCurrentAccountRefreshMinutesMap,
 } from '../utils/currentAccountRefresh';
@@ -67,6 +74,7 @@ import type {
 import { getDisplayGroups, type DisplayGroup } from '../services/groupService';
 import { useRemoteConfigStore } from '../stores/useRemoteConfigStore';
 import { usePlatformRuntimeSupport } from '../hooks/usePlatformRuntimeSupport';
+import { AntigravityMenuBarQuotaSelect } from './AntigravityMenuBarQuotaSelect';
 import {
   readAccountsOverviewFilterPersistenceEnabled,
   resolveAccountsOverviewScopeFromQuickSettingsType,
@@ -114,8 +122,10 @@ interface GeneralConfig {
   minimize_behavior?: 'dock_and_tray' | 'tray_only';
   hide_dock_icon?: boolean;
   tray_icon_style?: 'template' | 'color';
+  menu_bar_antigravity_metric?: string;
   opencode_app_path: string;
   antigravity_app_path: string;
+  antigravity_legacy_app_path: string;
   codex_app_path: string;
   claude_app_path: string;
   claude_app_scan_roots: string;
@@ -164,6 +174,9 @@ interface GeneralConfig {
   auto_switch_threshold: number;
   auto_switch_credits_enabled: boolean;
   auto_switch_credits_threshold: number;
+  auto_switch_window_thresholds_enabled?: boolean;
+  auto_switch_five_hour_threshold?: number;
+  auto_switch_weekly_threshold?: number;
   auto_switch_scope_mode: string;
   auto_switch_selected_group_ids: string[];
   auto_switch_account_scope_mode?: string;
@@ -298,7 +311,9 @@ type CodexWindowThresholdKey =
   | 'codex_auto_switch_primary_threshold'
   | 'codex_auto_switch_secondary_threshold'
   | 'codex_quota_alert_primary_threshold'
-  | 'codex_quota_alert_secondary_threshold';
+  | 'codex_quota_alert_secondary_threshold'
+  | 'auto_switch_five_hour_threshold'
+  | 'auto_switch_weekly_threshold';
 
 type AppLaunchCandidate = {
   target_type: string;
@@ -311,8 +326,9 @@ type AppLaunchCandidate = {
 const getAppPathKeyForTarget = (target: AppPathTarget): keyof GeneralConfig => {
   switch (target) {
     case 'antigravity':
-    case 'antigravity_legacy':
       return 'antigravity_app_path';
+    case 'antigravity_legacy':
+      return 'antigravity_legacy_app_path';
     case 'codex':
       return 'codex_app_path';
     case 'claude':
@@ -352,6 +368,7 @@ const getAppPathKeyForTarget = (target: AppPathTarget): keyof GeneralConfig => {
 
 interface QuickSettingsPopoverProps {
   type: QuickSettingsType;
+  antigravityRuntimeTarget?: AntigravityRuntimeTarget;
 }
 
 const AUTO_SWITCH_SCOPE_ALL_ACCOUNTS: AutoSwitchAccountScopeMode = 'all_accounts';
@@ -409,9 +426,13 @@ const normalizeAutoSwitchAccountScopeMode = (
     ? AUTO_SWITCH_SCOPE_SELECTED_ACCOUNTS
     : AUTO_SWITCH_SCOPE_ALL_ACCOUNTS;
 
-export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
+export function QuickSettingsPopover({
+  type,
+  antigravityRuntimeTarget = DEFAULT_ANTIGRAVITY_RUNTIME_TARGET,
+}: QuickSettingsPopoverProps) {
   const { t } = useTranslation();
   const isWindows = usePlatformRuntimeSupport('windows-only');
+  const isMacOS = usePlatformRuntimeSupport('macos-only');
   const remoteCodexOAuthAppVersion = useRemoteConfigStore(
     (state) => state.state.codexOAuthAppVersion,
   );
@@ -456,6 +477,8 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
   const [codexAutoSwitchSecondaryCustomThreshold, setCodexAutoSwitchSecondaryCustomThreshold] = useState('');
   const [codexQuotaAlertPrimaryCustomThreshold, setCodexQuotaAlertPrimaryCustomThreshold] = useState('');
   const [codexQuotaAlertSecondaryCustomThreshold, setCodexQuotaAlertSecondaryCustomThreshold] = useState('');
+  const [agFiveHourCustomThreshold, setAgFiveHourCustomThreshold] = useState('');
+  const [agWeeklyCustomThreshold, setAgWeeklyCustomThreshold] = useState('');
   const [autoSwitchDisplayGroups, setAutoSwitchDisplayGroups] = useState<DisplayGroup[]>([]);
   const [antigravityAccounts, setAntigravityAccounts] = useState<Account[]>([]);
   const [antigravityAccountGroups, setAntigravityAccountGroups] = useState<AccountGroup[]>([]);
@@ -497,9 +520,11 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
             : disabledReason === 'tos_violation'
               ? 'TOS_VIOLATION'
               : getSubscriptionTier(account.quota);
+        const badge = getAntigravityTierBadge(account.quota);
         return {
           id: account.id,
           label: account.email,
+          badge: <span className={`tier-badge ${badge.className}`}>{badge.label}</span>,
           searchableText: account.email,
           tags: account.tags || [],
           type: typeValue,
@@ -521,6 +546,7 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
       codexAccounts.map((account) => ({
         id: account.id,
         label: resolveCodexAccountDisplayName(account, t("common.apiKeyAccount")),
+        badge: <CodexAccountPlanBadge account={account} />,
         searchableText: [resolveCodexAccountDisplayName(account, t("common.apiKeyAccount")), account.email, account.api_base_url].join(" "),
         tags: account.tags || [],
       })),
@@ -785,6 +811,8 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
       setCodexAutoSwitchSecondaryCustomThreshold(String(cfg.codex_auto_switch_secondary_threshold));
       setCodexQuotaAlertPrimaryCustomThreshold(String(cfg.codex_quota_alert_primary_threshold));
       setCodexQuotaAlertSecondaryCustomThreshold(String(cfg.codex_quota_alert_secondary_threshold));
+      setAgFiveHourCustomThreshold(String(cfg.auto_switch_five_hour_threshold ?? 5));
+      setAgWeeklyCustomThreshold(String(cfg.auto_switch_weekly_threshold ?? 5));
       setAppLaunchCandidates([]);
     } catch (err) {
       if (loadVersion !== configLoadVersionRef.current) {
@@ -896,10 +924,7 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
         setAppLaunchCandidates(candidates);
         if (candidates.length === 0) {
           setError(
-            t(
-              'quickSettings.appPath.scanEmpty',
-              '未检测到正在运行的应用，请先启动后重试，或手动选择路径。',
-            ),
+            t('appPath.missing.scanEmpty'),
           );
         }
       } catch (err) {
@@ -995,11 +1020,11 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
         case 'trae':
           return 'Trae';
         case 'trae_solo':
-          return 'TRAE SOLO';
+          return t('nav.traeSolo');
         case 'trae_cn':
           return 'Trae CN';
         case 'trae_solo_cn':
-          return 'TRAE SOLO CN';
+          return t('nav.traeSoloCn');
         case 'workbuddy':
           return 'WorkBuddy';
         case 'minimaxcode':
@@ -1018,11 +1043,11 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
       case 'trae':
         return 'Trae';
       case 'trae_solo':
-        return 'TRAE SOLO';
+        return t('nav.traeSolo');
       case 'trae_cn':
         return 'Trae CN';
       case 'trae_solo_cn':
-        return 'TRAE SOLO CN';
+        return t('nav.traeSoloCn');
       default:
         return '';
     }
@@ -1176,7 +1201,9 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
     if (!config) return '';
     switch (type) {
       case 'antigravity':
-        return config.antigravity_app_path;
+        return antigravityRuntimeTarget === 'antigravity'
+          ? config.antigravity_legacy_app_path
+          : config.antigravity_app_path;
       case 'codex':
         return config.codex_app_path;
       case 'claude':
@@ -1221,7 +1248,9 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
   const getAppPathLabel = () => {
     switch (type) {
       case 'antigravity':
-        return t('quickSettings.antigravity.appPath', '启动路径');
+        return t('settings.general.antigravityAppPath', {
+          appName: antigravityRuntimeTarget === 'antigravity' ? 'Antigravity' : 'Antigravity IDE',
+        });
       case 'codex':
         return t('quickSettings.codex.appPath', '启动路径');
       case 'claude':
@@ -1247,13 +1276,13 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
       case 'trae':
         return t('quickSettings.trae.appPath', 'Trae 路径');
       case 'trae_solo':
-        return t('quickSettings.traeSolo.appPath', 'TRAE SOLO 路径');
+        return t('quickSettings.traeSolo.appPath', 'TraeWork 路径');
       case 'trae_cn':
         return t('quickSettings.traeCn.appPath', 'Trae CN 路径');
       case 'trae_solo_cn':
-        return t('quickSettings.traeSoloCn.appPath', 'TRAE SOLO CN 路径');
+        return t('quickSettings.traeSoloCn.appPath', 'TraeWork CN 路径');
       case 'workbuddy':
-        return t('quickSettings.workbuddy.appPath', 'WorkBuddy 路径');
+        return t('settings.general.workbuddyAppPath');
       case 'minimaxcode':
         return t('quickSettings.minimaxCode.appPath', 'MiniMax Code 路径');
       case 'zed':
@@ -1264,7 +1293,7 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
   const getAppTarget = (): AppPathTarget => {
     switch (type) {
       case 'antigravity':
-        return 'antigravity_legacy';
+        return antigravityAppPathTarget(antigravityRuntimeTarget);
       case 'codex':
         return 'codex';
       case 'claude':
@@ -1346,6 +1375,9 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
   const codexAutoSwitchSecondaryThresholdValue = config
     ? Number(config.codex_auto_switch_secondary_threshold)
     : 20;
+  const agWindowThresholdsEnabled = config?.auto_switch_window_thresholds_enabled ?? false;
+  const agFiveHourThresholdValue = Number(config?.auto_switch_five_hour_threshold ?? 5);
+  const agWeeklyThresholdValue = Number(config?.auto_switch_weekly_threshold ?? 5);
   const codexQuotaAlertPrimaryThresholdValue = config
     ? Number(config.codex_quota_alert_primary_threshold)
     : 20;
@@ -1412,14 +1444,17 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
     setRefreshEditing(false);
   };
 
+  useEffect(() => {
+    const reload = () => setCurrentAccountRefreshMap(loadCurrentAccountRefreshMinutesMap());
+    window.addEventListener(CURRENT_ACCOUNT_REFRESH_PREFERENCES_CHANGED_EVENT, reload);
+    reload();
+    return () => window.removeEventListener(CURRENT_ACCOUNT_REFRESH_PREFERENCES_CHANGED_EVENT, reload);
+  }, []);
+
   const saveCurrentAccountRefresh = (minutes: number) => {
-    setCurrentAccountRefreshMap((prev) => {
-      const next = saveCurrentAccountRefreshMinutesMap({
-        ...prev,
-        [currentAccountRefreshPlatform]: minutes,
-      });
-      window.dispatchEvent(new Event('config-updated'));
-      return next;
+    saveCurrentAccountRefreshMinutesMap({
+      ...loadCurrentAccountRefreshMinutesMap(),
+      [currentAccountRefreshPlatform]: minutes,
     });
   };
 
@@ -1652,7 +1687,7 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
                 </div>
 
                 <div className="qs-hint" style={{ marginTop: 0, marginBottom: 4 }}>
-                  {t('quickSettings.codexWindow.orDivider', 'OR（命中任一即触发）')}
+                  {t('quickSettings.codexWindow.orDivider')}
                 </div>
 
                 <div className="qs-row">
@@ -1728,22 +1763,22 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
                       <span className="qs-input-unit">%</span>
                     </div>
                   ) : (
-                    <select
-                      className="qs-select"
+                    <SingleSelectDropdown
+                      className="qs-dropdown"
                       value={String(quotaAlertThresholdValue)}
-                      onChange={(e) => handleQuotaAlertThresholdSelectChange(e.target.value)}
-                    >
-                      {!isQuotaAlertThresholdPreset && (
-                        <option value={String(quotaAlertThresholdValue)}>
-                          {quotaAlertThresholdValue}%
-                        </option>
-                      )}
-                      <option value="0">0%</option>
-                      <option value="20">20%</option>
-                      <option value="40">40%</option>
-                      <option value="60">60%</option>
-                      <option value="custom">{t('quickSettings.customInput', '自定义')}</option>
-                    </select>
+                      ariaLabel={t('quickSettings.quotaAlert.threshold', '预警阈值')}
+                      options={[
+                        ...(!isQuotaAlertThresholdPreset
+                          ? [{ value: String(quotaAlertThresholdValue), label: `${quotaAlertThresholdValue}%` }]
+                          : []),
+                        { value: '0', label: '0%' },
+                        { value: '20', label: '20%' },
+                        { value: '40', label: '40%' },
+                        { value: '60', label: '60%' },
+                        { value: 'custom', label: t('quickSettings.customInput', '自定义') },
+                      ]}
+                      onChange={handleQuotaAlertThresholdSelectChange}
+                    />
                   )}
                 </div>
               </div>
@@ -1914,6 +1949,7 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
                   onChange={(value) => void saveConfig({ codex_auto_refresh_plan_types: value })} />
                 <CodexRequestPayloadSetting />
                 <CodexOverloadRetrySetting />
+                <CodexProxyDirectHosts />
                 <CodexAppEnhancementSettings variant="quick" onError={setError} />
               </div>
             )}
@@ -2139,11 +2175,11 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
                 <CodexContextManagementControl variant="quick" active={isOpen && type === 'codex'} />
                 <div className="qs-row" style={{ marginTop: 8 }}>
                   <div className="qs-row-label">
-                    <EyeOff size={15} />
+                    <Wallet size={15} />
                     <span>
                       {t(
                         'settings.general.codexHideRelayQuota',
-                        '隐藏中转站额度',
+                        '余额开关',
                       )}
                     </span>
                   </div>
@@ -2151,10 +2187,10 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
                     <label className="qs-switch">
                       <input
                         type="checkbox"
-                        checked={config.codex_hide_relay_quota ?? false}
+                        checked={!config.codex_hide_relay_quota}
                         onChange={(e) =>
                           saveConfig({
-                            codex_hide_relay_quota: e.target.checked,
+                            codex_hide_relay_quota: !e.target.checked,
                           })
                         }
                       />
@@ -2165,7 +2201,7 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
                 <div className="qs-hint">
                   {t(
                     'settings.general.codexHideRelayQuotaDesc',
-                    '开启后，Codex 账号总览隐藏中转 / New API 类额度面板，减轻列表重叠与视觉干扰。',
+                    '关闭后，隐藏 Codex 中转站余额，并停止自动和手动余额查询。',
                   )}
                 </div>
               </div>
@@ -2199,23 +2235,23 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
                     <span className="qs-input-unit">{t('settings.general.minutes')}</span>
                   </div>
                 ) : (
-                  <select
-                    className="qs-select"
+                  <SingleSelectDropdown
+                    className="qs-dropdown"
                     value={String(refreshValue)}
-                    onChange={(e) => handleRefreshSelectChange(e.target.value)}
-                  >
-                    {!isPreset && (
-                      <option value={String(refreshValue)}>
-                        {refreshValue} {t('settings.general.minutes')}
-                      </option>
-                    )}
-                    <option value="-1">{t('settings.general.autoRefreshDisabled')}</option>
-                    <option value="2">2 {t('settings.general.minutes')}</option>
-                    <option value="5">5 {t('settings.general.minutes')}</option>
-                    <option value="10">10 {t('settings.general.minutes')}</option>
-                    <option value="15">15 {t('settings.general.minutes')}</option>
-                    <option value="custom">{t('quickSettings.customInput', '自定义')}</option>
-                  </select>
+                    ariaLabel={getRefreshLabel()}
+                    options={[
+                      ...(!isPreset
+                        ? [{ value: String(refreshValue), label: `${refreshValue} ${t('settings.general.minutes')}` }]
+                        : []),
+                      { value: '-1', label: t('settings.general.autoRefreshDisabled') },
+                      { value: '2', label: `2 ${t('settings.general.minutes')}` },
+                      { value: '5', label: `5 ${t('settings.general.minutes')}` },
+                      { value: '10', label: `10 ${t('settings.general.minutes')}` },
+                      { value: '15', label: `15 ${t('settings.general.minutes')}` },
+                      { value: 'custom', label: t('quickSettings.customInput', '自定义') },
+                    ]}
+                    onChange={handleRefreshSelectChange}
+                  />
                 )}
               </div>
             </div>
@@ -2249,27 +2285,27 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
                     <span className="qs-input-unit">{t('settings.general.minutes')}</span>
                   </div>
                 ) : (
-                  <select
-                    className="qs-select"
+                  <SingleSelectDropdown
+                    className="qs-dropdown"
                     value={currentAccountRefreshDisplayValue}
-                    onChange={(e) => handleCurrentAccountRefreshSelectChange(e.target.value)}
                     disabled={!isCurrentAccountRefreshAllowed}
-                  >
-                    {!isCurrentAccountRefreshAllowed && (
-                      <option value="-1">{t('settings.general.autoRefreshDisabled')}</option>
-                    )}
-                    {!isCurrentAccountRefreshPreset && (
-                      <option value={String(currentAccountRefreshValue)}>
-                        {currentAccountRefreshValue} {t('settings.general.minutes')}
-                      </option>
-                    )}
-                    <option value="1">1 {t('settings.general.minutes')}</option>
-                    <option value="2">2 {t('settings.general.minutes')}</option>
-                    <option value="5">5 {t('settings.general.minutes')}</option>
-                    <option value="10">10 {t('settings.general.minutes')}</option>
-                    <option value="15">15 {t('settings.general.minutes')}</option>
-                    <option value="custom">{t('quickSettings.customInput', '自定义')}</option>
-                  </select>
+                    ariaLabel={t('settings.general.currentAccountRefreshTitle')}
+                    options={[
+                      ...(!isCurrentAccountRefreshAllowed
+                        ? [{ value: '-1', label: t('settings.general.autoRefreshDisabled') }]
+                        : []),
+                      ...(!isCurrentAccountRefreshPreset
+                        ? [{ value: String(currentAccountRefreshValue), label: `${currentAccountRefreshValue} ${t('settings.general.minutes')}` }]
+                        : []),
+                      { value: '1', label: `1 ${t('settings.general.minutes')}` },
+                      { value: '2', label: `2 ${t('settings.general.minutes')}` },
+                      { value: '5', label: `5 ${t('settings.general.minutes')}` },
+                      { value: '10', label: `10 ${t('settings.general.minutes')}` },
+                      { value: '15', label: `15 ${t('settings.general.minutes')}` },
+                      { value: 'custom', label: t('quickSettings.customInput', '自定义') },
+                    ]}
+                    onChange={handleCurrentAccountRefreshSelectChange}
+                  />
                 )}
                 <div className="qs-hint" style={{ marginTop: 6 }}>
                   {isCurrentAccountRefreshAllowed
@@ -2815,18 +2851,18 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
                     <span>{t('codex.list.planBadgeStyle', '套餐徽章样式')}</span>
                   </div>
                   <div className="qs-row-control">
-                    <select
-                      className="qs-select"
+                    <SingleSelectDropdown
+                      className="qs-dropdown"
                       value={codexPlanBadgeStyle}
-                      onChange={(e) =>
-                        handleCodexPlanBadgeStyleChange(e.target.value as CodexPlanBadgeStyle)
-                      }
-                    >
-                      <option value="default">{t('codex.list.planBadgeStyleDefault', '默认')}</option>
-                      <option value="outline">{t('codex.list.planBadgeStyleOutline', '描边')}</option>
-                      <option value="soft">{t('codex.list.planBadgeStyleSoft', '柔和')}</option>
-                      <option value="mono">{t('codex.list.planBadgeStyleMono', '单色')}</option>
-                    </select>
+                      ariaLabel={t('codex.list.planBadgeStyle', '套餐徽章样式')}
+                      options={[
+                        { value: 'default', label: t('codex.list.planBadgeStyleDefault', '默认') },
+                        { value: 'outline', label: t('codex.list.planBadgeStyleOutline', '描边') },
+                        { value: 'soft', label: t('codex.list.planBadgeStyleSoft', '柔和') },
+                        { value: 'mono', label: t('codex.list.planBadgeStyleMono', '单色') },
+                      ]}
+                      onChange={(value) => handleCodexPlanBadgeStyleChange(value as CodexPlanBadgeStyle)}
+                    />
                   </div>
                 </div>
 
@@ -2900,7 +2936,7 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
                       </div>
 
                       <div className="qs-hint" style={{ marginTop: 0, marginBottom: 4 }}>
-                        {t('quickSettings.codexWindow.orDivider', 'OR（命中任一即触发）')}
+                        {t('quickSettings.codexWindow.orDivider')}
                       </div>
 
                       <div className="qs-row">
@@ -3171,25 +3207,105 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
                             <span className="qs-input-unit">%</span>
                           </div>
                         ) : (
-                          <select
-                            className="qs-select"
+                          <SingleSelectDropdown
+                            className="qs-dropdown"
                             value={String(config.auto_switch_threshold)}
-                            onChange={(e) => handleThresholdSelectChange(e.target.value)}
-                          >
-                            {!isThresholdPreset && (
-                              <option value={String(config.auto_switch_threshold)}>
-                                {config.auto_switch_threshold}%
-                              </option>
-                            )}
-                            <option value="0">0%</option>
-                            <option value="20">20%</option>
-                            <option value="40">40%</option>
-                            <option value="60">60%</option>
-                            <option value="custom">{t('quickSettings.customInput', '自定义')}</option>
-                          </select>
+                            ariaLabel={t('quickSettings.autoSwitch.threshold', '切号阈值')}
+                            options={[
+                              ...(!isThresholdPreset
+                                ? [{ value: String(config.auto_switch_threshold), label: `${config.auto_switch_threshold}%` }]
+                                : []),
+                              { value: '0', label: '0%' },
+                              { value: '20', label: '20%' },
+                              { value: '40', label: '40%' },
+                              { value: '60', label: '60%' },
+                              { value: 'custom', label: t('quickSettings.customInput', '自定义') },
+                            ]}
+                            onChange={handleThresholdSelectChange}
+                          />
                         )}
                       </div>
                     </div>
+
+                    <div className="qs-row">
+                      <div className="qs-row-label">
+                        <span>
+                          {t('quickSettings.autoSwitch.windowThresholdsEnable', '按 5h / 周额度分别设阈值')}
+                        </span>
+                      </div>
+                      <div className="qs-row-control">
+                        <label className="qs-switch">
+                          <input
+                            type="checkbox"
+                            checked={agWindowThresholdsEnabled}
+                            onChange={(e) =>
+                              saveConfig({ auto_switch_window_thresholds_enabled: e.target.checked })
+                            }
+                          />
+                          <span className="qs-switch-slider"></span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {agWindowThresholdsEnabled && (
+                      <>
+                        {(
+                          [
+                            [
+                              'auto_switch_five_hour_threshold',
+                              t('quickSettings.autoSwitch.fiveHourThreshold', '5h 额度切号阈值'),
+                              agFiveHourCustomThreshold,
+                              setAgFiveHourCustomThreshold,
+                              agFiveHourThresholdValue,
+                            ],
+                            [
+                              'auto_switch_weekly_threshold',
+                              t('quickSettings.autoSwitch.weeklyThreshold', '周额度切号阈值'),
+                              agWeeklyCustomThreshold,
+                              setAgWeeklyCustomThreshold,
+                              agWeeklyThresholdValue,
+                            ],
+                          ] as const
+                        ).map(([key, label, value, setValue, fallback]) => (
+                          <div className="qs-row" key={key}>
+                            <div className="qs-row-label">
+                              <span>{label}</span>
+                            </div>
+                            <div className="qs-row-control">
+                              <div className="qs-inline-input">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={100}
+                                  className="qs-select qs-select--input-mode qs-select--with-unit"
+                                  value={value}
+                                  placeholder={t('quickSettings.inputPercent', '输入百分比')}
+                                  onChange={(e) =>
+                                    handleCodexWindowThresholdInputChange(e.target.value, setValue)
+                                  }
+                                  onBlur={() =>
+                                    handleCodexWindowCustomThresholdApply(value, setValue, key, fallback)
+                                  }
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      handleCodexWindowCustomThresholdApply(value, setValue, key, fallback);
+                                    }
+                                  }}
+                                />
+                                <span className="qs-input-unit">%</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        <div className="qs-hint" style={{ marginTop: 0 }}>
+                          {t(
+                            'quickSettings.autoSwitch.windowThresholdsHint',
+                            '5h 或周额度任一低于各自阈值即切号（满足任一条件即触发）；上方「切号阈值」仅用于模型级额度。'
+                          )}
+                        </div>
+                      </>
+                    )}
 
                     <div className="qs-row">
                       <div className="qs-row-label">
@@ -3236,22 +3352,22 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
                               />
                             </div>
                           ) : (
-                            <select
-                              className="qs-select"
+                            <SingleSelectDropdown
+                              className="qs-dropdown"
                               value={String(creditsAutoSwitchThresholdValue)}
-                              onChange={(e) => handleCreditsThresholdSelectChange(e.target.value)}
-                            >
-                              {!isCreditsThresholdPreset && (
-                                <option value={String(creditsAutoSwitchThresholdValue)}>
-                                  {creditsAutoSwitchThresholdValue}
-                                </option>
-                              )}
-                              <option value="0">0</option>
-                              <option value="5">5</option>
-                              <option value="10">10</option>
-                              <option value="20">20</option>
-                              <option value="custom">{t('quickSettings.customInput', '自定义')}</option>
-                            </select>
+                              ariaLabel={t('quickSettings.autoSwitch.creditsThreshold', 'Credits 阈值')}
+                              options={[
+                                ...(!isCreditsThresholdPreset
+                                  ? [{ value: String(creditsAutoSwitchThresholdValue), label: String(creditsAutoSwitchThresholdValue) }]
+                                  : []),
+                                { value: '0', label: '0' },
+                                { value: '5', label: '5' },
+                                { value: '10', label: '10' },
+                                { value: '20', label: '20' },
+                                { value: 'custom', label: t('quickSettings.customInput', '自定义') },
+                              ]}
+                              onChange={handleCreditsThresholdSelectChange}
+                            />
                           )}
                         </div>
                       </div>
@@ -3262,18 +3378,16 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
                         <span>{t('quickSettings.autoSwitch.triggerModel', '触发模型')}</span>
                       </div>
                       <div className="qs-row-control">
-                        <select
-                          className="qs-select"
+                        <SingleSelectDropdown
+                          className="qs-dropdown"
                           value={autoSwitchScopeMode}
-                          onChange={(e) => handleAutoSwitchScopeModeChange(e.target.value)}
-                        >
-                          <option value="any_group">
-                            {t('quickSettings.autoSwitch.scopeAnyGroup', '任一模型分组')}
-                          </option>
-                          <option value="selected_groups">
-                            {t('quickSettings.autoSwitch.scopeSelectedGroups', '指定模型分组')}
-                          </option>
-                        </select>
+                          ariaLabel={t('quickSettings.autoSwitch.triggerModel', '触发模型')}
+                          options={[
+                            { value: 'any_group', label: t('quickSettings.autoSwitch.scopeAnyGroup', '任一模型分组') },
+                            { value: 'selected_groups', label: t('quickSettings.autoSwitch.scopeSelectedGroups', '指定模型分组') },
+                          ]}
+                          onChange={handleAutoSwitchScopeModeChange}
+                        />
                       </div>
                     </div>
 
@@ -3349,6 +3463,20 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
                   )}
                 </div>
 
+                {isMacOS && config && (
+                  <div className="qs-row">
+                    <div className="qs-row-label">
+                      <span>{t('settings.general.menuBarAntigravityMetric')}</span>
+                    </div>
+                    <div className="qs-row-control qs-row-control--fill">
+                      <AntigravityMenuBarQuotaSelect
+                        accounts={antigravityAccounts}
+                        value={config.menu_bar_antigravity_metric ?? ''}
+                        onChange={(value) => void saveConfig({ menu_bar_antigravity_metric: value })}
+                      />
+                    </div>
+                  </div>
+                )}
                 {renderQuotaAlertControls()}
               </div>
             )}
@@ -3360,6 +3488,17 @@ export function QuickSettingsPopover({ type }: QuickSettingsPopoverProps) {
                   <span>{t('quickSettings.quotaAlert.enable', '超额预警')}</span>
                 </div>
                 {renderQuotaAlertControls()}
+              </div>
+            )}
+
+            {type === 'codex' && (
+              <div className="qs-section">
+                <div className="qs-section-header">
+                  <Settings size={15} />
+                  <span>{t('codex.quotaHistory.title')}</span>
+                </div>
+                <CodexQuotaRecoverySettings variant="quick-settings" />
+                <CodexQuotaHistorySettings variant="quick-settings" />
               </div>
             )}
 

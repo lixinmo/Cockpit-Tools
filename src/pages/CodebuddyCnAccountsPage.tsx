@@ -1,10 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, Crosshair, X } from 'lucide-react';
 import { PlatformOverviewTabsHeader, PlatformOverviewTab } from '../components/platform/PlatformOverviewTabsHeader';
 import { CodebuddyCnInstancesContent } from './CodebuddyCnInstancesPage';
 import { useCodebuddyCnAccountStore } from '../stores/useCodebuddyCnAccountStore';
 import * as codebuddyCnService from '../services/codebuddyCnService';
 import {
   CodebuddyAccount,
+  type CodebuddyOfficialQuotaResource,
   getCodebuddyAccountDisplayEmail,
   getCodebuddyOfficialQuotaModel,
   getCodebuddyPlanBadge,
@@ -13,11 +15,37 @@ import {
 } from '../types/codebuddy';
 import { useProviderAccountsPage } from '../hooks/useProviderAccountsPage';
 import { CodebuddySuiteAccountsSharedView, type CodebuddySuiteAccountsPlatformConfig } from '../components/codebuddy-suite/CodebuddySuiteAccountsSharedView';
+import { CodebuddyQuotaCreditsSummary } from '../components/codebuddy-suite/CodebuddyQuotaCreditsSummary';
 import { CodebuddySessionManager } from '../components/codebuddy/CodebuddySessionManager';
 import { compareCurrentAccountFirst } from '../utils/currentAccountSort';
+import { WorkbuddyModelProbeModal } from '../components/workbuddy/WorkbuddyModelProbeModal';
+import {
+  dismissWorkbuddyProbeRecord,
+  getWorkbuddyProbeRecords,
+  subscribeWorkbuddyProbeStatus,
+} from '../utils/workbuddyProbeStatus';
 
 const CB_FLOW_NOTICE_COLLAPSED_KEY = 'agtools.codebuddycn.flow_notice_collapsed';
-const CB_CURRENT_ACCOUNT_ID_KEY = 'agtools.codebuddycn.current_account_id';
+
+/** 受限提示里的短时间格式：MM/DD HH:mm */
+function formatProbeTime(timestamp: number): string {
+  const date = new Date(timestamp);
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+
+function compareQuotaItems(a: CodebuddyOfficialQuotaResource, b: CodebuddyOfficialQuotaResource): number {
+  const aAvailable = !!a.unlimited || a.remain > 0;
+  const bAvailable = !!b.unlimited || b.remain > 0;
+  if (aAvailable !== bAvailable) return aAvailable ? -1 : 1;
+
+  const aExpires = a.expireAt ?? Number.POSITIVE_INFINITY;
+  const bExpires = b.expireAt ?? Number.POSITIVE_INFINITY;
+  if (aExpires !== bExpires) return aExpires - bExpires;
+
+  return b.remain - a.remain;
+}
 
 const codebuddyCnPlatformConfig: CodebuddySuiteAccountsPlatformConfig<CodebuddyAccount> = {
   pageClassName: 'codebuddy-accounts-page',
@@ -66,7 +94,10 @@ const codebuddyCnPlatformConfig: CodebuddySuiteAccountsPlatformConfig<CodebuddyA
   getDisplayEmail: (account) => getCodebuddyAccountDisplayEmail(account),
   getPlanBadge: (account) => getCodebuddyPlanBadge(account),
   getUsage: (account) => getCodebuddyUsage(account),
-  getQuotaGroups: (account, t) => getCodebuddyQuotaCategoryGroups(account, t),
+  getQuotaGroups: (account, t) => getCodebuddyQuotaCategoryGroups(account, t).map((group) => ({
+    ...group,
+    items: [...group.items].sort(compareQuotaItems),
+  })),
   hasQuotaData: (account) => {
     const model = getCodebuddyOfficialQuotaModel(account);
     return model.resources.length > 0 || model.extra.total > 0 || model.extra.remain > 0 || model.extra.used > 0;
@@ -78,13 +109,21 @@ const codebuddyCnPlatformConfig: CodebuddySuiteAccountsPlatformConfig<CodebuddyA
 
 export function CodebuddyCnAccountsPage() {
   const [activeTab, setActiveTab] = useState<PlatformOverviewTab>('overview');
+  const [probeOpen, setProbeOpen] = useState(false);
+  const [probeAccountId, setProbeAccountId] = useState<string | null>(null);
+  const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
+  const [probeVersion, setProbeVersion] = useState(0);
   const store = useCodebuddyCnAccountStore();
+
+  // 探测结果变化时刷新卡片上的受限标识
+  useEffect(() => subscribeWorkbuddyProbeStatus(() => setProbeVersion((v) => v + 1)), []);
+
+  // 恢复时间过后自动复测：确认恢复则在卡片提示后标注「已恢复」（CN 与 WorkBuddy 额度共享、同一套逻辑）
 
   const page = useProviderAccountsPage<CodebuddyAccount>({
     platformKey: 'CodeBuddy CN',
     oauthLogPrefix: 'CodebuddyCnOAuth',
     flowNoticeCollapsedKey: CB_FLOW_NOTICE_COLLAPSED_KEY,
-    currentAccountIdKey: CB_CURRENT_ACCOUNT_ID_KEY,
     exportFilePrefix: 'codebuddy_cn_accounts',
     oauthTabKeys: ['oauth'],
     store: {
@@ -128,8 +167,91 @@ export function CodebuddyCnAccountsPage() {
     [page.sortDirection, store.accounts, store.currentAccountId],
   );
 
+  // 与 WorkBuddy 一致，用「总剩余额度 + 分组明细」的新版概览替换平铺的资源包列表；
+  // 无配额数据时返回 null，让共享视图回退到原有的空状态提示。
+  const platformConfig = useMemo<
+    CodebuddySuiteAccountsPlatformConfig<CodebuddyAccount>
+  >(
+    () => ({
+      ...codebuddyCnPlatformConfig,
+      renderCardActionExtra: (account) => (
+        <button
+          type="button"
+          className="card-action-btn"
+          onClick={() => {
+            setProbeAccountId(account.id);
+            setProbeOpen(true);
+          }}
+          title={page.t('workbuddy.modelProbe.title', '探测模型')}
+        >
+          <Crosshair size={14} />
+        </button>
+      ),
+      renderCardNotice: (account) => {
+        const records = getWorkbuddyProbeRecords(account.id);
+        if (records.length === 0) return null;
+        return (
+          <div className="wb-probe-notice">
+            {records.slice(0, 2).map((record) => {
+              return (
+                <div key={record.model} className={`wb-probe-notice-item ${record.status}`}>
+                  <AlertTriangle size={12} aria-hidden="true" />
+                  <span title={record.message}>
+                    {record.resetAt
+                        ? page.t('workbuddy.probeNotice.until', '{{model}} 不可用至 {{time}}', {
+                            model: record.model,
+                            time: formatProbeTime(record.resetAt),
+                          })
+                        : page.t('workbuddy.probeNotice.unavailable', '{{model}} 暂不可用', {
+                            model: record.model,
+                          })}
+                  </span>
+                  <button
+                    type="button"
+                    className="wb-probe-notice-close"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      dismissWorkbuddyProbeRecord(account.id, record.model);
+                    }}
+                    title={page.t('common.close')}
+                  >
+                    <X size={12} aria-hidden="true" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        );
+      },
+
+      renderQuotaSummary: (account) => {
+        const groups = getCodebuddyQuotaCategoryGroups(
+          account,
+          page.t as (key: string, defaultValue?: string) => string,
+        );
+        return groups.some((group) => group.visible) ? (
+          <CodebuddyQuotaCreditsSummary groups={groups} />
+        ) : null;
+      },
+    }),
+    [page.t, probeVersion],
+  );
+
   return (
     <div className={`ghcp-accounts-page ${codebuddyCnPlatformConfig.pageClassName}`}>
+      <div className="page-toolbar workbuddy-probe-toolbar">
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          onClick={() => {
+            setProbeAccountId(null);
+            setProbeOpen(true);
+          }}
+        >
+          <Crosshair size={14} aria-hidden="true" />
+          {page.t('workbuddy.modelProbe.open', '批量探测模型')}
+        </button>
+      </div>
       <PlatformOverviewTabsHeader
         platform="codebuddy_cn"
         active={activeTab}
@@ -145,8 +267,24 @@ export function CodebuddyCnAccountsPage() {
           accounts={store.accounts}
           loading={store.loading}
           page={page}
-          platformConfig={codebuddyCnPlatformConfig}
+          platformConfig={platformConfig}
+          onSelectionChange={setSelectedAccountIds}
           onRefreshAccounts={() => { store.fetchAccounts(); }}
+        />
+      )}
+      {probeOpen && (
+        <WorkbuddyModelProbeModal
+          accounts={store.accounts}
+          currentAccountId={probeAccountId ?? store.currentAccountId}
+          selectedAccountIds={selectedAccountIds}
+          initialScope={probeAccountId ? 'current' : undefined}
+          lockedAccountId={probeAccountId}
+          platform="codebuddy_cn"
+          displayEmail={getCodebuddyAccountDisplayEmail}
+          onClose={() => {
+            setProbeOpen(false);
+            setProbeAccountId(null);
+          }}
         />
       )}
     </div>

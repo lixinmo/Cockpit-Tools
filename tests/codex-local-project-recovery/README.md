@@ -9,14 +9,14 @@ CARGO_TARGET_DIR=target/project-recovery-harness cargo test --locked --release \
 
 This independent workspace compiles the actual project recovery module and its
 existing tests. It also imports the actual launch-budget implementation and
-atomic-write implementation, including their SQLite interruption, rollback,
+atomic-write implementation and SSH identity helpers, including SQLite interruption, rollback,
 compare-and-swap and concurrency protections. `build.rs` selects parent-module
 path/SQLite helpers and four existing deadline tests directly from their source
 syntax trees; missing source items fail the build. No helper implementation is
 re-created here. The only shim is a warning-log sink.
 
-The custom `cockpit_project_recovery_harness` cfg excludes four tests of the
-enclosing desktop/session orchestration and their two helpers. They still run
+The custom `cockpit_project_recovery_harness` cfg excludes tests of the
+enclosing desktop/session orchestration and their helpers. They still run
 in the full App suite, including with `--all-features`; the App only declares
 that cfg for linting and does not enable it. This harness does **not** validate
 desktop stop detection, credential-owner resolution, UI entry points or the

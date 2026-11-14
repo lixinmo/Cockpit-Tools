@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { loadHookModule, settlePromises } from '../../tests/helpers/reactHookHarness';
+import { resolveUpdaterDownloadUrl } from '../utils/updaterReleaseNotes';
 
 function setup(savedVersion?: string) {
   const storage = new Map<string, string>();
@@ -12,6 +13,7 @@ function setup(savedVersion?: string) {
   const harness = loadHookModule(new URL('./useUpstreamRelease.ts', import.meta.url), {
     '@tauri-apps/api/core': { async invoke(command: string) { commands.push(command); return latest; } },
     '@tauri-apps/plugin-opener': { async openUrl(url: string) { urls.push(url); } },
+    '../utils/updaterReleaseNotes': { resolveUpdaterDownloadUrl },
   }, {
     localStorage: {
       getItem: (key: string) => storage.get(key) ?? null,

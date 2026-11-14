@@ -3,10 +3,11 @@ import { UnlockFireworksOverlay } from '../components/UnlockFireworksOverlay';
 import { SettingsAccountTransferSection } from '../components/SettingsAccountTransferSection';
 import { SettingsWebdavSyncSection } from '../components/SettingsWebdavSyncSection';
 import { SettingsInstanceCleanupSection } from '../components/SettingsInstanceCleanupSection';
+import { AntigravityMenuBarQuotaSelect } from '../components/AntigravityMenuBarQuotaSelect';
+import { CodexProxyDirectHosts } from '../components/codex/CodexProxyDirectHosts';
 import './settings/Settings.css';
 import { Github, User, Rocket, Save, AlertCircle, RefreshCw, Heart, MessageSquare, FileText, Download, X } from 'lucide-react';
-import type { PlatformId } from '../types/platform';
-import type { useSettingsPageController } from "./SettingsPage";
+import type { MenuBarQuotaPlatform, useSettingsPageController } from "./SettingsPage";
 import { SettingsGeneralPanel } from "./SettingsGeneralPanel";
 import type { UpstreamReleaseNotice } from '../hooks/useUpstreamRelease';
 
@@ -35,6 +36,8 @@ export function SettingsPageView(props: SettingsPageViewProps) {
     handleOpenReleaseHistory,
     handleSaveNetworkConfig,
     menuBarQuotaDraftPlatform,
+    menuBarAntigravityAccounts,
+    menuBarAntigravityMetricDraft,
     menuBarQuotaDraftShowPrefix,
     menuBarQuotaModalMode,
     menuBarQuotaModalOpen,
@@ -61,6 +64,7 @@ export function SettingsPageView(props: SettingsPageViewProps) {
     setGlobalProxyNoProxy,
     setGlobalProxyUrl,
     setMenuBarQuotaDraftPlatform,
+    setMenuBarAntigravityMetricDraft,
     setMenuBarQuotaDraftShowPrefix,
     setReportEnabled,
     setReportPort,
@@ -208,6 +212,7 @@ export function SettingsPageView(props: SettingsPageViewProps) {
                     <input
                       type="checkbox"
                       checked={reportEnabled}
+                      disabled={networkSaving}
                       onChange={(e) => setReportEnabled(e.target.checked)}
                     />
                     <span className="slider"></span>
@@ -221,7 +226,7 @@ export function SettingsPageView(props: SettingsPageViewProps) {
                     <div className="row-label">
                       <div className="row-title">{t('settings.network.reportPort')}</div>
                       <div className="row-desc">
-                        {t('settings.network.reportPortDesc').replace('{port}', String(reportDefaultPort))}
+                        {t('settings.network.reportPortDesc', { port: reportDefaultPort })}
                       </div>
                     </div>
                     <div className="row-control">
@@ -229,6 +234,7 @@ export function SettingsPageView(props: SettingsPageViewProps) {
                         type="number"
                         className="settings-input"
                         value={reportPort}
+                        disabled={networkSaving}
                         onChange={(e) => setReportPort(e.target.value)}
                         placeholder={String(reportDefaultPort)}
                         min="1024"
@@ -247,12 +253,14 @@ export function SettingsPageView(props: SettingsPageViewProps) {
                         type="text"
                         className="settings-input"
                         value={reportToken}
+                        disabled={networkSaving}
                         onChange={(e) => setReportToken(e.target.value)}
                         placeholder="change-this-token"
                       />
                       <button
                         className="btn btn-secondary"
                         onClick={() => setReportToken(generateReportToken())}
+                        disabled={networkSaving}
                         type="button"
                       >
                         {t('settings.network.generateToken')}
@@ -267,9 +275,10 @@ export function SettingsPageView(props: SettingsPageViewProps) {
                         <div className="row-desc">
                           {reportActualPort === parseInt(reportPort, 10)
                             ? t('settings.network.portNormal')
-                            : t('settings.network.portFallback')
-                                .replace('{configured}', reportPort)
-                                .replace('{actual}', String(reportActualPort))}
+                            : t('settings.network.portFallback', {
+                                configured: reportPort,
+                                actual: reportActualPort,
+                              })}
                         </div>
                       </div>
                       <div className="row-control">
@@ -278,13 +287,13 @@ export function SettingsPageView(props: SettingsPageViewProps) {
                           fontSize: '14px',
                           color: reportActualPort === parseInt(reportPort, 10) ? 'var(--accent)' : 'var(--warning, #f59e0b)',
                         }}>
-                          http://0.0.0.0:{reportActualPort}
+                          {reportActualPort}
                         </span>
                       </div>
                     </div>
                   )}
 
-                  <div className="settings-row" style={{ animation: 'fadeUp 0.3s ease both' }}>
+                  {reportRawPreviewUrl && <div className="settings-row" style={{ animation: 'fadeUp 0.3s ease both' }}>
                     <div className="row-label">
                       <div className="row-title">{t('settings.network.reportUrlPreview')}</div>
                       <div className="row-desc">
@@ -302,11 +311,17 @@ export function SettingsPageView(props: SettingsPageViewProps) {
                         color: 'var(--text-secondary)',
                         wordBreak: 'break-all',
                       }}>
-                        <span>{`${t('settings.network.reportUrlRaw')}: ${reportRawPreviewUrl}`}</span>
-                        <span>{`${t('settings.network.reportUrlRendered')}: ${reportRenderedPreviewUrl}`}</span>
+                        <a href={reportRawPreviewUrl} onClick={(event) => {
+                          event.preventDefault();
+                          openLink(reportRawPreviewUrl);
+                        }}>{`${t('settings.network.reportUrlRaw')}: ${reportRawPreviewUrl}`}</a>
+                        <a href={reportRenderedPreviewUrl} onClick={(event) => {
+                          event.preventDefault();
+                          openLink(reportRenderedPreviewUrl);
+                        }}>{`${t('settings.network.reportUrlRendered')}: ${reportRenderedPreviewUrl}`}</a>
                       </div>
                     </div>
-                  </div>
+                  </div>}
 
                   <div className="settings-row" style={{ animation: 'fadeUp 0.3s ease both' }}>
                     <div className="row-label">
@@ -372,6 +387,7 @@ export function SettingsPageView(props: SettingsPageViewProps) {
                   </div>
                 </>
               )}
+              <div className="settings-row"><CodexProxyDirectHosts /></div>
             </div>
             
             {needsRestart && (
@@ -545,7 +561,7 @@ export function SettingsPageView(props: SettingsPageViewProps) {
                   id="menu-bar-quota-platform"
                   className="settings-select settings-menu-bar-quota-modal-select"
                   value={menuBarQuotaDraftPlatform}
-                  onChange={(e) => setMenuBarQuotaDraftPlatform(e.target.value as PlatformId)}
+                  onChange={(e) => setMenuBarQuotaDraftPlatform(e.target.value as MenuBarQuotaPlatform)}
                 >
                   {menuBarQuotaPlatformOptions.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -554,6 +570,18 @@ export function SettingsPageView(props: SettingsPageViewProps) {
                   ))}
                 </select>
               </div>
+              {menuBarQuotaDraftPlatform === 'antigravity' && (
+                <div className="settings-menu-bar-quota-modal-field">
+                  <span className="settings-menu-bar-quota-modal-label">
+                    {t('settings.general.menuBarAntigravityMetric')}
+                  </span>
+                  <AntigravityMenuBarQuotaSelect
+                    accounts={menuBarAntigravityAccounts}
+                    value={menuBarAntigravityMetricDraft}
+                    onChange={setMenuBarAntigravityMetricDraft}
+                  />
+                </div>
+              )}
               <div className="settings-menu-bar-quota-modal-field">
                 <label className="settings-menu-bar-quota-modal-label" htmlFor="menu-bar-quota-prefix">
                   {t('settings.general.menuBarAccountPrefix', '显示账号邮箱前 4 位')}

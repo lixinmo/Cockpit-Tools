@@ -2,13 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { registerHooks } from 'node:module';
+import { register } from 'node:module';
 import type { TFunction } from 'i18next';
 import type { CodexModelProvider } from '../../services/codexModelProviderService';
 
-registerHooks({ load(url, context, next) {
-  return url.endsWith('.css') ? { format: 'module', source: '', shortCircuit: true } : next(url, context);
-} });
+register(new URL('../../../tests/helpers/ignoreCssLoader.mjs', import.meta.url));
 const { OpenAIOfficialUsagePanel } = await import('./OpenAIOfficialUsagePanel');
 
 const provider: CodexModelProvider = { id: 'p', name: 'OpenAI', baseUrl: 'https://api.openai.com/v1', supportsWebsockets: false, createdAt: 1, updatedAt: 1, apiKeys: [{ id: 'k', name: '', apiKey: 'model-key', usageApiKey: 'admin-key', usageKeyVersion: 1, createdAt: 1, updatedAt: 1 }] };

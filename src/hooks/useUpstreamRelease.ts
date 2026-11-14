@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { resolveUpdaterDownloadUrl } from '../utils/updaterReleaseNotes';
 
-const RELEASE_NOTES_URL = 'https://github.com/jlcodes99/cockpit-tools/releases/tag/v';
 const VIEWED_VERSION_KEY = 'cockpit-tools.viewed-upstream-release';
 const CHECK_INTERVAL_MS = 60 * 60 * 1000;
 
@@ -42,7 +42,7 @@ export function useUpstreamRelease() {
   const openReleaseNotes = useCallback(async () => {
     if (!version) return;
     try {
-      await openUrl(`${RELEASE_NOTES_URL}${encodeURIComponent(version)}`);
+      await openUrl(resolveUpdaterDownloadUrl(version));
     } catch (error) {
       console.warn('[Upstream release] Could not open release notes:', error);
       return;

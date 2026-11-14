@@ -64,6 +64,7 @@ impl Host for Recorder {
 
 include!("lifecycle_dispatch_tests.rs");
 include!("lifecycle_admission_tests.rs");
+include!("network_recovery_lifecycle_tests.rs");
 
 #[tokio::test]
 async fn native_lifecycle_local_quota_checks_are_not_inference_dispatch() {

@@ -174,11 +174,24 @@ struct Thread {
     project: Option<String>,
     cwd: Option<String>,
     root: bool,
+    section: Option<String>,
 }
 
 // The existing launch deadline and SQLite interrupt bound this scan. Total
 // history size must not disable project restoration for an otherwise small registry.
 fn threads(db: &Connection) -> Result<Vec<Thread>, String> {
+    read_threads(db, None)
+}
+
+fn threads_for_presentation(db: &Connection, ids: &[String]) -> Result<Vec<Thread>, String> {
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let encoded = serde_json::to_string(ids).map_err(|error| error.to_string())?;
+    read_threads(db, Some(&encoded))
+}
+
+fn read_threads(db: &Connection, selected: Option<&str>) -> Result<Vec<Thread>, String> {
     let cols = super::table_columns(db, "threads")?;
     if !["id", "cwd", "project_id", "source"]
         .iter()
@@ -188,13 +201,21 @@ fn threads(db: &Connection) -> Result<Vec<Thread>, String> {
         return Err("CODEX_PROJECT_SCHEMA_UNSUPPORTED".into());
     }
     let sql = format!(
-        "SELECT id,project_id,cwd,source,{},{},{} FROM threads ORDER BY id",
+        "SELECT id,project_id,cwd,source,{},{},{},{} FROM threads{} ORDER BY id",
         column_expr(&cols, "thread_source", "NULL"),
         column_expr(&cols, "has_user_event", "0"),
         column_expr(&cols, "first_user_message", "NULL"),
+        column_expr(&cols, "thread_section_id", "NULL"),
+        if selected.is_some() {
+            " WHERE id IN (SELECT value FROM json_each(?1))"
+        } else {
+            ""
+        },
     );
     let mut statement = db.prepare(&sql).map_err(|e| e.to_string())?;
-    let mut rows = statement.query([]).map_err(|e| e.to_string())?;
+    let mut rows = statement
+        .query(rusqlite::params_from_iter(selected))
+        .map_err(|e| e.to_string())?;
     let mut result = Vec::new();
     while let Some(row) = rows.next().map_err(|e| e.to_string())? {
         check()?;
@@ -214,6 +235,7 @@ fn threads(db: &Connection) -> Result<Vec<Thread>, String> {
             project: row.get(1).map_err(|e| e.to_string())?,
             cwd: row.get(2).map_err(|e| e.to_string())?,
             root: !child && (user.unwrap_or(0) != 0 || first.is_some_and(|s| !s.is_empty())),
+            section: row.get(7).map_err(|e| e.to_string())?,
         });
     }
     Ok(result)
@@ -333,6 +355,8 @@ fn scan_impl(
     exists: &dyn Fn(&str) -> bool,
 ) -> Result<Plan, String> {
     check()?;
+    // read_bytes enforces MAX_STATE_BYTES. Account archives routinely make a
+    // valid state larger than 2 MB; its size must not disable project recovery.
     let before_bytes = read_bytes(&home.join(STATE))?;
     let before = decode(before_bytes.as_deref())?;
     for key in ["local-projects", MAP, ASSIGN, HOSTS, MIGRATION] {

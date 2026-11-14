@@ -23,6 +23,7 @@ export function SettingsGeneralPanel(props: SettingsPageViewProps) {
   const {
     antigravityAccountGroups,
     antigravityAppPath,
+    antigravityLegacyAppPath,
     antigravityDualSwitchNoRestartEnabled,
     antigravityLaunchOnSwitch,
     antigravityScopeAccounts,
@@ -47,6 +48,9 @@ export function SettingsGeneralPanel(props: SettingsPageViewProps) {
     autoSwitchEnabled,
     autoSwitchSelectedAccountIds,
     autoSwitchThreshold,
+    agWindowThresholdsEnabled,
+    agFiveHourThreshold,
+    agWeeklyThreshold,
     autoSwitchThresholdCustomMode,
     autoSwitchThresholdIsPreset,
     claudeAppPath,
@@ -164,6 +168,7 @@ export function SettingsGeneralPanel(props: SettingsPageViewProps) {
     sanitizeNumberInput,
     saveGrokCliPath,
     setAntigravityAppPath,
+    setAntigravityLegacyAppPath,
     setAntigravityDualSwitchNoRestartEnabled,
     setAntigravityLaunchOnSwitch,
     setAppAutoLaunchEnabled,
@@ -180,6 +185,9 @@ export function SettingsGeneralPanel(props: SettingsPageViewProps) {
     setAutoSwitchEnabled,
     setAutoSwitchSelectedAccountIds,
     setAutoSwitchThreshold,
+    setAgWindowThresholdsEnabled,
+    setAgFiveHourThreshold,
+    setAgWeeklyThreshold,
     setAutoSwitchThresholdCustomMode,
     setClaudeAppPath,
     setClaudeAutoRefresh,
@@ -227,6 +235,7 @@ export function SettingsGeneralPanel(props: SettingsPageViewProps) {
     setGrokQuotaAlertThreshold,
     setGrokSyncOfficialAuthOnSwitch,
     setHideDockIcon,
+    setShowTrayIcon,
     setKiroAppPath,
     setKiroAutoRefresh,
     setKiroAutoRefreshCustomMode,
@@ -343,6 +352,7 @@ export function SettingsGeneralPanel(props: SettingsPageViewProps) {
     traeSoloQuotaAlertThresholdCustomMode,
     traeSoloQuotaAlertThresholdIsPreset,
     trayIconStyle,
+    showTrayIcon,
     uiScale,
     updateRemindersEnabled,
     updateRemindersLoaded,
@@ -549,7 +559,9 @@ export function SettingsGeneralPanel(props: SettingsPageViewProps) {
                     onChange={(e) => setCloseBehavior(e.target.value as 'ask' | 'minimize' | 'quit')}
                   >
                     <option value="ask">{t('settings.general.closeBehaviorAsk')}</option>
-                    <option value="minimize">{t('settings.general.closeBehaviorMinimize')}</option>
+                    <option value="minimize">
+                      {t(showTrayIcon ? 'settings.general.closeBehaviorMinimize' : 'closeDialog.minimizeWindow')}
+                    </option>
                     <option value="quit">{t('settings.general.closeBehaviorQuit')}</option>
                   </select>
                 </div>
@@ -662,6 +674,24 @@ export function SettingsGeneralPanel(props: SettingsPageViewProps) {
                 </div>
               </div>
 
+              <div className="settings-row">
+                <div className="row-label">
+                  <div className="row-title">{t('settings.general.showTrayIcon')}</div>
+                  <div className="row-desc">{t('settings.general.showTrayIconDesc')}</div>
+                </div>
+                <div className="row-control">
+                  <label className="switch">
+                    <input
+                      type="checkbox"
+                      aria-label={t('settings.general.showTrayIcon')}
+                      checked={showTrayIcon}
+                      onChange={(event) => setShowTrayIcon(event.target.checked)}
+                    />
+                    <span className="slider"></span>
+                  </label>
+                </div>
+              </div>
+
               {isMacOS && (
                 <>
                   <div className="settings-row">
@@ -679,7 +709,8 @@ export function SettingsGeneralPanel(props: SettingsPageViewProps) {
                     <div className="row-control">
                       <select
                         className="settings-select"
-                        value={hideDockIcon ? 'true' : 'false'}
+                        value={showTrayIcon && hideDockIcon ? 'true' : 'false'}
+                        disabled={!showTrayIcon}
                         onChange={(e) => setHideDockIcon(e.target.value === 'true')}
                       >
                         <option value="false">
@@ -708,6 +739,7 @@ export function SettingsGeneralPanel(props: SettingsPageViewProps) {
                       <select
                         className="settings-select"
                         value={trayIconStyle}
+                        disabled={!showTrayIcon}
                         onChange={(e) =>
                           setTrayIconStyle(e.target.value === 'color' ? 'color' : 'template')
                         }
@@ -728,7 +760,7 @@ export function SettingsGeneralPanel(props: SettingsPageViewProps) {
                         {t('settings.general.menuBarQuota', '菜单栏显示实时额度')}
                       </div>
                       <div className="row-desc">
-                        {menuBarQuotaEnabled
+                        {showTrayIcon && menuBarQuotaEnabled
                           ? t(
                               'settings.general.menuBarQuotaEnabledDesc',
                               '已启用 · {{platform}} · 显示该平台当前账号剩余额度（多条取最低）',
@@ -748,7 +780,8 @@ export function SettingsGeneralPanel(props: SettingsPageViewProps) {
                     <div className="row-control">
                       <select
                         className="settings-select"
-                        value={menuBarQuotaEnabled ? 'true' : 'false'}
+                        value={showTrayIcon && menuBarQuotaEnabled ? 'true' : 'false'}
+                        disabled={!showTrayIcon}
                         onChange={(e) => {
                           if (e.target.value === 'true') {
                             openMenuBarQuotaModal(menuBarQuotaEnabled ? 'edit' : 'enable');
@@ -760,7 +793,7 @@ export function SettingsGeneralPanel(props: SettingsPageViewProps) {
                         <option value="false">{t('common.disable', '停用')}</option>
                         <option value="true">{t('common.enable', '启用')}</option>
                       </select>
-                      {menuBarQuotaEnabled ? (
+                      {showTrayIcon && menuBarQuotaEnabled ? (
                         <button
                           type="button"
                           className="btn btn-secondary"
@@ -1180,40 +1213,45 @@ export function SettingsGeneralPanel(props: SettingsPageViewProps) {
                 </div>
               </div>
 
-	              <div className="settings-row">
-	                <div className="row-label">
-	                  <div className="row-title">{t('settings.general.antigravityAppPath', 'Antigravity IDE 启动路径')}</div>
-                  <div className="row-desc">{t('settings.general.codexAppPathDesc', '留空则使用默认路径')}</div>
-                </div>
-                <div className="row-control row-control--grow">
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flex: 1 }}>
-                    <input
-                      type="text"
-                      className="settings-input settings-input--path"
-                      value={antigravityAppPath}
-                      placeholder={t('settings.general.codexAppPathPlaceholder', '默认路径')}
-                      onChange={(e) => setAntigravityAppPath(e.target.value)}
-                    />
-                    <button
-                      className="btn btn-secondary"
-                      onClick={() => handlePickAppPath('antigravity')}
-                      disabled={isAppPathResetDetecting('antigravity')}
-                    >
-                      {t('settings.general.codexPathSelect', '选择')}
-                    </button>
-                    <button
-                      className="btn btn-secondary"
-                      onClick={() => handleResetAppPath('antigravity')}
-                      disabled={isAppPathResetDetecting('antigravity')}
-                    >
-                      <RefreshCw size={16} className={isAppPathResetDetecting('antigravity') ? 'spin' : undefined} />
-                      {isAppPathResetDetecting('antigravity')
-                        ? t('common.loading', '加载中...')
-                        : getResetLabelByTarget('antigravity')}
-                    </button>
+              {([
+                ['antigravity_legacy', 'Antigravity', antigravityLegacyAppPath, setAntigravityLegacyAppPath],
+                ['antigravity', 'Antigravity IDE', antigravityAppPath, setAntigravityAppPath],
+              ] as const).map(([target, appName, path, setPath]) => (
+                <div className="settings-row" key={target}>
+                  <div className="row-label">
+                    <div className="row-title">{t('settings.general.antigravityAppPath', { appName })}</div>
+                    <div className="row-desc">{t('settings.general.codexAppPathDesc', '留空则使用默认路径')}</div>
+                  </div>
+                  <div className="row-control row-control--grow">
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flex: 1 }}>
+                      <input
+                        type="text"
+                        className="settings-input settings-input--path"
+                        value={path}
+                        placeholder={t('settings.general.codexAppPathPlaceholder', '默认路径')}
+                        onChange={(e) => setPath(e.target.value)}
+                      />
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() => handlePickAppPath(target)}
+                        disabled={isAppPathResetDetecting(target)}
+                      >
+                        {t('settings.general.codexPathSelect', '选择')}
+                      </button>
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() => handleResetAppPath(target)}
+                        disabled={isAppPathResetDetecting(target)}
+                      >
+                        <RefreshCw size={16} className={isAppPathResetDetecting(target) ? 'spin' : undefined} />
+                        {isAppPathResetDetecting(target)
+                          ? t('common.loading', '加载中...')
+                          : getResetLabelByTarget(target)}
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
+              ))}
 
               {antigravitySeamlessSwitchUnlocked && (
                 <div className="settings-row">
@@ -1323,6 +1361,40 @@ export function SettingsGeneralPanel(props: SettingsPageViewProps) {
                   </div>
                 </div>
               )}
+              {autoSwitchEnabled && (
+                <div className="settings-row">
+                  <div className="row-label">
+                    <div className="row-title">{t('quickSettings.autoSwitch.windowThresholdsEnable')}</div>
+                    <div className="row-desc">{t('quickSettings.autoSwitch.windowThresholdsHint')}</div>
+                  </div>
+                  <div className="row-control">
+                    <label className="switch">
+                      <input type="checkbox" checked={agWindowThresholdsEnabled}
+                        aria-label={t('quickSettings.autoSwitch.windowThresholdsEnable')}
+                        onChange={(event) => setAgWindowThresholdsEnabled(event.target.checked)} />
+                      <span className="slider" />
+                    </label>
+                  </div>
+                </div>
+              )}
+              {autoSwitchEnabled && agWindowThresholdsEnabled && ([
+                ['fiveHourThreshold', agFiveHourThreshold, setAgFiveHourThreshold],
+                ['weeklyThreshold', agWeeklyThreshold, setAgWeeklyThreshold],
+              ] as const).map(([key, value, setValue]) => {
+                const label = t(`quickSettings.autoSwitch.${key}`);
+                return (
+                  <div className="settings-row" key={key}>
+                    <div className="row-label"><div className="row-title">{label}</div></div>
+                    <div className="row-control settings-inline-input">
+                      <input type="number" min={0} max={100} value={value} aria-label={label}
+                        className="settings-select settings-select--input-mode settings-select--with-unit"
+                        onChange={(event) => setValue(sanitizeNumberInput(event.target.value))}
+                        onBlur={() => setValue(normalizeNumberInput(value || '5', 0, 100))} />
+                      <span className="settings-input-unit">%</span>
+                    </div>
+                  </div>
+                );
+              })}
               {autoSwitchEnabled && (
                 <div className="settings-row">
                   <div className="row-label">
@@ -3163,9 +3235,9 @@ export function SettingsGeneralPanel(props: SettingsPageViewProps) {
                 target: 'trae_solo',
                 order: platformSettingsOrder.trae_solo,
                 titleKey: 'quickSettings.traeSolo.title',
-                titleDefault: 'TRAE SOLO 设置',
+                titleDefault: 'TraeWork 设置',
                 appPathTitleKey: 'settings.general.traeSoloAppPath',
-                appPathTitleDefault: 'TRAE SOLO 启动路径',
+                appPathTitleDefault: 'TraeWork 启动路径',
                 autoRefresh: traeSoloAutoRefresh,
                 setAutoRefresh: setTraeSoloAutoRefresh,
                 autoRefreshCustomMode: traeSoloAutoRefreshCustomMode,
@@ -3205,9 +3277,9 @@ export function SettingsGeneralPanel(props: SettingsPageViewProps) {
                 target: 'trae_solo_cn',
                 order: platformSettingsOrder.trae_solo_cn,
                 titleKey: 'quickSettings.traeSoloCn.title',
-                titleDefault: 'TRAE SOLO CN 设置',
+                titleDefault: 'TraeWork CN 设置',
                 appPathTitleKey: 'settings.general.traeSoloCnAppPath',
-                appPathTitleDefault: 'TRAE SOLO CN 启动路径',
+                appPathTitleDefault: 'TraeWork CN 启动路径',
                 autoRefresh: traeSoloCnAutoRefresh,
                 setAutoRefresh: setTraeSoloCnAutoRefresh,
                 autoRefreshCustomMode: traeSoloCnAutoRefreshCustomMode,
@@ -3321,7 +3393,7 @@ export function SettingsGeneralPanel(props: SettingsPageViewProps) {
 
                   <div className="settings-row">
                     <div className="row-label">
-                      <div className="row-title">{t('settings.general.workbuddyAppPath', 'WorkBuddy 启动路径')}</div>
+                      <div className="row-title">{t('settings.general.workbuddyAppPath')}</div>
                       <div className="row-desc">{t('settings.general.workbuddyAppPathDesc', '留空则使用默认路径')}</div>
                     </div>
                     <div className="row-control row-control--grow">
