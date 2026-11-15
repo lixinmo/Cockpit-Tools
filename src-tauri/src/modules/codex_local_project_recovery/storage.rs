@@ -220,6 +220,7 @@ pub(super) fn apply(plan: &Plan, backup: &Path) -> Result<(), String> {
     atomic_value(&backup.join("project-recovery-plan.json"), plan)?;
     // Durable intent precedes both SQLite and JSON writes. A process crash can
     // interrupt a multi-file commit; the next explicit repair compensates it.
+    check()?;
     atomic_value(&plan.home.join(JOURNAL), &backup)?;
     let mut connections = Vec::new();
     let result = (|| {
@@ -228,24 +229,22 @@ pub(super) fn apply(plan: &Plan, backup: &Path) -> Result<(), String> {
             db.execute_batch("BEGIN IMMEDIATE")
                 .map_err(|e| e.to_string())?;
             if relative == &plan.primary
-                && fingerprint(&projects_with_limit(
-                    &db,
-                    plan.quick.then_some(QUICK_MAX_PROJECTS),
-                )?) != plan.project_fingerprint
+                && fingerprint(&read_projects(&db)?) != plan.project_fingerprint
             {
                 return Err("CODEX_PROJECT_CHANGED".into());
             }
             if relative == &plan.primary {
-                let roots: HashSet<_> =
-                    threads(&db)?
-                        .into_iter()
-                        .filter(|t| t.root)
-                        .map(|t| t.id)
-                        .collect();
-                if patches
+                let thread_ids: Vec<_> = patches
                     .iter()
-                    .any(|p| p.table == "threads" && p.rows.iter().any(|r| !roots.contains(&r.id)))
-                {
+                    .filter(|patch| patch.table == "threads")
+                    .flat_map(|patch| patch.rows.iter().map(|row| row.id.as_str()))
+                    .collect();
+                let roots: HashSet<_> = read_threads_by_ids(&db, &thread_ids)?
+                    .into_iter()
+                    .filter(|thread| thread.root)
+                    .map(|thread| thread.id)
+                    .collect();
+                if thread_ids.iter().any(|id| !roots.contains(*id)) {
                     return Err("CODEX_PROJECT_CHANGED".into());
                 }
             }
@@ -263,6 +262,7 @@ pub(super) fn apply(plan: &Plan, backup: &Path) -> Result<(), String> {
         atomic_value(&plan.home.join(STATE), &plan.after)?;
         atomic_value(&plan.home.join(format!("{STATE}.bak")), &plan.after)?;
         for db in &connections {
+            check()?;
             db.execute_batch("COMMIT").map_err(|e| e.to_string())?;
         }
         Ok(())

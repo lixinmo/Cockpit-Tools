@@ -496,7 +496,7 @@ fn ssh_startup_keeps_adopted_entries_and_leaves_unsupported_files_untouched() {
 
 #[test]
 #[cfg(not(cockpit_project_recovery_harness))]
-fn desktop_launch_restores_archived_groups_before_optional_catalog_scan_defers() {
+fn desktop_launch_restores_archived_groups_with_large_catalog() {
     let f = Fixture::new();
     fs::write(f.home().join("config.toml"), "cli_auth_credentials_store = 'file'\n").unwrap();
     let auth = br#"{"auth_mode":"apikey","OPENAI_API_KEY":"fixture-key"}"#;
@@ -514,11 +514,7 @@ fn desktop_launch_restores_archived_groups_before_optional_catalog_scan_defers()
     let summary = super::super::super::repair_session_visibility_quick_for_instance(
         "archived-projects", "Archived projects", f.home(), true,
     ).unwrap();
-    assert!(summary.local_project_recovery_deferred);
-    let detail = summary.local_project_recovery_deferred_message.as_deref().unwrap();
-    let actual_size = fs::metadata(f.home().join(STATE)).unwrap().len().to_string();
-    assert!(detail.contains(&actual_size), "{detail}");
-    assert!(summary.message.contains(detail));
+    assert!(!summary.local_project_recovery_deferred, "{}", summary.message);
     let booted = native_start(f.state(), None);
     assert_eq!(booted["local-projects"]["legacy"]["name"], "My project");
     assert_eq!(booted[ASSIGN]["chat"]["projectId"], "legacy");
@@ -610,7 +606,7 @@ fn switch_without_launch_preserves_projects_with_large_catalog_and_history() {
         true,
     )
     .unwrap();
-    assert!(launch.local_project_recovery_deferred);
+    assert!(!launch.local_project_recovery_deferred, "{}", launch.message);
     assert_eq!(launch.mutated_instance_count, 1);
     let after_launch = native_start(f.state(), Some(&owner));
     assert_eq!(after_launch["project-order"], json!(["legacy"]));
@@ -867,7 +863,7 @@ fn account_project_switch_preserves_large_supported_state_and_original_backup() 
     let f = Fixture::new();
     let state = json!({SCOPES:{"owner":"b","inactive":{
         "a":{"globals":f.local("legacy"),"atoms":{}}
-    }}, "untouched": "x".repeat(2_500_000)});
+    }}, "untouched": "x".repeat(20_000_001)});
     f.write(&state);
     let backup = f.home().join(format!("{STATE}.bak"));
     fs::write(&backup, b"previous backup").unwrap();
@@ -965,7 +961,7 @@ fn state_with_ssh(f: &Fixture) -> Value {
 }
 
 #[test]
-fn large_history_recovers_saved_and_verified_local_memberships() {
+fn large_history_restores_all_verified_project_memberships() {
     for project in [None, Some("server")] {
         let f = Fixture::new();
         f.write(&state_with_ssh(&f));
@@ -975,10 +971,7 @@ fn large_history_recovers_saved_and_verified_local_memberships() {
         assert_eq!(db.query_row("SELECT count(*) FROM threads", [], |r| r.get::<_, i64>(0)).unwrap(), 2049);
         drop(db);
         for owner in [Some("a"), Some("b"), None] {
-            with_launch_visibility_budget(std::time::Duration::from_secs(5), || {
-                prepare(f.home(), owner)
-            })
-            .unwrap();
+            prepare(f.home(), owner).unwrap();
             let booted = native_start(f.state(), owner);
             assert_eq!(booted[ASSIGN]["chat"]["projectId"], "legacy");
             if project.is_some() {

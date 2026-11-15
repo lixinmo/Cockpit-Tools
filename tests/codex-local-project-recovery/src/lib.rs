@@ -69,8 +69,6 @@ fn readonly_preview_current_project_metadata() {
         Err(error) => {
             let category = if error.contains(LAUNCH_VISIBILITY_TIMEOUT) {
                 "timeout"
-            } else if error.contains("CODEX_PROJECT_QUICK_LIMIT") {
-                "quick_limit"
             } else {
                 "scan_failed"
             };

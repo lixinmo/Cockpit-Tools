@@ -1,8 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createInstance } from 'i18next';
 
-import zhCN from '../../locales/zh-CN.json';
 import { PACKAGE_CODE } from '../../types/codebuddy-suite.ts';
 import type { MinimaxCodeAccount } from '../../types/minimaxCode.ts';
 import {
@@ -108,11 +106,9 @@ test('reads details from the top level of the real credit/details body', () => {
   assert.equal(wrapped.data.Response.Data.TotalDosage, 250);
 });
 
-test('lands each credit type in a labelled group instead of 其他', async () => {
+test('lands each credit type in a labelled group instead of 其他', () => {
   // Regression: bare 'free'/'purchased' codes fell through to the `其他` group,
   // so the quota card showed one ugly "其他" row.
-  const i18n = createInstance();
-  await i18n.init({ lng: 'zh-CN', resources: { 'zh-CN': { translation: zhCN } } });
   const groups = getMiniMaxCodeQuotaGroups(
     account({
       base_resp: { status_code: 0 },
@@ -122,13 +118,13 @@ test('lands each credit type in a labelled group instead of 其他', async () =>
       ],
       total_count: 2,
     }),
-    (key) => i18n.t(key),
+    (key) => key,
   );
 
   const labels = groups.filter((group) => group.visible).map((group) => group.label);
-  assert.ok(labels.includes('活动赠送包'), `expected 活动赠送包, got ${JSON.stringify(labels)}`);
-  assert.ok(labels.includes('加量包'), `expected 加量包, got ${JSON.stringify(labels)}`);
-  assert.ok(!labels.includes('其他'), `其他 should be empty, got ${JSON.stringify(labels)}`);
+  assert.ok(labels.includes('common.shared.quotaCategories.activity'), `expected 活动赠送包, got ${JSON.stringify(labels)}`);
+  assert.ok(labels.includes('common.shared.quotaCategories.extra'), `expected 加量包, got ${JSON.stringify(labels)}`);
+  assert.ok(!labels.includes('common.shared.quotaCategories.other'), `其他 should be empty, got ${JSON.stringify(labels)}`);
 });
 
 test('drops detail rows the official client would discard', () => {

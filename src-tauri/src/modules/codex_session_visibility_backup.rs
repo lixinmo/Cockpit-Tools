@@ -448,9 +448,10 @@ fn backup_instance_files(
         "codex",
         &scope,
         &format!(
-            "{}{}{}",
+            "{}{}-{}{}",
             SESSION_VISIBILITY_REPAIR_BACKUP_PREFIX,
             Utc::now().format("%Y%m%d-%H%M%S"),
+            uuid::Uuid::new_v4(),
             SESSION_VISIBILITY_REPAIR_BACKUP_SUFFIX
         ),
     )?;
@@ -558,89 +559,9 @@ fn backup_instance_files(
     Ok(backup_dir)
 }
 
-fn parse_session_visibility_repair_backup_timestamp(name: &str) -> Option<&str> {
-    let timestamp = name
-        .strip_prefix(SESSION_VISIBILITY_REPAIR_BACKUP_PREFIX)?
-        .strip_suffix(SESSION_VISIBILITY_REPAIR_BACKUP_SUFFIX)?;
-    if timestamp.len() != 15 {
-        return None;
-    }
-    if !timestamp.chars().enumerate().all(|(index, value)| {
-        if index == 8 {
-            value == '-'
-        } else {
-            value.is_ascii_digit()
-        }
-    }) {
-        return None;
-    }
-    Some(timestamp)
-}
-
-fn prune_session_visibility_repair_backups(instances: &[CodexSyncInstance]) {
-    for instance in instances {
-        if let Err(error) = prune_instance_session_visibility_repair_backups(&instance.data_dir) {
-            modules::logger::log_warn(&format!(
-                "清理 Codex 会话可见性修复旧备份失败 ({}): {}",
-                instance.data_dir.display(),
-                error
-            ));
-        }
-    }
-}
-
-fn prune_instance_session_visibility_repair_backups(data_dir: &Path) -> Result<(), String> {
-    let entries = match fs::read_dir(data_dir) {
-        Ok(entries) => entries,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(error) => {
-            return Err(format!(
-                "读取实例目录失败 ({}): {}",
-                data_dir.display(),
-                error
-            ));
-        }
-    };
-    let mut backups: Vec<(String, PathBuf)> = Vec::new();
-
-    for entry in entries {
-        let entry = entry
-            .map_err(|error| format!("读取实例目录项失败 ({}): {}", data_dir.display(), error))?;
-        let file_type = entry.file_type().map_err(|error| {
-            format!(
-                "读取实例目录项类型失败 ({}): {}",
-                entry.path().display(),
-                error
-            )
-        })?;
-        if !file_type.is_dir() {
-            continue;
-        }
-
-        let file_name = entry.file_name();
-        let Some(file_name) = file_name.to_str() else {
-            continue;
-        };
-        let Some(timestamp) = parse_session_visibility_repair_backup_timestamp(file_name) else {
-            continue;
-        };
-        backups.push((timestamp.to_string(), entry.path()));
-    }
-
-    if backups.len() <= MAX_SESSION_VISIBILITY_REPAIR_BACKUPS {
-        return Ok(());
-    }
-
-    backups.sort_by(|left, right| right.0.cmp(&left.0));
-    for (_, path) in backups
-        .into_iter()
-        .skip(MAX_SESSION_VISIBILITY_REPAIR_BACKUPS)
-    {
-        fs::remove_dir_all(&path)
-            .map_err(|error| format!("删除旧备份失败 ({}): {}", path.display(), error))?;
-    }
-
-    Ok(())
+pub(crate) fn is_session_visibility_repair_backup(name: &str) -> bool {
+    name.starts_with(SESSION_VISIBILITY_REPAIR_BACKUP_PREFIX)
+        && name.ends_with(SESSION_VISIBILITY_REPAIR_BACKUP_SUFFIX)
 }
 
 fn restore_instance_files_from_backup(

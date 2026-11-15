@@ -36,7 +36,7 @@ fn main() {
     let out = Path::new(&out);
     let mut helpers = source_items(&root,
         "src-tauri/src/modules/codex_session_visibility_repair_api.rs",
-        &["STATE_DB_FILE", "SQLITE_DIR_NAME", "PREFERRED_SQLITE_DB_FILE"]);
+        &["STATE_DB_FILE", "SQLITE_DIR_NAME", "PREFERRED_SQLITE_DB_FILE", "can_defer_launch_snapshot_error"]);
     helpers.push_str(&source_items(&root,
         "src-tauri/src/modules/codex_session_visibility_projects.rs",
         &["QUICK_PROJECT_REPAIR_BUDGET"]));
@@ -56,11 +56,13 @@ fn main() {
         &["WINDOWS_OPERATION_ERROR_PREFIX", "WindowsOperationErrorPayload", "is_access_denied_message", "format_error", "format_permission_io_error"]);
     fs::write(out.join("windows_errors.rs"), windows).expect("write source-derived error formatting");
 
-    let budget_tests = source_items(&root,
+    let mut budget_tests = source_items(&root,
         "src-tauri/src/modules/codex_session_visibility_launch_budget_tests.rs",
         &["launch_budget_interrupts_sql_and_rolls_back_its_transaction",
           "expired_launch_budget_is_paused_for_existing_and_fresh_rollback_connections",
-          "launch_budget_does_not_detach_a_slow_read_or_leave_deadlines_on_next_worker",
-          "only_pre_mutation_process_snapshot_failures_can_be_deferred"]);
+          "launch_budget_does_not_detach_a_slow_read_or_leave_deadlines_on_next_worker"]);
+    budget_tests.push_str(&source_items(&root,
+        "src-tauri/src/modules/codex_session_visibility_launch_tests.rs",
+        &["only_pre_mutation_process_snapshot_failures_can_be_deferred"]));
     fs::write(out.join("launch_budget_tests.rs"), budget_tests).expect("write source-derived deadline tests");
 }

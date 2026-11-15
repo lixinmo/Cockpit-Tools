@@ -154,3 +154,29 @@ After bundle verification the builder removed `target/`, `node_modules/`,
 `dist/`, and the build scratch directory. These held at least 2.46 GiB before
 packaging. After startup validation the old v1.3.81 App, the duplicate staged
 App, and the generated Tauri schemas were removed, totaling about 284 MiB.
+
+## Upstream v1.4.0 integration (2026-11-15)
+
+Merged upstream `795e91f5`. The merge adopts the upstream project recovery
+readers and targeted commit-time revalidation. The fork keeps the launch and
+repair deadlines, SQLite interruption, and rollback path required by its project
+recovery contract. The earlier fork-specific uncapped thread reader and
+whole-history commit scan are superseded.
+
+Upstream owns reset-card timing, including its new preference to wait for
+usage Credits to run out. The fork still checks regular quota for the actual
+subscription credential before dispatch. WebSocket history preloads and the
+final generating request use that check while retaining the upstream replay
+rules. The setup-only connection retry still wraps the same Native HTTP client.
+
+The merge also uses upstream's Codex API Service, Cursor and MiniMax frontend
+test fixtures in place of the equivalent v1.3.84 merge fixes.
+
+On the Intel Mac, the production frontend build, 2,283 frontend tests, 130
+build and publication tests, the locale check, and the Chromium platform sort
+smoke test passed. Two runs of the App's Rust test binary passed 280 distinct
+cases. They include Credits denial between WebSocket preload segments on both
+new and reused sockets, DNS and IPv6 settings, launch-time recovery, and reset
+card timing. The standalone retry, Credits and recovery suites passed 18, 29
+and 65 tests respectively. The opt-in real-profile preview was excluded. This
+merge validated source and tests. The installed App remains at v1.3.84.

@@ -17,5 +17,6 @@ include!("codex_session_visibility_backup.rs");
 mod tests {
     include!("codex_session_visibility_tests.rs");
     include!("codex_session_visibility_mtime_tests.rs");
+    include!("codex_session_visibility_launch_tests.rs");
     include!("codex_session_visibility_launch_budget_tests.rs");
 }

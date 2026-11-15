@@ -265,6 +265,7 @@ fn native_recorded_failure_cools_account(report: &native_contract::RequestReport
             report.error.as_deref(),
             Some(
                 "upstream_request_scoped"
+                    | "quota_reserved"
                     | "request_scoped"
                     | "connection_lifecycle"
                     | "client_cancelled"
@@ -573,13 +574,15 @@ fn native_scoped_account_ids(
     )
 }
 
-fn native_quota_allows(collection: &CodexLocalAccessCollection, account: &CodexAccount) -> bool {
+fn native_host_quota_cooldown_active(account: &CodexAccount) -> bool {
     let now = now_ms();
-    if account_quota_cooldown(account, now).is_some_and(|snapshot| snapshot.active(now)
-        && !native_credits_recovered_host_quota(account, snapshot.updated_at_ms)) {
-        return false;
-    }
-    native_bound_quota_reserve_allows(collection, account)
+    account_quota_cooldown(account, now).is_some_and(|snapshot| {
+        snapshot.active(now) && !native_credits_recovered_host_quota(account, snapshot.updated_at_ms)
+    })
+}
+
+fn native_quota_allows(collection: &CodexLocalAccessCollection, account: &CodexAccount) -> bool {
+    !native_host_quota_cooldown_active(account) && native_bound_quota_reserve_allows(collection, account)
 }
 
 fn native_is_reserve_model(model: &str) -> bool {
@@ -854,6 +857,13 @@ impl native_contract::Host for NativeHostBridge {
             .filter(|collection| collection.bound_oauth_account_id.as_deref() == Some(account_id))
             .and_then(|collection| collection.bound_oauth_quota_reserve.as_ref());
         check_gateway_quota_before_send(account_id, self.collection_override.is_none(), local)
+    }
+    fn request_quota_refresh(&self, account_id: &str) {
+        let bound = quota_reserve_coordinator().lock().ok()
+            .is_some_and(|runtime| runtime.watched_account.as_deref() == Some(account_id));
+        if bound && self.collection_override.is_none() && crate::get_app_handle().is_some() {
+            trigger_bound_oauth_quota_refresh_in_background("请求发送前复核", Duration::from_secs(1));
+        }
     }
     fn set_session_affinity_enabled(&self, enabled: bool) {
         if self

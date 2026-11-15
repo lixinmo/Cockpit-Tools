@@ -1,20 +1,8 @@
 // A cooperative deadline belongs to the synchronous launch worker, never to a
 // detached task. The caller awaits repair and rollback before it can launch Codex.
 const LAUNCH_VISIBILITY_REPAIR_BUDGET: Duration = Duration::from_secs(5);
-const MAX_LAUNCH_ROLLOUT_FIRST_LINE_BYTES: u64 = 1024 * 1024;
 const LAUNCH_VISIBILITY_TIMEOUT: &str = "CODEX_SESSION_VISIBILITY_TIMEOUT";
-const LAUNCH_VISIBILITY_LINE_TOO_LARGE: &str = "CODEX_SESSION_VISIBILITY_ROLLOUT_LINE_TOO_LARGE";
 const LAUNCH_VISIBILITY_ROLLBACK_FAILED: &str = "CODEX_SESSION_VISIBILITY_ROLLBACK_FAILED";
-
-/// Only the read before any mutation can be deferred. Never suppress a timeout
-/// after writes, a rollback failure, or an actual history/configuration error.
-pub fn can_defer_launch_snapshot_error(error: &str) -> bool {
-    !error.contains(LAUNCH_VISIBILITY_ROLLBACK_FAILED)
-        && !error.contains("CODEX_DESKTOP_STATE_PREPARATION_FAILED")
-        && (error.contains("CODEX_SESSION_VISIBILITY_PROCESS_UNAVAILABLE")
-            || (error.contains(LAUNCH_VISIBILITY_TIMEOUT)
-                && error.ends_with("stage=process_snapshot")))
-}
 
 struct LaunchVisibilityBudget {
     deadline: std::time::Instant,

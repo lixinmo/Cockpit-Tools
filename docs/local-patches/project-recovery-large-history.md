@@ -8,21 +8,20 @@ The limits could skip an entire account/project restore despite a small local
 project registry. The thread count included child-agent and guardian records
 that do not themselves receive project assignments.
 
-This patch extends the upstream implementation; it adds no alternate project
-store, watcher, credential migration or history-repair service. It does not
-change Native retry, Credits, model configuration or Reset automation.
+Upstream v1.4.0 now owns the project, thread, catalog and state-file reads.
+The fork preserves the operation deadlines and the recovery path on timeout.
 
 ## Behavior and protections
 
-- Account-state preparation, project planning and pre-commit thread revalidation
-  all read without the retired thread-count gate. Quick planning no longer
-  rejects the state or adjacent backup merely for exceeding 2 MB.
+- The upstream readers have no fixed thread or state-file size gate. Commit
+  revalidation queries only the thread IDs the plan will update.
 - Existing per-operation deadline checks, SQLite interruption/busy timeouts,
   profile/process ownership, state hash comparisons, conditional row writes,
   durable transaction intent and rollback remain intact.
-- The common 20 MB file guard and the quick planner's project/root/catalog bounds
-  remain. Account-state preparation follows upstream's deadline-bounded project
-  registry read before the quick planner runs.
+- Account-state preparation reads the project registry first. If a full thread
+  scan times out, it tries the saved thread IDs within the remaining budget so
+  the account switch can still publish its project groups. The launch and repair
+  paths check their deadlines while reading large files and querying SQLite.
 - Remote/cloud projects, account-private state, explicit projectless threads,
   child agents, pending deletions and ambiguous/newer assignments retain their
   existing protection. Chat bodies, credentials and history contents are not
@@ -43,6 +42,20 @@ it uses the upstream saved-membership query with the remaining launch time.
 The isolated recovery suite passed 66 tests with one opt-in preview excluded.
 It covered the large-profile round trip, large state and backup files, the slow
 SQLite fallback, sidebar presentation, and SSH state and startup restoration.
+
+## Upstream v1.4.0 review
+
+Upstream `795e91f5` removes the thread-count ceiling from planning and account
+preparation and revalidates only affected thread IDs at commit. It also removes
+the 20 MB state-file limit and quick limits on projects, roots, and catalog
+rows. The fork adopts these readers and retains the existing launch, switch,
+and project repair deadlines. In-progress SQLite work is interrupted at its
+deadline, and a failed write can finish rollback after the deadline.
+
+The isolated release suite passed 65 tests with the opt-in profile preview
+excluded. It covered state and backup files larger than 20 MB, the 3,500-thread
+account round trip, deadline expiry, SQLite interruption and conditional
+rollback.
 
 ## Earlier upstream review (2026-11-12)
 

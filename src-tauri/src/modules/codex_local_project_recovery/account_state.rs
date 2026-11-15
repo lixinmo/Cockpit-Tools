@@ -1,13 +1,13 @@
 //! Bridge Codex Desktop's account-scoped renderer state while the profile is stopped.
 //! Only projects and user threads verified in this profile's SQLite registry are
 //! shared. Remote/cloud state and account atoms stay in their original scope.
+use super::super::{
+    configure_launch_visibility_connection, launch_visibility_budget, with_launch_visibility_budget,
+    LAUNCH_VISIBILITY_TIMEOUT, QUICK_PROJECT_REPAIR_BUDGET,
+};
 use super::*;
 use crate::modules::ssh_server_identity::AUTO_CONNECT;
 use sha2::{Digest, Sha256};
-use super::super::{
-    configure_launch_visibility_connection, launch_visibility_budget,
-    with_launch_visibility_budget, LAUNCH_VISIBILITY_TIMEOUT, QUICK_PROJECT_REPAIR_BUDGET,
-};
 
 #[path = "account_state_ssh.rs"]
 mod ssh;
@@ -505,20 +505,21 @@ pub(crate) fn prepare(home: &Path, owner: Option<&str>) -> Result<bool, String> 
     if let Some(primary) = project_database(home)? {
         let db = open(&home.join(primary), false)?;
         db.execute_batch("BEGIN").map_err(|e| e.to_string())?;
-        // Project visibility depends on the registry. Read thread memberships
-        // within a separate budget so they cannot block restoring the groups.
-        let projects = projects_with_limit(&db, None)?;
+        // Reserve time to publish project groups when a large history scan times out.
+        let projects = read_projects(&db)?;
         let threads = local_memberships(&db, &sources)?;
         let view = local_view(home, &sources, &projects, &threads)?;
         // Finish the read transaction before writing the renderer state.
         drop(db);
         merge_local(&mut target["globals"], &view);
     }
-    let remaining = launch_visibility_budget().map(|budget|
-        budget.deadline.saturating_duration_since(std::time::Instant::now()));
-    let verification = if let Some(remaining) = remaining {
-        with_launch_visibility_budget((remaining / 4).min(QUICK_PROJECT_REPAIR_BUDGET),
-            || ssh::verify_threads(home, &mut ssh_state))
+    let verification = if let Some(budget) = launch_visibility_budget() {
+        let remaining = budget
+            .deadline
+            .saturating_duration_since(std::time::Instant::now());
+        with_launch_visibility_budget((remaining / 4).min(QUICK_PROJECT_REPAIR_BUDGET), || {
+            ssh::verify_threads(home, &mut ssh_state)
+        })
     } else {
         ssh::verify_threads(home, &mut ssh_state)
     };
@@ -560,16 +561,22 @@ pub(crate) fn prepare(home: &Path, owner: Option<&str>) -> Result<bool, String> 
 }
 
 fn local_memberships(db: &Connection, sources: &[&Value]) -> Result<Vec<Thread>, String> {
+    let Some(launch) = launch_visibility_budget() else {
+        return read_threads(db, None);
+    };
     let budget = || {
-        launch_visibility_budget()
-            .map(|budget| budget.deadline.saturating_duration_since(std::time::Instant::now()) / 4)
-            .unwrap_or(QUICK_PROJECT_REPAIR_BUDGET)
+        launch
+            .deadline
+            .saturating_duration_since(std::time::Instant::now()) / 4
     };
     let full = with_launch_visibility_budget(budget(), || {
         configure_launch_visibility_connection(db)?;
-        threads(db)
+        read_threads(db, None)
     });
-    if !full.as_ref().is_err_and(|error| error.starts_with(LAUNCH_VISIBILITY_TIMEOUT)) {
+    if !full
+        .as_ref()
+        .is_err_and(|error| error.starts_with(LAUNCH_VISIBILITY_TIMEOUT))
+    {
         return full;
     }
     // An actual timeout leaves time to recover saved memberships using the
@@ -577,7 +584,7 @@ fn local_memberships(db: &Connection, sources: &[&Value]) -> Result<Vec<Thread>,
     match with_launch_visibility_budget(budget(), || {
         let ids = presentation::referenced_threads(&sources[..2])?;
         configure_launch_visibility_connection(db)?;
-        threads_for_presentation(db, &ids)
+        read_threads_by_ids(db, &ids)
     }) {
         Err(error) if error.starts_with(LAUNCH_VISIBILITY_TIMEOUT) => {
             crate::modules::logger::log_warn("[Codex Local Projects] Thread membership recovery deferred within launch budget");
@@ -588,14 +595,12 @@ fn local_memberships(db: &Connection, sources: &[&Value]) -> Result<Vec<Thread>,
 }
 
 fn finish_prepare(home: &Path, bytes: &[u8], before: &Value, after: &Value) -> Result<bool, String> {
+    check()?;
     if after == before {
         return Ok(ssh::prepare_startup(home, after));
     }
     let expected_hash: [u8; 32] = Sha256::digest(bytes).into();
     let content = serde_json::to_string(after).map_err(|e| e.to_string())?;
-    if content.len() as u64 > MAX_STATE_BYTES {
-        return Err("CODEX_PROJECT_STATE_TOO_LARGE".into());
-    }
     check()?;
     // Codex owns the adjacent .bak. Do not replace it with a temporary backup
     // or treat it as a plaintext credential backup to remove.

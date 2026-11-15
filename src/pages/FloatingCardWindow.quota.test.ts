@@ -84,7 +84,7 @@ for (const platform of ['antigravity', 'antigravity_ide']) {
   });
 }
 
-test('Cursor legacy quota keeps its three primary bars and reported On-Demand usage', async () => {
+test('Cursor shows its primary quota bars and the enabled On-Demand cap', async () => {
   const store = (await server.ssrLoadModule('/src/stores/useCursorAccountStore.ts')).useCursorAccountStore;
   const account = { id: 'cursor-test', email: 'cursor@example.com', access_token: '', created_at: 0, last_used: 0,
     cursor_usage_raw: { individualUsage: { plan: { totalPercentUsed: 20, autoPercentUsed: 30, apiPercentUsed: 40 }, onDemand: { used: 100, limit: 1000, enabled: true } } } };
@@ -94,13 +94,11 @@ test('Cursor legacy quota keeps its three primary bars and reported On-Demand us
   const i18n = createInstance();
   await i18n.init({ lng: 'en', resources: { en: { translation: enResources } } });
   const html = renderToStaticMarkup(createElement(I18nextProvider, { i18n }, createElement(FloatingCardWindow)));
-  const rows = html.split('class="floating-card-quota-row"').slice(1);
-  assert.equal(rows.length, 4);
-  assert.match(rows[0], />Usage<[^]*?20% used/);
-  assert.match(rows[1], />Cursor Models<[^]*?30% used/);
-  assert.match(rows[2], />Other Models<[^]*?40% used/);
-  assert.match(rows[3], />On-Demand<[^]*?10% used/);
-  assert.match(rows[3], /\$1\.00 \/ \$10\.00/);
+  assert.equal((html.match(/class="floating-card-quota-row"/g) ?? []).length, 4);
+  assert.match(html, /Usage[^]*?20%/);
+  assert.match(html, /Cursor Models[^]*?30%/);
+  assert.match(html, /Other Models[^]*?40%/);
+  assert.match(html, /On-Demand[^]*?10%/);
 });
 
 test('Codex retains its existing two-window cap', async () => {

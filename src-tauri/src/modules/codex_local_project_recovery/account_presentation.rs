@@ -1,8 +1,6 @@
 use super::*;
 
-const FALLBACK_MAX_PRESENTATION_THREADS: usize = 2048;
-
-pub(super) fn referenced_threads(sources: &[&Value]) -> Result<Vec<String>, String> {
+pub(super) fn referenced_threads<'a>(sources: &[&'a Value]) -> Result<Vec<&'a str>, String> {
     let mut seen = HashSet::new();
     let mut result = Vec::new();
     for source in sources {
@@ -16,10 +14,7 @@ pub(super) fn referenced_threads(sources: &[&Value]) -> Result<Vec<String>, Stri
         for id in pins.chain(orders).filter_map(Value::as_str).chain(memberships) {
             check()?;
             if seen.insert(id) {
-                result.push(id.to_owned());
-                if result.len() == FALLBACK_MAX_PRESENTATION_THREADS {
-                    return Ok(result);
-                }
+                result.push(id);
             }
         }
     }

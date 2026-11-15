@@ -1,31 +1,4 @@
 #[test]
-fn desktop_api_key_launch_restores_onboarding_state_without_project_metadata() {
-    let temp = tempfile::tempdir().unwrap();
-    fs::write(temp.path().join(CONFIG_FILE_NAME), "cli_auth_credentials_store = 'file'\n").unwrap();
-    let auth = br#"{"auth_mode":"apikey","OPENAI_API_KEY":"fixture-key"}"#;
-    fs::write(temp.path().join("auth.json"), auth).unwrap();
-    let state = json!({
-        "electron-account-renderer-state-v1":{"owner":null,"inactive":{}},
-        "electron-persisted-atom-state":{"electron:onboarding-projectless-completed":true}
-    });
-    let state_path = temp.path().join(GLOBAL_STATE_FILE);
-    fs::write(&state_path, serde_json::to_vec(&state).unwrap()).unwrap();
-    // CLI launches keep the native renderer state intact.
-    repair_session_visibility_quick_for_instance("onboarding-api-service", "Fixture", temp.path(), false)
-        .unwrap();
-    assert_eq!(serde_json::from_slice::<JsonValue>(&fs::read(&state_path).unwrap()).unwrap(), state);
-    // The same desktop entry is exercised on macOS and Windows.
-    let result = repair_session_visibility_quick_for_instance(
-        "onboarding-api-service", "Fixture", temp.path(), true,
-    ).unwrap();
-    assert!(!result.local_project_recovery_deferred);
-    let prepared: JsonValue = serde_json::from_slice(&fs::read(&state_path).unwrap()).unwrap();
-    assert!(prepared.get("electron-account-renderer-state-v1").is_none());
-    assert_eq!(prepared["electron-persisted-atom-state"]["electron:onboarding-projectless-completed"], true);
-    assert_eq!(fs::read(temp.path().join("auth.json")).unwrap(), auth);
-}
-
-#[test]
 fn launch_budget_interrupts_sql_and_rolls_back_its_transaction() {
     let mut connection = Connection::open_in_memory().unwrap();
     connection
@@ -113,29 +86,6 @@ fn launch_budget_does_not_detach_a_slow_read_or_leave_deadlines_on_next_worker()
         check_launch_visibility_budget("next_launch")
     })
     .unwrap();
-}
-
-#[test]
-fn oversized_launch_rollout_header_fails_before_database_or_history_mutation() {
-    let fixture = VisibilityMtimeFixture::new();
-    let oversized = vec![b'x'; MAX_LAUNCH_ROLLOUT_FIRST_LINE_BYTES as usize + 2];
-    fs::write(&fixture.rollout, &oversized).unwrap();
-    let original_time = fs::metadata(&fixture.rollout).unwrap().modified().unwrap();
-    let error =
-        repair_session_visibility_quick_for_instance("header-limit", "Header limit", &fixture.dir, false)
-            .unwrap_err();
-    assert!(error.contains(LAUNCH_VISIBILITY_LINE_TOO_LARGE), "{error}");
-    assert_eq!(read_thread_provider(&fixture.dir, "mtime-thread"), "openai");
-    assert_eq!(fs::read(&fixture.rollout).unwrap(), oversized);
-    assert_eq!(
-        fs::metadata(&fixture.rollout).unwrap().modified().unwrap(),
-        original_time
-    );
-    // Non-launch readers retain their full explicit repair behavior.
-    assert_eq!(
-        read_first_line(&fixture.rollout).unwrap().unwrap().0.len(),
-        oversized.len()
-    );
 }
 
 #[test]
@@ -232,39 +182,4 @@ fn rollback_failure_keeps_its_specific_error_after_launch_deadline() {
     assert!(Path::new(backup).join("manifest.json").is_file());
     assert!(Path::new(backup).join("db").join(STATE_DB_FILE).is_file());
     fs::remove_dir_all(backup).unwrap();
-}
-
-#[test]
-fn launch_quick_repair_leaves_backup_retention_outside_critical_path() {
-    let fixture = VisibilityMtimeFixture::new();
-    let old = fixture
-        .dir
-        .join("backup-20200101-000000-session-visibility-repair");
-    let newest = fixture
-        .dir
-        .join("backup-20200102-000000-session-visibility-repair");
-    fs::create_dir_all(&old).unwrap();
-    fs::create_dir_all(&newest).unwrap();
-    let summary =
-        repair_session_visibility_quick_for_instance("retention", "Retention", &fixture.dir, false)
-            .unwrap();
-    assert!(old.exists() && newest.exists());
-    for backup in summary.backup_dirs {
-        fs::remove_dir_all(backup).unwrap();
-    }
-}
-#[test]
-fn only_pre_mutation_process_snapshot_failures_can_be_deferred() {
-    assert!(can_defer_launch_snapshot_error("CODEX_SESSION_VISIBILITY_PROCESS_UNAVAILABLE"));
-    assert!(can_defer_launch_snapshot_error("CODEX_SESSION_VISIBILITY_TIMEOUT: CODEX_SESSION_VISIBILITY_TIMEOUT: stage=process_snapshot"));
-    for error in [
-        "CODEX_SESSION_VISIBILITY_TIMEOUT: stage=sqlite",
-        "CODEX_SESSION_VISIBILITY_TIMEOUT: stage=rollout_write",
-        "CODEX_SESSION_VISIBILITY_ROLLBACK_FAILED: CODEX_SESSION_VISIBILITY_TIMEOUT: stage=process_snapshot",
-        "CODEX_DESKTOP_STATE_PREPARATION_FAILED: CODEX_SESSION_VISIBILITY_PROCESS_UNAVAILABLE",
-        "CODEX_DESKTOP_STATE_PREPARATION_FAILED: CODEX_SESSION_VISIBILITY_TIMEOUT: stage=process_snapshot",
-        "database is locked",
-    ] {
-        assert!(!can_defer_launch_snapshot_error(error), "{error}");
-    }
 }

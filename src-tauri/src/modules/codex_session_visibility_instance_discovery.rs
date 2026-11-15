@@ -578,23 +578,30 @@ fn read_first_line(path: &Path) -> Result<Option<(String, String)>, String> {
     check_launch_visibility_budget("read_rollout_header")?;
     let file = fs::File::open(path)
         .map_err(|error| format!("打开 rollout 文件失败 ({}): {}", path.display(), error))?;
-    // Limit only the launch path. Manual repair keeps its historical semantics;
-    // a malformed multi-GB first line must never be allocated during switching.
-    let limit = launch_visibility_budget()
-        .map(|_| MAX_LAUNCH_ROLLOUT_FIRST_LINE_BYTES + 1)
-        .unwrap_or(u64::MAX);
-    let mut reader = BufReader::new(std::io::Read::take(file, limit));
+    let mut reader = BufReader::new(file);
     let mut buffer = Vec::new();
-    let bytes_read = reader
-        .read_until(b'\n', &mut buffer)
-        .map_err(|error| format!("读取 rollout 首行失败 ({}): {}", path.display(), error))?;
-    check_launch_visibility_budget("read_rollout_header")?;
-    if launch_visibility_budget().is_some()
-        && bytes_read as u64 > MAX_LAUNCH_ROLLOUT_FIRST_LINE_BYTES
-    {
-        return Err(format!("{LAUNCH_VISIBILITY_LINE_TOO_LARGE}: {}", path.display()));
+    loop {
+        check_launch_visibility_budget("read_rollout_header")?;
+        let chunk = match reader.fill_buf() {
+            Ok(chunk) => chunk,
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(error) => {
+                return Err(format!("读取 rollout 首行失败 ({}): {}", path.display(), error));
+            }
+        };
+        if chunk.is_empty() {
+            break;
+        }
+        let newline = chunk.iter().position(|byte| *byte == b'\n');
+        let length = newline.map_or(chunk.len(), |index| index + 1);
+        buffer.extend_from_slice(&chunk[..length]);
+        reader.consume(length);
+        if newline.is_some() {
+            break;
+        }
     }
-    if bytes_read == 0 {
+    check_launch_visibility_budget("read_rollout_header")?;
+    if buffer.is_empty() {
         return Ok(None);
     }
 

@@ -275,10 +275,7 @@ impl NativeCreditsPool {
     fn mark_host_cooldowns(&mut self, before: &[CodexAccount]) {
         for account in before {
             if self.scheduler.get(&account.id) == Some(&"model_or_account_policy")
-                && account_quota_cooldown(account, now_ms()).is_some_and(|q| {
-                    q.active(now_ms())
-                        && !native_credits_recovered_host_quota(account, q.updated_at_ms)
-                })
+                && native_host_quota_cooldown_active(account)
             {
                 self.scheduler.insert(account.id.clone(), "quota_cooldown");
             }

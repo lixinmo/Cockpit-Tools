@@ -1,11 +1,12 @@
 //! Local project registry recovery. No credentials, providers or rollout contents.
-//! Quick repair uses bounded current metadata; deep repair may inspect snapshots.
+//! Quick repair uses current metadata; deep repair may inspect snapshots.
 //! Neither path reads credentials, providers or rollout contents.
 use rusqlite::{Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 const STATE: &str = ".codex-global-state.json";
@@ -14,9 +15,6 @@ const ASSIGN: &str = "thread-project-assignments";
 const MIGRATION: &str = "app-server-projects-migration-by-host";
 const HOSTS: &str = "thread-project-membership-host-ids";
 const JOURNAL: &str = ".cockpit-local-project-recovery.json";
-const MAX_STATE_BYTES: u64 = 20_000_000;
-const QUICK_MAX_PROJECTS: usize = 256;
-const QUICK_MAX_CATALOG_ROWS: usize = 4096;
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -95,11 +93,21 @@ fn open(path: &Path, write: bool) -> Result<Connection, String> {
 }
 
 fn read_bytes(path: &Path) -> Result<Option<Vec<u8>>, String> {
-    match fs::metadata(path) {
-        Ok(meta) if meta.len() > MAX_STATE_BYTES => Err("CODEX_PROJECT_STATE_TOO_LARGE".into()),
-        Ok(_) => fs::read(path).map(Some).map_err(|e| e.to_string()),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(e.to_string()),
+    let mut file = match fs::File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.to_string()),
+    };
+    let mut bytes = Vec::new();
+    let mut chunk = [0; 64 * 1024];
+    loop {
+        check()?;
+        match file.read(&mut chunk) {
+            Ok(0) => return Ok(Some(bytes)),
+            Ok(n) => bytes.extend_from_slice(&chunk[..n]),
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error.to_string()),
+        }
     }
 }
 

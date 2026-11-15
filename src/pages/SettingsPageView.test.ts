@@ -12,6 +12,7 @@ test('the network page opens report links only when a listener address is availa
     '../components/SettingsInstanceCleanupSection': { SettingsInstanceCleanupSection: Section },
     '../components/AntigravityMenuBarQuotaSelect': { AntigravityMenuBarQuotaSelect: Section },
     '../components/codex/CodexProxyDirectHosts': { CodexProxyDirectHosts: Section },
+    '../components/SingleSelectDropdown': { SingleSelectDropdown: Section },
     './SettingsGeneralPanel': { SettingsGeneralPanel: Section },
   });
   const opened: string[] = [];
@@ -45,6 +46,7 @@ test('data settings mount only on first visit and retain their component tree ac
     '../components/SettingsInstanceCleanupSection': { SettingsInstanceCleanupSection: Section },
     '../components/AntigravityMenuBarQuotaSelect': { AntigravityMenuBarQuotaSelect: Section },
     '../components/codex/CodexProxyDirectHosts': { CodexProxyDirectHosts: Section },
+    '../components/SingleSelectDropdown': { SingleSelectDropdown: Section },
     './SettingsGeneralPanel': { SettingsGeneralPanel: Section },
   });
   let activeTab = 'general';

@@ -144,3 +144,17 @@ and tokio 1.52.0. All 18 setup-retry tests passed with these versions. Four
 isolated loopback tests using the merged client builder verified that it
 detects a stalled HTTP/2 connection and allows a healthy 50-second response to
 finish, both with and without the setup retry.
+
+## Upstream v1.4.0 review (2026-11-15)
+
+Mihomo applies the upstream DNS and IPv6 settings for a bound proxy. Native
+HTTP on that route uses the account's stable loopback `socks5h` entry, which
+passes the destination hostname to the proxy and reads the current binding on
+each new connection. Direct requests still use the typed system resolver.
+
+The WebSocket history preload runs on an established socket and uses its own
+non-generating response checks before any HTTP bridge fallback. The Native
+HTTP builder retains one setup retry entry. WebSocket-selected clients remain
+outside this setup retry, and ordinary HTTP/1 fallback retains it. The patched
+reqwest/hyper-util send boundary and the three-attempt budget are unchanged.
+The local verifier passed all 18 acceptance tests after the merge.

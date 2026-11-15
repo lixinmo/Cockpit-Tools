@@ -631,7 +631,7 @@ impl RequestTracker {
         }
     }
 
-    pub(super) fn check_quota_before_send(&self) -> Result<(), ServiceError> {
+    pub(super) fn check_credits_before_send(&self) -> Result<(), ServiceError> {
         let guard = match &self.pending_dispatch {
             Some(candidate) => candidate.send_guard.as_ref(),
             None => self.send_guard.as_ref(),
@@ -639,11 +639,20 @@ impl RequestTracker {
         if let Some(guard) = guard {
             guard.check().map_err(|error| error.with_upstream_not_sent(true))?;
         }
+        Ok(())
+    }
+
+    pub(super) fn check_quota_before_send(&self) -> Result<(), ServiceError> {
+        self.check_credits_before_send()?;
         if let Some(account_id) = self.quota_candidate() {
             self.host.check_quota_before_send(account_id)
                 .map_err(|error| error.with_upstream_not_sent(true))?;
         }
         Ok(())
+    }
+
+    pub(super) fn request_quota_refresh(&self) {
+        if let Some(account) = self.quota_candidate() { self.host.request_quota_refresh(account); }
     }
 
     /// Mark only when a business request is actually about to be sent. A

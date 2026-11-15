@@ -446,22 +446,6 @@ fn local_projects_preserve_project_order_ids_and_default_process_context_on_all_
 }
 
 #[test]
-fn local_projects_budget_expires_before_mutation_and_existing_data_stays_available() {
-    let f = Fixture::new();
-    let before = f.state();
-    let result = super::super::with_launch_visibility_budget(std::time::Duration::ZERO, || {
-        scan(f.home(), None)
-    });
-    assert!(result
-        .unwrap_err()
-        .contains("CODEX_SESSION_VISIBILITY_TIMEOUT"));
-    assert_eq!(f.state(), before);
-    assert!(f.project("chat").is_none());
-    f.apply(&f.scan());
-    assert!(!f.scan().changed());
-}
-
-#[test]
 fn quick_projects_use_current_metadata_only_and_keep_precise_backups() {
     let f = Fixture::new();
     f.catalog();
@@ -528,7 +512,7 @@ fn quick_projects_accept_large_state_and_backup_with_precise_backups() {
         let f = Fixture::new();
         f.catalog();
         let mut large = f.state();
-        large["large-cache"] = json!("x".repeat(2_000_001));
+        large["large-cache"] = json!("x".repeat(20_000_001));
         let raw = serde_json::to_vec(&large).unwrap();
         fs::write(f.home().join(&large_file), &raw).unwrap();
         let before = f.state();
@@ -552,16 +536,17 @@ fn quick_projects_accept_large_state_and_backup_with_precise_backups() {
 }
 
 #[test]
-fn quick_projects_keep_the_common_state_memory_limit() {
-    for large_file in [STATE.to_string(), format!("{STATE}.bak")] {
-        let f = Fixture::new();
-        let file = f.home().join(&large_file);
-        fs::File::create(&file).unwrap().set_len(MAX_STATE_BYTES + 1).unwrap();
-        assert!(scan_for_repair(f.home(), None, true).unwrap_err()
-            .contains("CODEX_PROJECT_STATE_TOO_LARGE"));
-        assert_eq!(fs::metadata(&file).unwrap().len(), MAX_STATE_BYTES + 1);
-        assert!(f.project("chat").is_none());
-    }
+fn local_projects_budget_expires_before_mutation_and_existing_data_stays_available() {
+    let f = Fixture::new();
+    let before = f.state();
+    let result = super::super::with_launch_visibility_budget(std::time::Duration::ZERO, || {
+        scan(f.home(), None)
+    });
+    assert!(result.unwrap_err().contains("CODEX_SESSION_VISIBILITY_TIMEOUT"));
+    assert_eq!(f.state(), before);
+    assert!(f.project("chat").is_none());
+    f.apply(&f.scan());
+    assert!(!f.scan().changed());
 }
 
 #[cfg(not(cockpit_project_recovery_harness))]
@@ -595,6 +580,7 @@ fn integrated_repair(
             data_dir: f.home().to_path_buf(),
             last_pid: None,
         }],
+        false,
     )
 }
 

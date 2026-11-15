@@ -28,11 +28,18 @@ const GLOBAL_STATE_FILE: &str = ".codex-global-state.json";
 const SESSION_DIRS: [&str; 2] = ["sessions", "archived_sessions"];
 const SESSION_VISIBILITY_REPAIR_BACKUP_PREFIX: &str = "backup-";
 const SESSION_VISIBILITY_REPAIR_BACKUP_SUFFIX: &str = "-session-visibility-repair";
-const MAX_SESSION_VISIBILITY_REPAIR_BACKUPS: usize = 1;
 const SESSION_INDEX_ACTIVITY_DRIFT_MS: i128 = 3_600_000;
 pub const SESSION_VISIBILITY_REPAIR_PROGRESS_EVENT: &str =
     "codex:session_visibility_repair_progress";
 static SESSION_VISIBILITY_REPAIR_LOCK: Mutex<()> = Mutex::new(());
+
+pub fn can_defer_launch_snapshot_error(error: &str) -> bool {
+    !error.contains(LAUNCH_VISIBILITY_ROLLBACK_FAILED)
+        && !error.contains("CODEX_DESKTOP_STATE_PREPARATION_FAILED")
+        && (error.contains("CODEX_SESSION_VISIBILITY_PROCESS_UNAVAILABLE")
+            || (error.contains(LAUNCH_VISIBILITY_TIMEOUT)
+                && error.ends_with("stage=process_snapshot")))
+}
 
 fn acquire_session_visibility_repair_lock() -> Result<MutexGuard<'static, ()>, String> {
     #[cfg(test)]
@@ -476,7 +483,7 @@ pub fn repair_session_visibility_quick_across_instances(
     repair_session_visibility_auto_across_instances(CodexSessionVisibilityAutoRepairMode::Current)
 }
 
-/// Repairs the launch target only, using the same bounded quick-repair plan as the
+/// Repairs the launch target only, using the same quick-repair plan as the
 /// automatic multi-instance repair. The caller supplies the already-resolved data
 /// directory so this path never discovers or mutates another configured instance.
 pub fn repair_session_visibility_quick_for_instance(
@@ -501,8 +508,7 @@ pub fn repair_session_visibility_quick_for_instance(
             last_pid: None,
         };
         // Desktop switches its renderer scope during startup. Restore the local
-        // workspace and SSH state before optional history maintenance can use up
-        // the budget or hit a quick-scan limit. Failure here must stop the launch.
+        // workspace and SSH state before history maintenance begins.
         let prepared = launch_desktop
             && prepare_local_project_account_state(&instance).map_err(|error| {
                 format!("CODEX_DESKTOP_STATE_PREPARATION_FAILED: {error}")
@@ -515,6 +521,7 @@ pub fn repair_session_visibility_quick_for_instance(
             None,
             RepairTargetSelection::default(),
             vec![instance],
+            true,
         )?;
         if prepared {
             summary.updated_global_state_entry_count += 1;
@@ -647,6 +654,7 @@ fn repair_session_visibility_across_instances_with_options(
         progress_reporter,
         selection,
         instances,
+        false,
     )
 }
 
@@ -656,6 +664,7 @@ fn repair_provider_visibility_for_instances_with_options(
     progress_reporter: ProgressReporter<'_>,
     selection: RepairTargetSelection,
     instances: Vec<CodexSyncInstance>,
+    automatic_start: bool,
 ) -> Result<CodexSessionVisibilityRepairSummary, String> {
     if options.mode == CodexSessionVisibilityRepairMode::History {
         return repair_history_projections_for_instances(options, run_id, progress_reporter, selection, instances);
@@ -663,7 +672,7 @@ fn repair_provider_visibility_for_instances_with_options(
     if instances.is_empty() {
         return Err("未找到要修复的 Codex 实例".to_string());
     }
-    let process_entries = if launch_visibility_budget().is_some() {
+    let process_entries = if automatic_start {
         modules::process::collect_codex_launch_maintenance_process_entries()?
     } else {
         modules::process::collect_codex_process_entries()
@@ -950,10 +959,10 @@ fn repair_provider_visibility_for_instances_with_options(
                     )
                 });
                 if let Err(restore_error) = restore_result {
-                    let code = if launch_visibility_budget().is_some() {
-                        format!("{LAUNCH_VISIBILITY_ROLLBACK_FAILED}: ")
+                    let code = if automatic_start || launch_visibility_budget().is_some() {
+                        "CODEX_SESSION_VISIBILITY_ROLLBACK_FAILED: "
                     } else {
-                        String::new()
+                        ""
                     };
                     return Err(format!(
                         "{code}修复实例历史会话可见性失败 ({}): {}；自动回滚也失败: {}；备份目录: {}",
@@ -1038,7 +1047,7 @@ fn repair_provider_visibility_for_instances_with_options(
 
     // Backup retention is maintenance, not a precondition for launching a
     // repaired instance. A large legacy backup tree must not delay this path.
-    if !options.dry_run && launch_visibility_budget().is_none()
+    if !options.dry_run && !automatic_start
         && !instances.iter().any(|instance| local_projects::has_pending(&instance.data_dir)) {
         report_repair_progress(
             progress_reporter,
@@ -1050,7 +1059,6 @@ fn repair_provider_visibility_for_instances_with_options(
             total_instances,
             None,
         );
-        prune_session_visibility_repair_backups(&instances);
         for instance in &instances {
             let scope = modules::backup_storage::scope_for_path(&instance.data_dir);
             let _ = modules::backup_storage::prune_behavior_backups("codex", &scope);

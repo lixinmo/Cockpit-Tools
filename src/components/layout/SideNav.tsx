@@ -22,8 +22,6 @@ import { CLASSIC_SIDEBAR_ENTRY_LIMIT, ORIGINAL_SIDEBAR_ENTRY_LIMIT, useSideNavLa
 import { useGlobalModal } from '../../hooks/useGlobalModal';
 import type { UpstreamReleaseNotice } from '../../hooks/useUpstreamRelease';
 import { getPlatformLabel, renderPlatformIcon } from '../../utils/platformMeta';
-import { useAntigravityRuntimeTarget } from '../../hooks/useAntigravityRuntimeTarget';
-import { setAntigravityRuntimeTargetFromPlatform } from '../../utils/antigravityRuntimeTarget';
 import { useRemoteConfigStore } from '../../stores/useRemoteConfigStore';
 import { useApiKeyFunCampaign } from '../../hooks/useApiKeyFunCampaign';
 import './SideNavCampaign.css';
@@ -82,6 +80,7 @@ const PAGE_PLATFORM_MAP: Partial<Record<Page, PlatformId>> = {
   'trae-cn': 'trae_cn',
   'trae-solo-cn': 'trae_solo_cn',
   workbuddy: 'workbuddy',
+  workbuddy_ai: 'workbuddy_ai',
   minimaxcode: 'minimaxcode',
 };
 
@@ -117,17 +116,11 @@ function renderEntryIcon(entry: SideNavEntry, size: number) {
   }
 
   if (entry.group) {
-    const iconPlatform = isAntigravitySuitePlatformIds(entry.group.platformIds)
-      ? entry.targetPlatformId
-      : entry.group.iconPlatformId ?? entry.targetPlatformId;
+    const iconPlatform = entry.group.iconPlatformId ?? entry.targetPlatformId;
     return iconPlatform ? renderPlatformIcon(iconPlatform, size) : null;
   }
 
   return entry.targetPlatformId ? renderPlatformIcon(entry.targetPlatformId, size) : null;
-}
-
-function isAntigravitySuitePlatformIds(platformIds: PlatformId[]): boolean {
-  return platformIds.includes('antigravity') && platformIds.includes('antigravity_ide');
 }
 
 function isAntigravitySuitePage(page: Page): boolean {
@@ -192,9 +185,8 @@ export function SideNav({
   } = usePlatformLayoutStore();
   const remoteHiddenPlatformIds = useRemoteConfigStore((state) => state.hiddenPlatformIds);
 
-  const antigravityRuntimeTarget = useAntigravityRuntimeTarget();
   const currentPlatformId = isAntigravitySuitePage(page)
-    ? antigravityRuntimeTarget
+    ? 'antigravity'
     : PAGE_PLATFORM_MAP[page] ?? null;
   const currentEntryId = useMemo<SideNavEntryId | null>(
     () => {
@@ -253,13 +245,9 @@ export function SideNav({
         }
 
         const resolvedTargetPlatformId = resolveEntryDefaultPlatformId(entryId, platformGroups);
-        const targetPlatformId =
-          isAntigravitySuitePlatformIds(group.platformIds)
-            && visiblePlatformIds.includes(antigravityRuntimeTarget)
-            ? antigravityRuntimeTarget
-            : resolvedTargetPlatformId && visiblePlatformIds.includes(resolvedTargetPlatformId)
-              ? resolvedTargetPlatformId
-              : visiblePlatformIds[0];
+        const targetPlatformId = resolvedTargetPlatformId && visiblePlatformIds.includes(resolvedTargetPlatformId)
+          ? resolvedTargetPlatformId
+          : visiblePlatformIds[0];
         if (!targetPlatformId) {
           return null;
         }
@@ -299,7 +287,6 @@ export function SideNav({
     platformGroups,
     hiddenSet,
     isPlatformAvailable,
-    antigravityRuntimeTarget,
     t,
   ]);
 
@@ -320,7 +307,6 @@ export function SideNav({
   );
 
   const navigateToPlatform = useCallback((platformId: PlatformId) => {
-    setAntigravityRuntimeTargetFromPlatform(platformId);
     setPage(PLATFORM_PAGE_MAP[platformId]);
   }, [setPage]);
 
@@ -1060,6 +1046,14 @@ export function SideNav({
       {!isClassicLayout && (
         <>
           <div className="nav-footer">
+            <button
+              className={`nav-item ${page === '2fa' && !shouldLockActiveOnMore ? 'active' : ''}`}
+              onClick={() => setPage('2fa')}
+              title={t('nav.2faManager', '2FA / MFA 管理')}
+            >
+              <ShieldCheck size={20} />
+              <span className="tooltip">{t('nav.2faManager', '2FA / MFA 管理')}</span>
+            </button>
             <button
               className={`nav-item ${page === 'settings' && !shouldLockActiveOnMore ? 'active' : ''}`}
               onClick={() => setPage('settings')}
