@@ -134,3 +134,23 @@ Credits admission uses the final subscription identity, including when the
 routing and policy reads straddle an account update. Grok and API-key provider
 credentials remain outside the subscription quota policy. This synchronization
 validated source and tests; it did not bundle or install an App.
+
+## Local Intel v1.3.84 installation (2026-11-15)
+
+Built source `c2692ac92f1529d81100ef3daea8b2bb1a6eb2f2` with
+`npm run build:app:local`. The optimized Rust build took 39m 33s. Version
+1.3.84 contains one thin `x86_64` Mach-O executable, passes strict ad-hoc
+signature verification, and contains no Go API executable. The main executable
+SHA-256 was identical in the verified bundle and the installed App:
+`974c857d838abe868c77565babee9efac0c39ed37ba3f3a16f911b64583099df`.
+
+The replacement launched from `/Applications/Cockpit Tools.app` and rendered
+the dashboard and its navigation controls. Before/after checks matched the
+Codex account inventory and current selection, API Service credentials and
+pool, port and enabled state, and Credits settings. The new SQLite account
+index matched the previous JSON index.
+
+After bundle verification the builder removed `target/`, `node_modules/`,
+`dist/`, and the build scratch directory. These held at least 2.46 GiB before
+packaging. After startup validation the old v1.3.81 App, the duplicate staged
+App, and the generated Tauri schemas were removed, totaling about 284 MiB.
