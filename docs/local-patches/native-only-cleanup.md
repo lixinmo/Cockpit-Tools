@@ -180,3 +180,35 @@ new and reused sockets, DNS and IPv6 settings, launch-time recovery, and reset
 card timing. The standalone retry, Credits and recovery suites passed 18, 29
 and 65 tests respectively. The opt-in real-profile preview was excluded. This
 merge validated source and tests. The installed App remains at v1.3.84.
+
+## Local Intel v1.4.0 installation and Cloud diagnosis (2026-11-15)
+
+Built source `08c88f6f7003b24c792a16cf841d6d1c7ae43a91` with
+`npm run build:app:local`. Optimized Rust compilation took 50m 58s. The App
+reports v1.4.0 and contains one thin `x86_64` Mach-O executable with a verified
+ad-hoc signature and no Go API executable. The build and installed executables
+have the same SHA-256:
+`b755ac271d3f590c71b780cb9a8e47e866c93353e3a161bda78816487c95f077`.
+
+The installed v1.4.0 process started from `/Applications/Cockpit Tools.app`.
+The active Codex account index, selected account, API Service credentials and
+pool, port and enabled state, Credits settings, and existing configuration keys
+matched the pre-install checks. After the display was unlocked, the frontend
+reported `react_mounted` and macOS exposed the WebView and its navigation
+controls in the installed App window. The builder removed `target/`,
+`node_modules/`, `dist/`, and its scratch after bundle verification. After the
+startup check, the previous v1.3.84 bundle, the duplicate App, and generated
+Tauri schemas were removed, totaling about 299 MiB.
+
+The [previous Intel Cloud Build](https://github.com/lixinmo/Cockpit-Tools/actions/runs/43693997617/job/132751194305#step:12:7171)
+used v1.3.84 and failed in Native gateway regressions before packaging. Four
+tests expected outdated route-selection counts while the upstream request
+counts remained within their budgets. The v1.4.0 fixtures check same-account
+reselection and preserve the request-count and replay checks. All four passed
+both alone and in a local run of the cloud workflow's Native filters.
+
+With the same filters, the local Debug binary passed 3,014 cases, ignored 14
+opt-in cases, and hit one timeout on the 65 MiB continuity `prepare` fixture.
+The timeout reproduced individually. The prior cloud run passed that unchanged
+fixture with release-profile dependencies. The workflow retains its normal
+regression gate and the existing production operation deadline.
