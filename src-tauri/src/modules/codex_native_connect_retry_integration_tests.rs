@@ -1,13 +1,14 @@
 use super::*;
 use axum::body::Bytes;
 use http_body_util::{BodyExt, Full};
+use rustls::pki_types::CertificateDer;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc,
 };
 use tokio::net::TcpListener;
 
-fn tls_config() -> Arc<rustls::ServerConfig> {
+fn tls_config() -> (Arc<rustls::ServerConfig>, CertificateDer<'static>) {
     let _ = rustls::crypto::ring::default_provider().install_default();
     let certificate = rcgen::generate_simple_self_signed(vec!["chatgpt.com".into()]).unwrap();
     let key = rustls::pki_types::PrivatePkcs8KeyDer::from(certificate.key_pair.serialize_der());
@@ -16,7 +17,7 @@ fn tls_config() -> Arc<rustls::ServerConfig> {
         .with_single_cert(vec![certificate.cert.der().clone()], key.into())
         .unwrap();
     config.alpn_protocols = vec![b"h2".to_vec()];
-    Arc::new(config)
+    (Arc::new(config), certificate.cert.der().clone())
 }
 
 struct CountedBody {
@@ -52,6 +53,7 @@ async fn server(
     Arc<AtomicUsize>,
     Arc<AtomicUsize>,
     tokio::task::JoinHandle<()>,
+    CertificateDer<'static>,
 ) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
@@ -59,7 +61,8 @@ async fn server(
     let requests = Arc::new(AtomicUsize::new(0));
     let connections = connects.clone();
     let received = requests.clone();
-    let acceptor = tokio_rustls::TlsAcceptor::from(tls_config());
+    let (tls, root) = tls_config();
+    let acceptor = tokio_rustls::TlsAcceptor::from(tls);
     let task = tokio::spawn(async move {
         loop {
             let (socket, _) = listener.accept().await.unwrap();
@@ -101,18 +104,31 @@ async fn server(
             });
         }
     });
-    (address, connects, requests, task)
+    (address, connects, requests, task, root)
 }
 
-fn client(address: SocketAddr, trusted: bool, enabled: bool) -> reqwest::Client {
+fn client(
+    address: SocketAddr,
+    root: Option<CertificateDer<'static>>,
+    enabled: bool,
+) -> reqwest::Client {
+    // The Native builder supplies a preconfigured TLS client. Losing its trust
+    // roots or ALPN in configure() would make even the successful fixture fail.
+    let mut roots = rustls::RootCertStore::empty();
+    if let Some(root) = root {
+        roots.add(root).unwrap();
+    }
+    let mut tls = rustls::ClientConfig::builder()
+        .with_root_certificates(roots)
+        .with_no_client_auth();
+    tls.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
     let builder = reqwest::Client::builder()
-        .use_rustls_tls()
+        .use_preconfigured_tls(tls)
         .no_proxy()
         .resolve("chatgpt.com", address)
-        .danger_accept_invalid_certs(trusted)
         .connect_timeout(std::time::Duration::from_secs(2));
-    let builder = if enabled {
-        configure(builder, "https://chatgpt.com", false)
+    let builder = if enabled && eligible("https://chatgpt.com", false) {
+        configure(builder)
     } else {
         builder
     };
@@ -148,9 +164,9 @@ async fn request(
 
 #[tokio::test]
 async fn native_real_tls_setup_retries_before_one_h2_post() {
-    let (address, connects, requests, task) = server(2, false).await;
+    let (address, connects, requests, task, root) = server(2, false).await;
     let started = std::time::Instant::now();
-    let (result, polls, drops) = request(client(address, true, true), address).await;
+    let (result, polls, drops) = request(client(address, Some(root), true), address).await;
     let response = result.unwrap();
     assert_eq!(response.version(), reqwest::Version::HTTP_2);
     assert_eq!(response.text().await.unwrap(), "ok");
@@ -164,8 +180,8 @@ async fn native_real_tls_setup_retries_before_one_h2_post() {
 
 #[tokio::test]
 async fn native_final_setup_failure_never_polls_and_drops_body_once() {
-    let (address, connects, requests, task) = server(usize::MAX, false).await;
-    let (result, polls, drops) = request(client(address, true, true), address).await;
+    let (address, connects, requests, task, root) = server(usize::MAX, false).await;
+    let (result, polls, drops) = request(client(address, Some(root), true), address).await;
     assert!(result.unwrap_err().is_connect());
     assert_eq!(connects.load(Ordering::SeqCst), 3);
     assert_eq!(requests.load(Ordering::SeqCst), 0);
@@ -176,8 +192,8 @@ async fn native_final_setup_failure_never_polls_and_drops_body_once() {
 
 #[tokio::test]
 async fn native_tls_certificate_failure_is_permanent() {
-    let (address, connects, _, task) = server(0, false).await;
-    let (result, polls, drops) = request(client(address, false, true), address).await;
+    let (address, connects, _, task, _) = server(0, false).await;
+    let (result, polls, drops) = request(client(address, None, true), address).await;
     assert!(result.is_err());
     assert_eq!(connects.load(Ordering::SeqCst), 1);
     assert_eq!(polls, 0);
@@ -187,8 +203,8 @@ async fn native_tls_certificate_failure_is_permanent() {
 
 #[tokio::test]
 async fn native_sent_post_is_never_replayed_by_setup_retry() {
-    let (address, connects, requests, task) = server(0, true).await;
-    let (result, _, drops) = request(client(address, true, true), address).await;
+    let (address, connects, requests, task, root) = server(0, true).await;
+    let (result, _, drops) = request(client(address, Some(root), true), address).await;
     assert!(result.is_err());
     assert_eq!(connects.load(Ordering::SeqCst), 1);
     assert_eq!(requests.load(Ordering::SeqCst), 1);
@@ -198,8 +214,8 @@ async fn native_sent_post_is_never_replayed_by_setup_retry() {
 
 #[tokio::test]
 async fn native_non_opted_in_transport_keeps_one_setup_attempt() {
-    let (address, connects, _, task) = server(usize::MAX, false).await;
-    let (result, polls, drops) = request(client(address, true, false), address).await;
+    let (address, connects, _, task, root) = server(usize::MAX, false).await;
+    let (result, polls, drops) = request(client(address, Some(root), false), address).await;
     assert!(result.is_err());
     assert_eq!(connects.load(Ordering::SeqCst), 1);
     assert_eq!(polls, 0);

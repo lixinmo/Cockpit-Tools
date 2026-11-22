@@ -11,6 +11,7 @@ const platforms = [
   { label: 'macos-x86_64', cache_target: 'macos-x86_64', runner: 'macos-15-intel', target: 'x86_64-apple-darwin', native_mac: '1' },
   { label: 'macos-aarch64', cache_target: 'macos-aarch64', runner: 'macos-15', target: 'aarch64-apple-darwin', native_mac: '1' },
   { label: 'windows', cache_target: 'windows', runner: 'windows-2022', target: 'x86_64-pc-windows-msvc', native_mac: '0' },
+  { label: 'windows-aarch64', cache_target: 'windows-aarch64', runner: 'windows-11-arm', target: 'aarch64-pc-windows-msvc', native_mac: '0' },
   { label: 'linux-x86_64', cache_target: 'linux-x86_64', runner: 'ubuntu-22.04', target: 'x86_64-unknown-linux-gnu', native_mac: '0' },
   { label: 'linux-aarch64', cache_target: 'linux-aarch64', runner: 'ubuntu-24.04-arm', target: 'aarch64-unknown-linux-gnu', native_mac: '0' },
 ];
@@ -51,6 +52,10 @@ function tauriArgs(mode, selectedTarget, configFile) {
   const args = [path.join(root, 'node_modules/@tauri-apps/cli/tauri.js'), mode, '--ci', '--config', configFile];
   // Match formal release target layouts so both workflows reuse the same cache.
   if (selectedTarget.endsWith('-apple-darwin')) args.push('--target', selectedTarget, '--bundles', 'app');
+  if (selectedTarget.endsWith('-windows-msvc')) {
+    const bundles = selectedTarget.startsWith('aarch64') ? 'nsis' : 'msi,nsis';
+    args.push('--target', selectedTarget, '--bundles', bundles);
+  }
   if (mode === 'build') args.push('--', '--locked');
   return args;
 }
@@ -91,7 +96,7 @@ function tauri(mode, selectedTarget) {
 }
 
 function releaseDirectory(selectedTarget) {
-  return selectedTarget.endsWith('-apple-darwin') ? path.join(root, 'target', selectedTarget, 'release') : path.join(root, 'target/release');
+  return selectedTarget.endsWith('-linux-gnu') ? path.join(root, 'target/release') : path.join(root, 'target', selectedTarget, 'release');
 }
 
 function identity() {
@@ -162,7 +167,7 @@ function packageOutputs(selectedTarget) {
     run('tar', ['-czf', path.join(outputDir, `Cockpit.Tools_${version()}_${selectedTarget}.app.tar.gz`), '-C', path.dirname(app), appName]);
   } else {
     stageReleaseAssets({ platform: selectedTarget.includes('windows') ? 'windows' : 'linux', assetsDir: path.join(releaseDir, 'bundle'), outputDir });
-    if (selectedTarget.includes('windows')) {
+    if (selectedTarget === 'x86_64-pc-windows-msvc') {
       run(process.execPath, ['scripts/release/build_windows_portable.cjs', '--version', version(), '--release-dir', releaseDir, '--output-dir', outputDir]);
     }
   }

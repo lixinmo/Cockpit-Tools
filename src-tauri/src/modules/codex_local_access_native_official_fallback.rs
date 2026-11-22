@@ -54,7 +54,7 @@ fn native_official_scope_fingerprint(
         "members":collection.account_ids,"paused":collection.paused_account_ids,
         "official":collection.official_account_bindings,"revision":collection.chatgpt_plan_service_revision,
         "identities":collection.service_account_identity_fingerprints,"excluded":collection.excluded_models,
-        "aliases":collection.model_aliases,"rules":collection.account_model_rules,"restrictFree":collection.restrict_free_accounts});
+        "aliases":collection.model_aliases,"rules":collection.account_model_rules});
     format!(
         "{:x}",
         Sha256::digest(ordered(material).to_string().as_bytes())
@@ -108,7 +108,6 @@ fn native_local_fallback_model(
         || account.is_web_session_auth()
         || codex_account::is_grok_upstream_provider(account)
         || !native_eligible(account)
-        || (collection.restrict_free_accounts && account.plan_type.as_deref() == Some("free"))
     {
         return Err(native_error(
             503,
@@ -235,7 +234,7 @@ async fn native_official_preflight_fallbacks(
         // Confirm the local authority before upstream's fallback capacity check;
         // a stale exhausted host value must not hide a successful bounded read.
         // This evidence never authorizes the independently billed official route.
-        let _ = native_credits_pool(host, collection, native_credits_scope(collection, key), &raw).await;
+        let _ = native_credits_pool(host, collection, native_configured_account_ids(collection, key), &raw).await;
     }
     for account in accounts.iter_mut() {
         let Some(id) = account.official_registration_id.as_deref() else {
@@ -412,7 +411,7 @@ async fn native_prepare_official_local_fallback(
             "Original local workspace changed",
         ));
     }
-    let credits = native_credits_pool(host, &collection, native_credits_scope(&collection, key), &[source.clone()]).await?;
+    let credits = native_credits_pool(host, &collection, native_configured_account_ids(&collection, key), &[source.clone()]).await?;
     if let Some(code) = credits.code(&source.id, false) {
         credits.report(caller, &request.model, code).await;
         return Err(credits.error(code));

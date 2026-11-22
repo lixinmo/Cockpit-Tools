@@ -33,6 +33,7 @@ npm run build:app -- --dry-run
 | `linux-x86_64` | Linux x86_64 |
 | `linux-aarch64` | Linux ARM64 |
 | `windows` | Windows x86_64 |
+| `windows-aarch64` | Windows ARM64 原生 NSIS 安装包 |
 | `all` | 全部上述平台，包括 macOS Universal |
 
 云端启动器只依赖 Node.js、Git 和已登录的 GitHub CLI，无需本地安装构建依赖。

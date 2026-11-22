@@ -212,3 +212,25 @@ opt-in cases, and hit one timeout on the 65 MiB continuity `prepare` fixture.
 The timeout reproduced individually. The prior cloud run passed that unchanged
 fixture with release-profile dependencies. The workflow retains its normal
 regression gate and the existing production operation deadline.
+
+## Upstream v1.4.2 integration (2026-11-22)
+
+The upstream baseline is `ccac8637`, following v1.4.1 and v1.4.2. The
+fork uses upstream's cached system TLS roots, named account pools, minimum
+remaining quota, model and price updates, and manual reset-card redemption.
+The setup-only retry now attaches to the upstream TLS client. The fork also
+shares one configured-member lookup between routing and Credits. A positive
+quota refresh still respects the upstream pool's minimum remaining quota.
+Immediately before sending, the Credits check uses the selected credential.
+
+Local project recovery uses upstream's checks for ungrouped local chats.
+Those chat IDs also participate in the saved-ID lookup when the full scan
+runs out of time. Account switches reuse upstream's SSH identity helpers to
+carry the selected host's reconnect preference into the next launch.
+
+Formal releases use upstream's shared frontend build, Windows ARM64 installer
+and standalone Linux CLI packaging. The fork keeps the same-commit release
+gate and manually triggered personal cloud builds. Windows ARM64 is available
+individually and in `all`. The release cache warm-up also requires a manual
+run. The App checks the fork for updates and can show a separate notice for a
+newer official version.

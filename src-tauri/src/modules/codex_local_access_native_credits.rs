@@ -217,24 +217,6 @@ fn native_credits_snapshot(quota: &CodexQuota, at: i64, source: &'static str) ->
     snapshot
 }
 
-fn native_credits_scope(
-    collection: &CodexLocalAccessCollection,
-    key: Option<&CodexLocalAccessApiKey>,
-) -> Vec<String> {
-    // Unlike native_scoped_account_ids, do not discard paused accounts. Their
-    // exclusion is a scheduling choice, never proof of exhausted regular quota.
-    match key {
-        Some(key)
-            if !key
-                .inherit_account_pool
-                .unwrap_or(key.account_ids.is_empty()) =>
-        {
-            key.account_ids.clone()
-        }
-        _ => collection.account_ids.clone(),
-    }
-}
-
 #[derive(Clone)]
 struct NativeCreditsMember {
     id: String,
@@ -272,10 +254,10 @@ impl NativeCreditsPool {
             m.applies && credits_policy::restricted(settings.policy, settings.allows(&m.id))
         })
     }
-    fn mark_host_cooldowns(&mut self, before: &[CodexAccount]) {
+    fn mark_host_cooldowns(&mut self, collection: &CodexLocalAccessCollection, before: &[CodexAccount]) {
         for account in before {
             if self.scheduler.get(&account.id) == Some(&"model_or_account_policy")
-                && native_host_quota_cooldown_active(account)
+                && native_host_quota_cooldown_active(collection, account)
             {
                 self.scheduler.insert(account.id.clone(), "quota_cooldown");
             }

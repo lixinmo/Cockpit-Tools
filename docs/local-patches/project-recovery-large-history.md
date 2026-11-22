@@ -29,6 +29,26 @@ The fork preserves the operation deadlines and the recovery path on timeout.
 - Account-state preparation precedes the generic project planner. A later
   deferred maintenance result does not undo its already committed account state.
 
+## Upstream v1.4.2 review (2026-11-22)
+
+Upstream `ccac8637` restores verified local chats without a project when
+switching to API-key mode. Its SQLite verification excludes remote, cloud
+and child-agent chats. The saved-ID fallback also includes the ungrouped
+chat IDs so the same verification runs after a full history scan times out.
+The fork keeps the launch deadlines and uses upstream's process check,
+instance-relative rollout paths and failed-backup cleanup.
+
+With the v1.4.2 SSH startup path, two existing upstream tests reproduced
+lost auto-connect settings during an account switch. The merged path calls
+upstream's `inherit_scoped_auto_connect` and `ssh_server_identity::aliases`
+for configured SSH hosts. Both scoped and legacy preferences use that same
+alias lookup.
+
+The isolated release suite passed all 66 fixture tests, including the two
+SSH cases, saved-ID and full-scan projectless recovery, the 3,500-thread
+round trip and conditional rollback. The opt-in live profile preview was
+skipped. All 13 Python project-repair tests also passed.
+
 ## Upstream review (2026-11-14)
 
 Upstream `v1.3.84` at `0c96cf74` removed the 2 MB quick-repair gate and gives

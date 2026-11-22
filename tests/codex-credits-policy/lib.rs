@@ -10,25 +10,13 @@ pub mod models {
 // Data-only contract required by the production request-diagnostics model.
 // This harness deliberately imports no identity storage or account runtime.
 pub mod modules {
-    // Only these serializable fields are needed by the imported account model;
-    // diagnostics transport and request logging are outside this offline harness.
+    // Credits does not inspect diagnostic payloads. Preserve these subtrees as
+    // JSON in this policy-only harness so it need not mirror the upstream types.
     pub mod codex_native_api {
         pub mod diagnostics {
-            #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-            #[serde(rename_all = "camelCase")]
-            pub struct RequestSize {
-                pub total_bytes: u64,
-                pub input_bytes: u64,
-                pub tools_bytes: u64,
-                pub instructions_bytes: u64,
-            }
-            #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-            #[serde(rename_all = "camelCase")]
-            pub struct OverloadRetry {
-                pub retry: u32,
-                pub wait_ms: u64,
-                pub recovery_ms: u64,
-            }
+            pub type RequestSize = serde_json::Value;
+            pub type ResponsesHistoryRejection = serde_json::Value;
+            pub type OverloadRetry = serde_json::Value;
         }
     }
     pub mod codex_api_identity {

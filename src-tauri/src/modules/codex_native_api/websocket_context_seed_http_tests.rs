@@ -7,6 +7,10 @@ enum SeedFault {
     #[default]
     None,
     Reject,
+    RejectSize,
+    CloseSize,
+    RejectSizeAfterFirst,
+    RejectSizeAfterCreated,
     Output,
     OutputAfterCompletion,
     Silent,
@@ -66,6 +70,26 @@ async fn endpoint(State(state): State<Arc<SeedServer>>, ws: WebSocketUpgrade) ->
                 assert_eq!(body.get("previous_response_id").and_then(Value::as_str), previous.as_deref());
                 let warm = body["generate"] == false;
                 let preload = warm && !body["input"].as_array().unwrap().is_empty();
+                if preload && state.fault == SeedFault::CloseSize {
+                    let _ = socket.send(UpMessage::Close(Some(axum::extract::ws::CloseFrame {
+                        code: 1009, reason: "message too big".into(),
+                    }))).await;
+                    return;
+                }
+                if preload && (matches!(state.fault, SeedFault::RejectSize | SeedFault::RejectSizeAfterCreated)
+                    || state.fault == SeedFault::RejectSizeAfterFirst && previous.is_some()) {
+                    if state.fault == SeedFault::RejectSizeAfterCreated {
+                        let created = json!({"type":"response.created","response":{"id":"unconfirmed","output":[]}});
+                        let _ = socket.send(UpMessage::Text(created.to_string().into())).await;
+                    }
+                    let event = if state.fault == SeedFault::RejectSize {
+                        json!({"error":{"code":"message_too_big","message":"upstream websocket message too big","type":"invalid_request_error"}})
+                    } else {
+                        json!({"type":"error","status":413,"error":{"code":"message_too_big","message":"upstream websocket message too big"}})
+                    };
+                    let _ = socket.send(UpMessage::Text(event.to_string().into())).await;
+                    continue;
+                }
                 if preload && state.fault == SeedFault::Reject {
                     let event = json!({"type":"error","status":400,"error":{"code":"unsupported_parameter","param":"generate","message":"generate is unsupported"}});
                     let _ = socket.send(UpMessage::Text(event.to_string().into())).await;
@@ -167,9 +191,13 @@ async fn case(fault: SeedFault, preflight: bool, explicit_parent: bool) {
         preflight_id = Some(event["response"]["id"].clone());
     }
     credits.armed.store(true, Ordering::SeqCst);
-    let input: Vec<Value> = (0..9)
+    let mut input: Vec<Value> = (0..9)
         .map(|n| json!({"role":"user","content":format!("{n}{}","A".repeat(4*1024*1024))}))
         .collect();
+    if matches!(fault, SeedFault::RejectSize | SeedFault::CloseSize) {
+        input.insert(1, json!({"role":"user","content":[{"type":"input_image","image_url":
+            "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jMZkAAAAASUVORK5CYII="}]}));
+    }
     let mut body = json!({"type":"response.create","model":"m","input":input.clone()});
     if explicit_parent {
         body["previous_response_id"] = preflight_id.unwrap();
@@ -201,9 +229,8 @@ async fn case(fault: SeedFault, preflight: bool, explicit_parent: bool) {
     reports(&host, if preflight { 2 } else { 1 }).await;
     if matches!(
         fault,
-        SeedFault::Output
-            | SeedFault::OutputAfterCompletion
-            | SeedFault::Silent
+        SeedFault::Output | SeedFault::OutputAfterCompletion | SeedFault::Silent
+            | SeedFault::RejectSizeAfterFirst | SeedFault::RejectSizeAfterCreated
             | SeedFault::CreditsAfterPreload
     ) {
         assert!(matches!(
@@ -211,7 +238,7 @@ async fn case(fault: SeedFault, preflight: bool, explicit_parent: bool) {
             Some("response.failed" | "error")
         ));
         let expected_code = match fault {
-            SeedFault::Silent => "websocket_context_seed_outcome_unknown",
+            SeedFault::Silent | SeedFault::RejectSizeAfterFirst | SeedFault::RejectSizeAfterCreated => "websocket_context_seed_outcome_unknown",
             SeedFault::CreditsAfterPreload => "credits_policy_blocked",
             _ => "websocket_context_seed_output",
         };
@@ -238,12 +265,20 @@ async fn case(fault: SeedFault, preflight: bool, explicit_parent: bool) {
         }
         assert_eq!(server.http_calls.load(Ordering::SeqCst), 0);
         assert_eq!(server.generated.load(Ordering::SeqCst), 0);
+        if fault == SeedFault::RejectSizeAfterFirst {
+            assert_eq!(server.warms.load(Ordering::SeqCst), 1);
+        }
     } else {
         assert_eq!(event["type"], "response.completed");
         assert_eq!(*server.inputs.lock().unwrap(), input);
-        if fault == SeedFault::Reject {
+        if matches!(fault, SeedFault::Reject | SeedFault::RejectSize | SeedFault::CloseSize) {
             assert_eq!(server.http_calls.load(Ordering::SeqCst), 1);
             assert_eq!(server.generated.load(Ordering::SeqCst), 0);
+            if fault != SeedFault::Reject {
+                assert_eq!(server.warms.load(Ordering::SeqCst), 0);
+                assert_eq!(server.connections.load(Ordering::SeqCst), 1);
+                assert_eq!(server.message_sizes.lock().unwrap().len(), 1);
+            }
         } else {
             assert_eq!(server.http_calls.load(Ordering::SeqCst), 0);
             assert!(server.warms.load(Ordering::SeqCst) > 0);
@@ -305,6 +340,17 @@ async fn cold_seed_large_history_primes_same_socket_then_generates_once() {
 #[tokio::test]
 async fn cold_seed_rejected_preload_uses_one_complete_http_request() {
     case(SeedFault::Reject, false, false).await;
+}
+#[tokio::test]
+async fn cold_seed_first_message_size_rejection_uses_http_once() {
+    case(SeedFault::RejectSize, false, false).await;
+    case(SeedFault::CloseSize, false, false).await;
+}
+
+#[tokio::test]
+async fn cold_seed_message_size_rejection_after_acceptance_never_replays() {
+    case(SeedFault::RejectSizeAfterFirst, false, false).await;
+    case(SeedFault::RejectSizeAfterCreated, false, false).await;
 }
 #[tokio::test]
 async fn cold_seed_unexpected_output_never_replays_over_http() {

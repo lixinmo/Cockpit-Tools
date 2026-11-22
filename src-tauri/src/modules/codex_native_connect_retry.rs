@@ -2,29 +2,20 @@
 //! request sender in the narrowly patched hyper-util connection setup boundary.
 use std::{error::Error, fmt, io, net::SocketAddr};
 
-pub(crate) fn configure(
-    builder: reqwest::ClientBuilder,
-    base_url: &str,
-    websocket: bool,
-) -> reqwest::ClientBuilder {
-    let enabled = !websocket
+pub(crate) fn eligible(base_url: &str, websocket: bool) -> bool {
+    !websocket
         && reqwest::Url::parse(base_url).is_ok_and(|url| {
             url.scheme() == "https"
                 && url
                     .host_str()
                     .is_some_and(|host| host.eq_ignore_ascii_case("chatgpt.com"))
-        });
-    if enabled {
-        // Match upstream Native OAuth's TLS backend and system trust store.
-        // macOS native-tls erases the typed OS failure behind its Error, making
-        // a closed handshake indistinguishable from permanent TLS failures.
-        builder
-            .use_rustls_tls()
-            .cockpit_connect_retry(retryable)
-            .dns_resolver(std::sync::Arc::new(SystemResolver))
-    } else {
-        builder
-    }
+        })
+}
+
+pub(crate) fn configure(builder: reqwest::ClientBuilder) -> reqwest::ClientBuilder {
+    builder
+        .cockpit_connect_retry(retryable)
+        .dns_resolver(std::sync::Arc::new(SystemResolver))
 }
 
 #[derive(Debug)]

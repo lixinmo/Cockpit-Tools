@@ -5,13 +5,14 @@ pub(super) fn referenced_threads<'a>(sources: &[&'a Value]) -> Result<Vec<&'a st
     let mut result = Vec::new();
     for source in sources {
         let pins = source[PINNED_THREADS].as_array().into_iter().flatten();
+        let projectless = source[PROJECTLESS_THREADS].as_array().into_iter().flatten();
         let orders = source[THREAD_ORDERS]
             .as_object()
             .into_iter()
             .flat_map(|orders| orders.values())
             .flat_map(|order| order["threadIds"].as_array().into_iter().flatten());
         let memberships = source[ASSIGN].as_object().into_iter().flat_map(|items| items.keys()).map(String::as_str);
-        for id in pins.chain(orders).filter_map(Value::as_str).chain(memberships) {
+        for id in pins.chain(orders).chain(projectless).filter_map(Value::as_str).chain(memberships) {
             check()?;
             if seen.insert(id) {
                 result.push(id);

@@ -158,3 +158,23 @@ HTTP builder retains one setup retry entry. WebSocket-selected clients remain
 outside this setup retry, and ordinary HTTP/1 fallback retains it. The patched
 reqwest/hyper-util send boundary and the three-attempt budget are unchanged.
 The local verifier passed all 18 acceptance tests after the merge.
+
+## Upstream v1.4.2 review (2026-11-22)
+
+At upstream `ccac8637`, `native_codex_tls_roots` caches system trust roots for
+60 seconds, and `native_codex_http_client_builder` sets up TLS and ALPN for
+each client. Protected ChatGPT HTTP requests now use that same builder. The
+fork's retry hook installs only the setup error classifier and system resolver,
+so it preserves the upstream trust store, protocol list and session isolation.
+An ordinary HTTP/1 fallback stays eligible; WebSocket clients stay excluded.
+
+There is one production call to `native_connect_retry::configure`. The
+reqwest request-cloning fence and hyper-util setup loop remain at their existing
+boundaries: three attempts with 200/400 ms waits under one deadline, ending
+before the sender takes ownership of the request. Upstream's image timeout
+guard prevents replay after ambiguous dispatch, and its WebSocket preload
+fallback checks the first cold chunk. Neither adds a connector retry loop.
+
+All 18 tests in `scripts/verify-native-connect-retry.sh` passed locally. The
+loopback TLS fixture now supplies its own trust root through a preconfigured
+client, so overwriting that TLS configuration would fail the one-POST test.

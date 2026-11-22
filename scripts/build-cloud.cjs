@@ -5,14 +5,14 @@ const repoRoot = path.resolve(__dirname, '..');
 const workflow = 'build-matrix.yml';
 const platforms = [
   'macos-x86_64', 'macos-aarch64', 'macos-universal',
-  'linux-x86_64', 'linux-aarch64', 'windows', 'all',
+  'linux-x86_64', 'linux-aarch64', 'windows', 'windows-aarch64', 'all',
 ];
 
 function hostPlatform() {
   return {
     'darwin:x64': 'macos-x86_64', 'darwin:arm64': 'macos-aarch64',
     'linux:x64': 'linux-x86_64', 'linux:arm64': 'linux-aarch64',
-    'win32:x64': 'windows',
+    'win32:x64': 'windows', 'win32:arm64': 'windows-aarch64',
   }[`${process.platform}:${process.arch}`];
 }
 

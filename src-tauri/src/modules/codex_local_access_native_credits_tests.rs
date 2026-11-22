@@ -57,7 +57,7 @@ async fn native_credits_complete_pool_preserves_paused_and_excluded_evidence() {
         .unwrap()
         .paused_account_ids = vec![positive.id.clone()];
     let collection = host.collection().await.unwrap();
-    let ids = native_credits_scope(&collection, None);
+    let ids = native_configured_account_ids(&collection, None);
     assert!(ids.contains(&positive.id));
     // The scheduler's candidate slice has already lost the positive member.
     let pool = native_credits_pool(&host, &collection, ids, &[exhausted.clone()])
@@ -203,6 +203,15 @@ async fn native_credits_snapshot_isolates_workspace_and_recovers_only_host_coold
     let mut different = source.clone();
     different.account_id = Some("different-workspace".into());
     assert!(!native_quota_allows(&collection, &different));
+    // A positive fraction confirms that regular quota exists, but does not
+    // release the user's independently configured 10% pool reserve.
+    let mut reserved = collection.clone();
+    reserved.account_quota_floors.insert(source.id.clone(), 10);
+    assert!(!native_quota_allows(&reserved, &source));
+    assert_eq!(
+        native_pool_quota_floor_error(&reserved, &source, "gpt-6.2-sol").unwrap().code,
+        "quota_reserved"
+    );
     // The helper never touches host.cooldowns (runtime 429/model evidence).
     assert!(host.cooldowns.lock().unwrap().is_empty());
 }

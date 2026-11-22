@@ -405,3 +405,4 @@ export function MinimaxCodeAutoCheckinConfigModal({
     </div>
   );
 }
+

@@ -32,6 +32,9 @@ test('full Cloud Build is manual while formal signed releases keep their tag tri
   const workflow = fs.readFileSync(path.join(root, '.github/workflows/build-matrix.yml'), 'utf8');
   const events = workflow.slice(workflow.indexOf('on:\n'), workflow.indexOf('\npermissions:'));
   assert.deepEqual([...events.matchAll(/^  ([a-z_]+):$/gm)].map(match => match[1]), ['workflow_dispatch']);
+  const warm = fs.readFileSync(path.join(root, '.github/workflows/warm-macos-release-cache.yml'), 'utf8');
+  const warmEvents = warm.slice(warm.indexOf('on:\n'), warm.indexOf('\nconcurrency:'));
+  assert.deepEqual([...warmEvents.matchAll(/^  ([a-z_]+):$/gm)].map(match => match[1]), ['workflow_dispatch']);
   const release = fs.readFileSync(path.join(root, '.github/workflows/release.yml'), 'utf8');
   assert.match(release, /on:\s+push:\s+tags:\s+- "v\*"/);
   assert.match(release, /TAURI_SIGNING_PRIVATE_KEY/);
@@ -59,12 +62,15 @@ test('Universal selects exactly the two thin inputs for the merge job', () => {
 test('cloud builds share formal release Cargo output layouts', () => {
   for (const platform of platforms) {
     const args = tauriArgs('build', platform.target, 'example.json');
-    if (platform.native_mac === '1') {
+    if (platform.native_mac === '1' || platform.target.endsWith('-windows-msvc')) {
       assert.equal(args[args.indexOf('--target') + 1], platform.target);
       assert.ok(releaseDirectory(platform.target).endsWith(path.join('target', platform.target, 'release')));
     } else {
       assert.ok(!args.includes('--target'));
       assert.ok(releaseDirectory(platform.target).endsWith(path.join('target', 'release')));
+    }
+    if (platform.target.endsWith('-windows-msvc')) {
+      assert.equal(args[args.indexOf('--bundles') + 1], platform.label === 'windows-aarch64' ? 'nsis' : 'msi,nsis');
     }
     assert.deepEqual(args.slice(-2), ['--', '--locked']);
   }

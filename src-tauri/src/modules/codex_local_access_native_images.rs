@@ -111,21 +111,17 @@ async fn native_image_route_once(
     accounts.retain(|account| ids.contains(&account.id));
     let credits_ids = if caller.id == NATIVE_INTERNAL_CALLER || !collection.image_generation_account_ids.is_empty() {
         ids.clone()
-    } else { native_credits_scope(&collection, key) };
+    } else { native_configured_account_ids(&collection, key) };
     let mut credits = native_credits_pool(host, &collection, credits_ids, &accounts).await?;
     credits.filter(caller, &model, &mut accounts).await?;
     let credits_before_filter = accounts.iter().map(|a| a.id.clone()).collect::<Vec<_>>();
     accounts.retain(|account| {
-        ids.contains(&account.id)
-            && (caller.id == NATIVE_INTERNAL_CALLER || !service_account_paused(&collection, &account.id))
+        (caller.id == NATIVE_INTERNAL_CALLER || !service_account_paused(&collection, &account.id))
             && !account.is_web_session_auth()
             && !request.excluded_account_ids.contains(&account.id)
             && !account.is_agent_identity_auth()
             && !account.requires_reauth
             && !codex_account::account_has_remote_api_auth_rejection(account)
-            && !(collection.restrict_free_accounts
-                && is_free_plan_type(account.plan_type.as_deref())
-                && !account.is_api_key_auth())
             && native_quota_allows(&collection, account)
             && native_image_source_allowed(&collection, account, selection)
             && native_image_model_allowed_for_selection(
