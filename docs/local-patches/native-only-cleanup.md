@@ -240,3 +240,20 @@ gate and manually triggered personal cloud builds. Windows ARM64 is available
 individually and in `all`. The release cache warm-up also requires a manual
 run. The App checks the fork for updates and can show a separate notice for a
 newer official version.
+
+On the Intel Mac, all 2,369 frontend tests and 128 build and publication tests
+passed. Locale checks and the Chromium keyboard, drag-and-drop and sidebar
+smoke test passed. The isolated suites passed 18 connection retry, 30 Credits,
+66 project recovery and 13 Python repair cases. The optional real-profile
+preview was excluded. The App's release-profile Rust test binary passed 286
+selected cases on the final routing source. Two opt-in cases were skipped.
+
+`npm run build:app:local` built v1.4.2 from
+`2e19ac3d61dfd729bb0bd87ad2b27585fd8820f1`. The bundle in
+`.local-app-output/Cockpit Tools.app` is 154 MiB and contains one thin
+`x86_64` Mach-O executable. Its ad-hoc signature passed strict verification.
+The executable SHA-256 is
+`c2b73b1d686915fb222e36c673cba1959ff6dc9ff86d86ad6ac68c2115befebd`.
+The builder removed the project compilation directory (at least 3.8 GiB),
+frontend dependencies (225 MiB), frontend output (18 MiB), and build scratch.
+The installed App remains v1.4.0. Installation and launch were outside this run.
