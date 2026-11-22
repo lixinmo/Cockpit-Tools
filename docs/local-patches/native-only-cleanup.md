@@ -223,6 +223,12 @@ shares one configured-member lookup between routing and Credits. A positive
 quota refresh still respects the upstream pool's minimum remaining quota.
 Immediately before sending, the Credits check uses the selected credential.
 
+The upstream Responses/search routing regression exposed a second sort that
+could promote a backup OAuth account ahead of a healthy regular relay. The
+protocol sort now uses the upstream account tier as its first key. The same
+upstream fixture exercises the regular account, fallback, and return to the
+regular account for both operations.
+
 Local project recovery uses upstream's checks for ungrouped local chats.
 Those chat IDs also participate in the saved-ID lookup when the full scan
 runs out of time. Account switches reuse upstream's SSH identity helpers to
