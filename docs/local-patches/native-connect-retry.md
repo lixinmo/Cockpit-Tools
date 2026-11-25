@@ -178,3 +178,24 @@ fallback checks the first cold chunk. Neither adds a connector retry loop.
 All 18 tests in `scripts/verify-native-connect-retry.sh` passed locally. The
 loopback TLS fixture now supplies its own trust root through a preconfigured
 client, so overwriting that TLS configuration would fail the one-POST test.
+
+## Upstream v1.5.1 review (2026-11-26)
+
+At `20dce1be`, upstream's `network_recovery::Budget` limits existing HTTP
+recovery across route changes. The first surfaced transport failure starts a
+timer. Four failures or 120 seconds end the episode under the default policy;
+receiving response headers clears it. The watcher can cancel a stalled
+recovery but never opens a connection or resends a request.
+
+The Native HTTP builder still enables `native_connect_retry::configure` once
+for eligible ChatGPT HTTP clients. Each selected client's setup has the
+existing three-attempt limit and 200/400 ms waits. The setup loop ends before
+`PoolClient::try_send_request`, and reqwest still declines to clone protected
+requests. WebSocket upgrades and the new WorkBuddy ACP route stay outside the
+hook. For a silent zero-token incomplete stream, upstream can close the
+downstream body so the caller can reconnect; the setup hook never sees that
+event. The transport and vendor implementations required no changes.
+
+The local `scripts/verify-native-connect-retry.sh` passed all 18 cases,
+including two failed TLS handshakes followed by one POST, cancellation during
+setup, and an EOF after dispatch without a second POST.

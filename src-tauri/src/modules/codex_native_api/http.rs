@@ -448,10 +448,11 @@ async fn forward_with_policy(
         .total_deadline
         .min(tracker.deadline(policy.total_timeout));
     let HttpResponseStream {
-        bytes: upstream,
+        bytes: raw_upstream,
         status,
         mut headers,
         is_sse,
+        canonical,
     } = match open_response_stream(
         &state,
         &mut prepared,
@@ -469,6 +470,9 @@ async fn forward_with_policy(
             return Err(error);
         }
     };
+    let canonical_sse = canonical.as_ref().map_or(is_sse, |stream| stream.is_sse);
+    let upstream = canonical.map_or(raw_upstream, |stream| stream.bytes);
+    let is_sse = canonical_sse;
     if prepared.route.chatgpt_plan && status.is_success() && !is_sse {
         let error = ServiceError::new(502, "incomplete_upstream_stream",
             "ChatGPT plan inference requires a Responses event stream");
@@ -507,6 +511,7 @@ async fn forward_with_policy(
             finished: false,
             sequence: 0,
             pending_error: None,
+            abort_downstream: false,
             idle_deadline: tokio::time::Instant::now() + policy.idle_timeout,
             keepalive_deadline: tokio::time::Instant::now() + policy.keepalive,
             deadline,
@@ -516,6 +521,22 @@ async fn forward_with_policy(
         let keepalive = stream_state.policy.keepalive;
         let body = Body::from_stream(stream::unfold(stream_state, move |mut current| async move {
             loop {
+                if current.abort_downstream {
+                    // A silent zero-token `response.incomplete` was dropped in
+                    // `observe_frames`: finish the body abruptly so the client
+                    // sees a premature stream end and runs its own stream
+                    // reconnect instead of treating an orphan terminal as final.
+                    // Checked before `finished`: the terminal observation marks
+                    // the stream finished while observed frames are still due.
+                    current.finished = true;
+                    return Some((
+                        Err(std::io::Error::new(
+                            std::io::ErrorKind::UnexpectedEof,
+                            "upstream ended with a silent zero-token response.incomplete",
+                        )),
+                        current,
+                    ));
+                }
                 if current.finished {
                     return None;
                 }
@@ -583,6 +604,16 @@ async fn forward_with_policy(
                         }
                         if !bytes.is_empty() {
                             return Some((Ok(bytes), current));
+                        }
+                        if current.abort_downstream {
+                            current.finished = true;
+                            return Some((
+                                Err(std::io::Error::new(
+                                    std::io::ErrorKind::UnexpectedEof,
+                                    "upstream ended with a silent zero-token response.incomplete",
+                                )),
+                                current,
+                            ));
                         }
                         if current.finished {
                             return None;
@@ -690,7 +721,10 @@ async fn forward_with_policy(
     let mut normalized = false;
     if !compact {
         if let Some(value) = &mut value {
-            normalized = super::output_usage::normalize_usage_details(value);
+            if prepared.route.chatgpt_plan {
+                normalized |= super::official_fallback::normalize_sharing_quota_error(value);
+            }
+            normalized |= super::output_usage::normalize_usage_details(value);
             if status.is_success() { normalized |= super::replay_wire::instructions(&prepared.source_body,value); normalized |= super::response_wire::ResponseWire::default().stamp_response(value); }
         }
     }
@@ -777,6 +811,7 @@ pub(super) struct HttpResponseStream {
     pub headers: HeaderMap,
     pub bytes: super::upstream::ByteStream,
     pub is_sse: bool,
+    pub canonical: Option<super::upstream::CanonicalStream>,
 }
 
 /// Open and normalize HTTP upstreams without consuming the request/session owner.
@@ -791,6 +826,9 @@ pub(super) async fn open_response_stream(
     policy: &ExecutionPolicy,
     deadline: Deadline,
 ) -> Result<HttpResponseStream, ServiceError> {
+    if super::workbuddy_acp::is_route(&prepared.route) {
+        return super::workbuddy_acp::open_text_stream(state, prepared, compact, deadline).await;
+    }
     let mut bootstrap_attempts = 0;
     loop {
         let response = super::retry::send(state, prepared, tracker, compact, policy).await?;
@@ -833,6 +871,7 @@ pub(super) async fn open_response_stream(
             headers,
             bytes: upstream.bytes,
             is_sse: upstream.is_sse,
+            canonical: None,
         });
     }
 }
@@ -850,6 +889,7 @@ struct StreamingResponse {
     recovery_generation: u64,
     sequence: u64,
     pending_error: Option<ServiceError>,
+    abort_downstream: bool,
     policy: ExecutionPolicy,
     deadline: Deadline,
     idle_deadline: tokio::time::Instant,
@@ -859,7 +899,21 @@ struct StreamingResponse {
 impl StreamingResponse {
     async fn observe_frames(&mut self, frames: Vec<SseFrame>) -> Result<Bytes, ServiceError> {
         let mut bytes = Vec::new();
-        for frame in frames {
+        for mut frame in frames {
+            if self.prepared.route.chatgpt_plan {
+                let mut normalized = false;
+                if let Some(event) = frame.value.as_mut() {
+                    normalized |= super::official_fallback::normalize_sharing_quota_error(event);
+                }
+                if let Some(event) = frame.identity_event.as_mut() {
+                    normalized |= super::official_fallback::normalize_sharing_quota_error(event);
+                }
+                if normalized {
+                    if let Some(event) = frame.value.as_ref() {
+                        frame.bytes = super::response_wire::rewrite_frame(&frame.bytes, event);
+                    }
+                }
+            }
             if let Some(opened)=pre_business::recover(&self.state,&mut self.prepared,&mut self.tracker,
                 &mut self.fence,&frame,self.observation.retry_after,&self.policy,self.deadline,true).await? {
                 self.recovery_generation=self.recovery_generation.saturating_add(1);
@@ -922,6 +976,19 @@ impl StreamingResponse {
                     );
                     let codex = super::output_error::is_codex_client(&self.prepared.source_headers);
                     bytes.extend_from_slice(&super::output_error::event_sse(&self.wire.failure(&error, codex, event_sequence)));
+                    break;
+                }
+                if super::events::response_terminal_kind(&event) == Some("response.incomplete")
+                    && super::events::silent_incomplete_termination(&event)
+                {
+                    // An unexplained zero-token `response.incomplete` is an
+                    // upstream glitch, not a semantic terminal: forwarding it
+                    // makes Codex clients abort the turn as a non-retryable
+                    // error (`Incomplete response returned, reason: unknown`)
+                    // and skips their built-in stream reconnect. Drop the frame;
+                    // the body loop aborts the stream after flushing what was
+                    // already observed.
+                    self.abort_downstream = true;
                     break;
                 }
                 if !super::response_wire::visible(&event, super::output_error::is_codex_client(&self.prepared.source_headers)) { continue; }
@@ -1043,7 +1110,15 @@ async fn collect_sse(
                         "Upstream response exceeds the configured size limit",
                     ));
                 }
-                for frame in decoder.push_frames(&chunk)? {
+                for mut frame in decoder.push_frames(&chunk)? {
+                    if prepared.route.chatgpt_plan {
+                        if let Some(event) = frame.value.as_mut() {
+                            super::official_fallback::normalize_sharing_quota_error(event);
+                        }
+                        if let Some(event) = frame.identity_event.as_mut() {
+                            super::official_fallback::normalize_sharing_quota_error(event);
+                        }
+                    }
                     if let Some(opened)=pre_business::recover(state,prepared,tracker,&mut fence,&frame,
                         observation.retry_after,policy,deadline,false).await? {
                         stream=opened.bytes;
@@ -1091,7 +1166,15 @@ async fn collect_sse(
                 ))
             }
             None => {
-                for frame in decoder.finish_frames()? {
+                for mut frame in decoder.finish_frames()? {
+                    if prepared.route.chatgpt_plan {
+                        if let Some(event) = frame.value.as_mut() {
+                            super::official_fallback::normalize_sharing_quota_error(event);
+                        }
+                        if let Some(event) = frame.identity_event.as_mut() {
+                            super::official_fallback::normalize_sharing_quota_error(event);
+                        }
+                    }
                     if let Some(opened)=pre_business::recover(state,prepared,tracker,&mut fence,&frame,
                         observation.retry_after,policy,deadline,false).await? {
                         stream=opened.bytes;
@@ -1399,3 +1482,7 @@ mod preparation_timeout_tests;
 #[cfg(test)]
 #[path = "official_late_rejection_tests.rs"]
 mod official_late_rejection_tests;
+
+#[cfg(test)]
+#[path = "http_silent_incomplete_tests.rs"]
+mod http_silent_incomplete_tests;

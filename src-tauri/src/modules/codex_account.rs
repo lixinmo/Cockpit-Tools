@@ -4,6 +4,8 @@
 include!("codex_account_provider.rs");
 include!("codex_account_model_vision.rs");
 include!("codex_account_grok_provider.rs");
+include!("codex_account_zcode_provider.rs");
+include!("codex_account_workbuddy_provider.rs");
 include!("codex_account_check.rs");
 include!("codex_account_model_retirement.rs");
 include!("codex_account_model_catalog.rs");

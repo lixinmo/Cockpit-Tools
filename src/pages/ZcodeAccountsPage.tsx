@@ -10,6 +10,8 @@ import {
 } from '../components/codebuddy-suite/CodebuddySuiteAccountsSharedView';
 import { useProviderAccountsPage } from '../hooks/useProviderAccountsPage';
 import * as zcodeService from '../services/zcodeService';
+import * as codexService from '../services/codexService';
+import { emitAccountsChanged } from '../utils/accountSyncEvents';
 import { useZcodeAccountStore } from '../stores/useZcodeAccountStore';
 import {
   getZcodeAccountDisplayEmail,
@@ -29,6 +31,7 @@ export function ZcodeAccountsPage() {
   const [activeTab, setActiveTab] = useState<PlatformOverviewTab>('overview');
   const [oauthProvider, setOauthProvider] = useState<zcodeService.ZcodeOAuthProvider>('zai');
   const [apiKeyProvider, setApiKeyProvider] = useState<zcodeService.ZcodeApiKeyProvider>('zai');
+  const [codexBindingId, setCodexBindingId] = useState<string | null>(null);
   const store = useZcodeAccountStore();
 
   const page = useProviderAccountsPage<ZcodeAccount>({
@@ -88,6 +91,34 @@ export function ZcodeAccountsPage() {
       }),
     [page.sortDirection, store.accounts, store.currentAccountId],
   );
+
+  const handleExposeToCodex = async (account: ZcodeAccount) => {
+    if ((account.auth_mode !== 'api_key' && account.auth_mode !== 'oauth') || codexBindingId) return;
+    setCodexBindingId(account.id);
+    try {
+      await codexService.addCodexAccountFromZcode(account.id);
+      await emitAccountsChanged({ platformId: 'codex', reason: 'import' });
+      page.setMessage({
+        text: t('common.shared.exposeToCodex.success', '已接入 Codex'),
+        tone: 'success',
+      });
+    } catch (error) {
+      const reason = String(error).replace(/^Error:\s*/, '');
+      const messages: Record<string, string> = {
+        ZCODE_START_PLAN_REQUIRED: t('zcode.exposeToCodex.startPlan'),
+        ZCODE_BIGMODEL_PROJECT_API_KEY_REQUIRED: t('zcode.exposeToCodex.projectKey'),
+        ZCODE_OAUTH_REAUTH_REQUIRED: t('zcode.exposeToCodex.signIn'),
+      };
+      page.setMessage({
+        text: t('common.shared.exposeToCodex.failed', '接入 Codex 失败：{{error}}', {
+          error: messages[reason] ?? reason,
+        }),
+        tone: 'error',
+      });
+    } finally {
+      setCodexBindingId(null);
+    }
+  };
 
   const platformConfig: CodebuddySuiteAccountsPlatformConfig<ZcodeAccount> = {
     pageClassName: 'zcode-accounts-page',
@@ -154,6 +185,20 @@ export function ZcodeAccountsPage() {
     getUsage: getZcodeUsage,
     getQuotaGroups: getZcodeQuotaGroups,
     hasQuotaData: (account) => hasZcodeQuotaData(account),
+    renderCardActionExtra: (account) => account.auth_mode === 'api_key' || account.auth_mode === 'oauth' ? (
+      <button
+        type="button"
+        className="btn btn-secondary"
+        disabled={codexBindingId !== null}
+        aria-busy={codexBindingId === account.id}
+        title={t('zcode.exposeToCodex.title', '仅在 Native Rust 网关中接入，不会复制 ZCode API Key 或 OAuth Token 到 Codex 配置')}
+        onClick={() => { void handleExposeToCodex(account); }}
+      >
+        {codexBindingId === account.id
+          ? t('common.shared.exposeToCodex.inProgress', '接入中…')
+          : t('common.shared.exposeToCodex.action', '接入 Codex')}
+      </button>
+    ) : null,
     usagePrefix: 'zcode',
     quotaPrefix: 'zcode',
     tableUsageClassName: 'zcode-table-usage',

@@ -1,5 +1,9 @@
 #[path = "codex_local_access_native_grok.rs"]
 mod native_grok;
+#[path = "codex_local_access_native_zcode.rs"]
+mod native_zcode;
+#[path = "codex_local_access_native_workbuddy.rs"]
+mod native_workbuddy;
 
 // Native provider selection, credentials and model catalogs. No legacy wire executor.
 
@@ -179,7 +183,7 @@ fn native_model_route_plan(
                 || route
                     .native_provider
                     .as_deref()
-                    .is_some_and(|provider| !matches!(provider, "" | "xai"))
+                    .is_some_and(|provider| !matches!(provider, "" | "xai" | "zcode" | "workbuddy_acp"))
             {
                 return Err(native_error(
                     400,
@@ -583,15 +587,31 @@ fn native_account_owner(account: &CodexAccount, base_url: &str) -> String {
     // replacement has no such identity proof, even when the local record is the
     // same, so it must not reuse the old key's upstream continuation state.
     // Keep only a digest; credentials must never enter the identity database.
-    let credential_scope =
-        if account.is_api_key_auth() && !codex_account::is_grok_upstream_provider(account) {
-            format!(
-                "{:x}",
-                Sha256::digest(account.openai_api_key.as_deref().unwrap_or("").as_bytes())
-            )
-        } else {
-            String::new()
-        };
+    let credential_scope = if codex_account::is_zcode_upstream_provider(account)
+        || codex_account::is_workbuddy_upstream_provider(account)
+    {
+        format!(
+            "{}:{}",
+            account.api_credential_kind.as_deref().unwrap_or(""),
+            account.api_credential_ref.as_deref().unwrap_or("")
+        )
+    } else if account.is_api_key_auth() && !codex_account::is_grok_upstream_provider(account) {
+        format!(
+            "{:x}",
+            Sha256::digest(account.openai_api_key.as_deref().unwrap_or("").as_bytes())
+        )
+    } else {
+        String::new()
+    };
+    let upstream_scope = if account.api_credential_ref.is_some() {
+        format!(
+            "{}:{}",
+            account.upstream_grok_account_id.as_deref().unwrap_or(""),
+            account.api_credential_ref.as_deref().unwrap_or("")
+        )
+    } else {
+        account.upstream_grok_account_id.as_deref().unwrap_or("").to_string()
+    };
     let agent_scope = account.agent_identity.as_ref().map(|identity| {
         (
             identity.agent_runtime_id.as_str(),
@@ -612,7 +632,7 @@ fn native_account_owner(account: &CodexAccount, base_url: &str) -> String {
         },
         account.user_id.as_deref().unwrap_or(""),
         account.account_id.as_deref().unwrap_or(""),
-        account.upstream_grok_account_id.as_deref().unwrap_or(""),
+        upstream_scope,
         base_url.trim_end_matches('/'),
         credential_scope
     )
@@ -735,6 +755,38 @@ async fn native_account_credentials(
                 account = updated;
                 headers = auth;
                 "https://chatgpt.com/backend-api/codex".to_string()
+            } else if codex_account::is_workbuddy_upstream_provider(&account) {
+                let source = codex_account::workbuddy_upstream_account(&account)
+                    .ok_or_else(|| "WorkBuddy account is unavailable".to_string())?;
+                if source.access_token.trim().is_empty()
+                    || source
+                        .expires_at
+                        .is_some_and(|expires_at| expires_at <= chrono::Utc::now().timestamp_millis())
+                    || source.status.as_deref().is_some_and(|status| {
+                        matches!(status, "expired" | "reauth_required" | "reauthorization_required")
+                    })
+                {
+                    return Err("WorkBuddy account token is missing or expired".to_string());
+                }
+                headers = native_workbuddy::credential_headers(&source)?;
+                native_workbuddy::bind_owner(&mut account, &source);
+                codex_account::WORKBUDDY_ACP_BASE_URL.to_string()
+            } else if codex_account::is_zcode_upstream_provider(&account) {
+                let source = crate::modules::zcode_account::load_account(
+                    account.api_credential_ref.as_deref().unwrap_or(""),
+                )
+                .ok_or_else(|| "ZCode account is unavailable".to_string())?;
+                let oauth = codex_account::is_zcode_oauth_upstream_provider(&account);
+                if oauth != (source.auth_mode == crate::models::zcode::ZcodeAuthMode::Oauth) {
+                    return Err("ZCode credential type changed; reconnect the account".to_string());
+                }
+                if oauth {
+                    headers = native_zcode::oauth_credential_headers(&source)?;
+                } else {
+                    headers = native_zcode::credential_headers(&source)?;
+                }
+                native_zcode::bind_owner(&mut account, &source);
+                native_zcode::base_url(&source).to_string()
             } else if account.is_api_key_auth() {
                 if account.api_wire_api.as_deref() == Some("anthropic") && account.api_auth_scheme.as_deref() != Some("bearer") {
                     headers.insert("x-api-key", HeaderValue::from_str(account.openai_api_key.as_deref().unwrap_or("")).map_err(|_| "Invalid API key")?);
@@ -784,6 +836,21 @@ async fn native_account_credentials(
 
 fn native_credential_error(error: &str) -> native_contract::ServiceError {
     match error {
+        "ZCODE_OAUTH_REAUTH_REQUIRED" => native_error(
+            401,
+            "zcode_oauth_reauthorization_required",
+            "ZCode OAuth credentials are unavailable; sign in again in ZCode",
+        )
+        .with_credential_scope(true),
+        "ZCODE_START_PLAN_REQUIRED" => native_error(
+            403, "zcode_start_plan_required",
+            "Refresh your ZCode quota to confirm an active personal Z.ai Start Plan",
+        ),
+        "ZCODE_BIGMODEL_PROJECT_API_KEY_REQUIRED" => native_error(
+            403,
+            "zcode_bigmodel_project_api_key_required",
+            "BigModel OAuth accounts require a project API key for inference; use a BigModel API Key account instead",
+        ),
         "CHATGPT_PLAN_REAUTH_REQUIRED" | "CHATGPT_PLAN_DISCONNECTED" | "CHATGPT_PLAN_NOT_FOUND" => {
             native_error(
                 401,
@@ -1474,7 +1541,11 @@ async fn native_select_route_once(
             let Some(quota_wait) = *quota_wait else {
                 return false;
             };
-            let memory_wait = if native_is_chatgpt_plan_account(account) {
+            let bound_official = native_is_chatgpt_plan_account(account)
+                && !account
+                    .id
+                    .starts_with(codex_account::CHATGPT_PLAN_ACCOUNT_PREFIX);
+            let memory_wait = if bound_official {
                 Duration::ZERO
             } else {
                 native_cooldown_wait(
@@ -1558,19 +1629,17 @@ async fn native_select_route_once(
     native_sort_accounts_scoped(host, &mut accounts, &collection, key, &routing_namespace);
     let search = request.auxiliary.as_deref() == Some("search");
     if search || plan.automatic {
-        let now = chrono::Utc::now().timestamp();
+        // Prefer the native transport within each configured account priority.
         accounts.sort_by_cached_key(|account| {
-            // Prefer the native protocol within each preferred, regular or backup tier.
-            let tier = native_account_rank(account, &collection, key, now).0;
+            let priority = account_usage_priority(native_account_routing_rule(account, &collection));
             let relay = if search {
                 account.is_api_key_auth()
             } else {
-                automatic_api_service_provider_route_eligible(
-                    account,
-                    || native_automatic_upstream_models(&collection, account),
-                ) && !codex_account::is_grok_upstream_provider(account)
+                automatic_api_service_provider_route_eligible(account, || {
+                    native_automatic_upstream_models(&collection, account)
+                }) && !codex_account::is_grok_upstream_provider(account)
             };
-            (tier, relay)
+            (std::cmp::Reverse(priority), relay)
         });
     }
     if request.capability_fallback_from.is_some() {
@@ -1691,7 +1760,11 @@ async fn native_select_route_once(
         // Another request can cool this account while its semaphore is queued.
         // Recheck the mapped model after admission, without holding the state
         // lock across a wait or charging an upstream attempt for a local skip.
-        let (cooldown, quota_exhausted) = if native_is_chatgpt_plan_account(account) {
+        let bound_official = native_is_chatgpt_plan_account(account)
+            && !account
+                .id
+                .starts_with(codex_account::CHATGPT_PLAN_ACCOUNT_PREFIX);
+        let (cooldown, quota_exhausted) = if bound_official {
             (None, false)
         } else {
             let states = host.cooldowns.lock().map_err(|_| {

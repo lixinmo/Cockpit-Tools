@@ -497,6 +497,17 @@ const CC_SWITCH_DIRECT_CLAUDE_PROVIDER_PRESETS: readonly ClaudeApiProviderPreset
     }),
   }),
   createClaudeApiProviderPreset({
+    id: 'teamorouter',
+    name: 'TeamoRouter',
+    baseUrl: 'https://api.teamorouter.com',
+    website: 'https://teamorouter.com',
+    apiKeyUrl: 'https://teamorouter.com/dashboard?tab=api-keys',
+    extraEnv: modelEnv('claude-sonnet-5-5', {
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-haiku-5-5',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-5-5',
+    }),
+  }),
+  createClaudeApiProviderPreset({
     id: 'pipellm',
     name: 'PIPELLM',
     baseUrl: 'https://cc-api.pipellm.ai',
@@ -558,6 +569,39 @@ const CC_SWITCH_DIRECT_CLAUDE_PROVIDER_PRESETS: readonly ClaudeApiProviderPreset
     templateValues: {
       AWS_REGION: { label: 'AWS Region', placeholder: 'us-west-2', editorValue: 'us-west-2' },
     },
+  }),
+  createClaudeApiProviderPreset({
+    id: 'aigrow',
+    name: 'AIGROW',
+    baseUrl: 'https://aigrow.gg',
+    website: 'https://aigrow.gg/ai-api',
+    apiKeyUrl: 'https://aigrow.gg/dashboard/api',
+    extraEnv: modelEnv('claude-haiku-5.5', {
+      ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-5.5',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-5.5',
+    }),
+  }),
+  createClaudeApiProviderPreset({
+    id: 'lazu',
+    name: 'Lazu',
+    baseUrl: 'https://api.lazu.ai',
+    website: 'https://lazu.ai',
+    apiKeyUrl: 'https://lazu.ai/console/token',
+    extraEnv: modelEnv('claude-sonnet-5-5', {
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-haiku-5-5',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-5-5',
+    }),
+  }),
+  createClaudeApiProviderPreset({
+    id: 'worldrouter',
+    name: 'WorldRouter',
+    baseUrl: 'https://inference-api.worldrouter.ai',
+    website: 'https://www.worldrouter.ai',
+    apiKeyUrl: 'https://www.worldrouter.ai/dashboard/api-keys',
+    extraEnv: modelEnv('claude-sonnet-5-5', {
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-haiku-5-5',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-5-5',
+    }),
   }),
 ];
 

@@ -80,6 +80,7 @@ import { useWorkbuddyAccountStore } from '../stores/useWorkbuddyAccountStore';
 import { useMinimaxCodeAccountStore } from '../stores/useMinimaxCodeAccountStore';
 import { useQoderAccountStore } from '../stores/useQoderAccountStore';
 import { useZcodeAccountStore } from '../stores/useZcodeAccountStore';
+import { useT3codeAccountStore } from '../stores/useT3codeAccountStore';
 import { useTraeAccountStore } from '../stores/useTraeAccountStore';
 import { useZedAccountStore } from '../stores/useZedAccountStore';
 import { getGitHubCopilotAccountDisplayEmail } from '../types/githubCopilot';
@@ -93,6 +94,7 @@ import { getWorkbuddyAccountDisplayEmail } from '../types/workbuddy';
 import { getMinimaxCodeAccountDisplayEmail } from '../types/minimaxCode';
 import { getQoderAccountDisplayEmail } from '../types/qoder';
 import { getZcodeAccountDisplayEmail } from '../types/zcode';
+import { getT3codeAccountDisplayEmail } from '../types/t3code';
 import {
   getTraeAccountDisplayEmail,
   getTraeAccountPlatformId,
@@ -172,6 +174,7 @@ interface GeneralConfig {
   tray_icon_style?: 'template' | 'color';
   menu_bar_left_click_opens_main_window?: boolean;
   menu_bar_quota_enabled?: boolean;
+  menu_bar_quota_layout?: 'horizontal' | 'stacked';
   menu_bar_show_account_prefix?: boolean;
   menu_bar_quota_platform?: MenuBarQuotaPlatform;
   menu_bar_antigravity_metric?: string;
@@ -202,6 +205,8 @@ interface GeneralConfig {
   codebuddy_cn_share_sessions_on_switch: boolean;
   qoder_app_path: string;
   zcode_app_path: string;
+  t3code_app_path: string;
+  t3code_app_ui_injection_enabled?: boolean;
   trae_app_path: string;
   trae_solo_app_path: string;
   trae_cn_app_path: string;
@@ -224,6 +229,7 @@ interface GeneralConfig {
   minimax_code_auto_refresh_minutes: number;
   qoder_auto_refresh_minutes: number;
   zcode_auto_refresh_minutes: number;
+  t3code_auto_refresh_minutes: number;
   trae_auto_refresh_minutes: number;
   trae_solo_auto_refresh_minutes: number;
   trae_cn_auto_refresh_minutes: number;
@@ -312,6 +318,7 @@ type AppPathTarget =
   | 'codebuddy_cn'
   | 'qoder'
   | 'zcode'
+  | 't3code'
   | 'trae'
   | 'trae_solo'
   | 'trae_cn'
@@ -356,6 +363,7 @@ const FALLBACK_PLATFORM_SETTINGS_ORDER: Record<PlatformId, number> = {
   codebuddy_cn: 11,
   qoder: 12,
   zcode: 13,
+  t3code: 23,
   trae: 14,
   trae_solo: 15,
   trae_cn: 16,
@@ -542,6 +550,7 @@ export function useSettingsPageController() {
     { value: 'codebuddy_cn', label: 'CodeBuddy CN' },
     { value: 'qoder', label: 'Qoder' },
     { value: 'zcode', label: 'ZCode' },
+    { value: 't3code', label: 'T3 Code' },
     { value: 'trae', label: 'Trae' },
     { value: 'trae_solo', label: t('nav.traeSolo') },
     { value: 'trae_cn', label: 'Trae CN' },
@@ -584,6 +593,8 @@ export function useSettingsPageController() {
   const [showTrayIcon, setShowTrayIcon] = useState(true);
   const [trayIconStyle, setTrayIconStyle] = useState<'template' | 'color'>('template');
   const [menuBarQuotaEnabled, setMenuBarQuotaEnabled] = useState(false);
+  const [menuBarQuotaLayout, setMenuBarQuotaLayout] = useState<'horizontal' | 'stacked'>('horizontal');
+  const [menuBarQuotaDraftLayout, setMenuBarQuotaDraftLayout] = useState<'horizontal' | 'stacked'>('horizontal');
   const [menuBarLeftClickOpensMainWindow, setMenuBarLeftClickOpensMainWindow] = useState(false);
   const [menuBarShowAccountPrefix, setMenuBarShowAccountPrefix] = useState(true);
   const [menuBarQuotaPlatform, setMenuBarQuotaPlatform] = useState<MenuBarQuotaPlatform>('codex');
@@ -628,6 +639,8 @@ export function useSettingsPageController() {
   const [codebuddyCnShareSessionsOnSwitch, setCodebuddyCnShareSessionsOnSwitch] = useState(false);
   const [qoderAppPath, setQoderAppPath] = useState('');
   const [zcodeAppPath, setZcodeAppPath] = useState('');
+  const [t3codeAppPath, setT3codeAppPath] = useState('');
+  const [t3codeAppUiInjectionEnabled, setT3codeAppUiInjectionEnabled] = useState(true);
   const [traeAppPath, setTraeAppPath] = useState('');
   const [traeSoloAppPath, setTraeSoloAppPath] = useState('');
   const [traeCnAppPath, setTraeCnAppPath] = useState('');
@@ -642,6 +655,7 @@ export function useSettingsPageController() {
   const [minimaxCodeAutoRefresh, setMinimaxCodeAutoRefresh] = useState('10');
   const [qoderAutoRefresh, setQoderAutoRefresh] = useState('10');
   const [zcodeAutoRefresh, setZcodeAutoRefresh] = useState('10');
+  const [t3codeAutoRefresh, setT3codeAutoRefresh] = useState('10');
   const [traeAutoRefresh, setTraeAutoRefresh] = useState('10');
   const [traeSoloAutoRefresh, setTraeSoloAutoRefresh] = useState('10');
   const [traeCnAutoRefresh, setTraeCnAutoRefresh] = useState('10');
@@ -688,6 +702,7 @@ export function useSettingsPageController() {
   const [codebuddyQuotaAlertThresholdCustomMode, setCodebuddyQuotaAlertThresholdCustomMode] = useState(false);
   const [qoderAutoRefreshCustomMode, setQoderAutoRefreshCustomMode] = useState(false);
   const [zcodeAutoRefreshCustomMode, setZcodeAutoRefreshCustomMode] = useState(false);
+  const [t3codeAutoRefreshCustomMode, setT3codeAutoRefreshCustomMode] = useState(false);
   const [qoderQuotaAlertThresholdCustomMode, setQoderQuotaAlertThresholdCustomMode] = useState(false);
   const [traeAutoRefreshCustomMode, setTraeAutoRefreshCustomMode] = useState(false);
   const [traeQuotaAlertThresholdCustomMode, setTraeQuotaAlertThresholdCustomMode] = useState(false);
@@ -1072,6 +1087,7 @@ export function useSettingsPageController() {
       !minimaxCodeAutoRefresh.trim() ||
       !qoderAutoRefresh.trim() ||
       !zcodeAutoRefresh.trim() ||
+      !t3codeAutoRefresh.trim() ||
       !traeAutoRefresh.trim() ||
       !traeSoloAutoRefresh.trim() ||
       !traeCnAutoRefresh.trim() ||
@@ -1095,6 +1111,7 @@ export function useSettingsPageController() {
     const minimaxCodeAutoRefreshNum = parseInt(minimaxCodeAutoRefresh, 10) || -1;
     const qoderAutoRefreshNum = parseInt(qoderAutoRefresh, 10) || -1;
     const zcodeAutoRefreshNum = parseInt(zcodeAutoRefresh, 10) || -1;
+    const t3codeAutoRefreshNum = parseInt(t3codeAutoRefresh, 10) || -1;
     const traeAutoRefreshNum = parseInt(traeAutoRefresh, 10) || -1;
     const traeSoloAutoRefreshNum = parseInt(traeSoloAutoRefresh, 10) || -1;
     const traeCnAutoRefreshNum = parseInt(traeCnAutoRefresh, 10) || -1;
@@ -1150,6 +1167,8 @@ export function useSettingsPageController() {
       minimax_code_auto_refresh_minutes: minimaxCodeAutoRefreshNum,
       qoder_auto_refresh_minutes: qoderAutoRefreshNum,
       zcode_auto_refresh_minutes: zcodeAutoRefreshNum,
+      t3code_auto_refresh_minutes: t3codeAutoRefreshNum,
+      t3code_app_ui_injection_enabled: t3codeAppUiInjectionEnabled,
       trae_auto_refresh_minutes: traeAutoRefreshNum,
       trae_solo_auto_refresh_minutes: traeSoloAutoRefreshNum,
       trae_cn_auto_refresh_minutes: traeCnAutoRefreshNum,
@@ -1167,6 +1186,7 @@ export function useSettingsPageController() {
       tray_icon_style: isMacOS ? trayIconStyle : undefined,
       menu_bar_left_click_opens_main_window: isMacOS ? menuBarLeftClickOpensMainWindow : undefined,
       menu_bar_quota_enabled: isMacOS ? menuBarQuotaEnabled : undefined,
+      menu_bar_quota_layout: isMacOS ? menuBarQuotaLayout : undefined,
       menu_bar_show_account_prefix: isMacOS ? menuBarShowAccountPrefix : undefined,
       menu_bar_quota_platform: isMacOS ? menuBarQuotaPlatform : undefined,
       menu_bar_antigravity_metric: isMacOS ? menuBarAntigravityMetric : undefined,
@@ -1197,6 +1217,7 @@ export function useSettingsPageController() {
       codebuddy_cn_share_sessions_on_switch: codebuddyCnShareSessionsOnSwitch,
       qoder_app_path: qoderAppPath,
       zcode_app_path: zcodeAppPath,
+      t3code_app_path: t3codeAppPath,
       trae_app_path: traeAppPath,
       trae_solo_app_path: traeSoloAppPath,
       trae_cn_app_path: traeCnAppPath,
@@ -1400,6 +1421,8 @@ export function useSettingsPageController() {
     minimaxCodeAutoRefresh,
     qoderAutoRefresh,
     zcodeAutoRefresh,
+    t3codeAutoRefresh,
+    t3codeAppUiInjectionEnabled,
     cursorAutoRefresh,
     grokAutoRefresh,
     grokSyncOfficialAuthOnSwitch,
@@ -1411,6 +1434,7 @@ export function useSettingsPageController() {
     showTrayIcon,
     trayIconStyle,
     menuBarQuotaEnabled,
+    menuBarQuotaLayout,
     menuBarLeftClickOpensMainWindow,
     menuBarShowAccountPrefix,
     menuBarQuotaPlatform,
@@ -1452,6 +1476,7 @@ export function useSettingsPageController() {
     codebuddyCnShareSessionsOnSwitch,
     qoderAppPath,
     zcodeAppPath,
+    t3codeAppPath,
     traeAppPath,
     traeSoloAppPath,
     traeCnAppPath,
@@ -1745,6 +1770,7 @@ export function useSettingsPageController() {
       setMenuBarLeftClickOpensMainWindow(config.menu_bar_left_click_opens_main_window ?? false);
       setTrayIconStyle(config.tray_icon_style === 'color' ? 'color' : 'template');
       setMenuBarQuotaEnabled(config.menu_bar_quota_enabled ?? false);
+      setMenuBarQuotaLayout(config.menu_bar_quota_layout === 'stacked' ? 'stacked' : 'horizontal');
       setMenuBarShowAccountPrefix(config.menu_bar_show_account_prefix ?? true);
       setMenuBarQuotaPlatform(config.menu_bar_quota_platform ?? 'codex');
       setMenuBarAntigravityMetric(config.menu_bar_antigravity_metric ?? '');
@@ -1776,6 +1802,8 @@ export function useSettingsPageController() {
       setCodebuddyCnShareSessionsOnSwitch(config.codebuddy_cn_share_sessions_on_switch ?? false);
       setQoderAppPath(config.qoder_app_path || '');
       setZcodeAppPath(config.zcode_app_path || '');
+      setT3codeAppPath(config.t3code_app_path || '');
+      setT3codeAppUiInjectionEnabled(Boolean(config.t3code_app_ui_injection_enabled ?? true));
       setTraeAppPath(config.trae_app_path || '');
       setTraeSoloAppPath(config.trae_solo_app_path || '');
       setTraeCnAppPath(config.trae_cn_app_path || '');
@@ -1796,6 +1824,7 @@ export function useSettingsPageController() {
       setMinimaxCodeAutoRefresh(String(config.minimax_code_auto_refresh_minutes ?? 10));
       setQoderAutoRefresh(String(config.qoder_auto_refresh_minutes ?? 10));
       setZcodeAutoRefresh(String(config.zcode_auto_refresh_minutes ?? 10));
+      setT3codeAutoRefresh(String(config.t3code_auto_refresh_minutes ?? 10));
       setTraeAutoRefresh(String(config.trae_auto_refresh_minutes ?? 10));
       setTraeSoloAutoRefresh(String(config.trae_solo_auto_refresh_minutes ?? 10));
       setTraeCnAutoRefresh(String(config.trae_cn_auto_refresh_minutes ?? 10));
@@ -1892,6 +1921,7 @@ export function useSettingsPageController() {
       setWorkbuddyAutoRefreshCustomMode(false);
       setQoderAutoRefreshCustomMode(false);
       setZcodeAutoRefreshCustomMode(false);
+      setT3codeAutoRefreshCustomMode(false);
       setTraeAutoRefreshCustomMode(false);
       setTraeSoloAutoRefreshCustomMode(false);
       setTraeCnAutoRefreshCustomMode(false);
@@ -2154,6 +2184,8 @@ export function useSettingsPageController() {
       setQoderAppPath(path);
     } else if (target === 'zcode') {
       setZcodeAppPath(path);
+    } else if (target === 't3code') {
+      setT3codeAppPath(path);
     } else if (isTraeAppPathTarget(target)) {
       setTraeAppPathValue(target, path);
       setTraeLaunchCandidatesTarget(target);
@@ -2195,6 +2227,8 @@ export function useSettingsPageController() {
         return 'Qoder';
       case 'zcode':
         return 'ZCode';
+      case 't3code':
+        return 'T3 Code';
       case 'trae':
       case 'trae_solo':
       case 'trae_cn':
@@ -2495,6 +2529,8 @@ export function useSettingsPageController() {
         return parseRefresh(qoderAutoRefresh) > 0;
       case 'zcode':
         return parseRefresh(zcodeAutoRefresh) > 0;
+      case 't3code':
+        return parseRefresh(t3codeAutoRefresh) > 0;
       case 'trae':
         return parseRefresh(traeAutoRefresh) > 0;
       case 'trae_solo':
@@ -2651,6 +2687,8 @@ export function useSettingsPageController() {
         return getProviderAccounts(useQoderAccountStore, getQoderAccountDisplayEmail);
       case 'zcode':
         return getProviderAccounts(useZcodeAccountStore, getZcodeAccountDisplayEmail);
+      case 't3code':
+        return getProviderAccounts(useT3codeAccountStore, getT3codeAccountDisplayEmail);
       case 'trae':
         return getTraeAccounts('trae');
       case 'trae_solo':
@@ -3104,6 +3142,7 @@ export function useSettingsPageController() {
   const minimaxCodeAutoRefreshIsPreset = REFRESH_PRESET_VALUES.includes(minimaxCodeAutoRefresh);
   const qoderAutoRefreshIsPreset = REFRESH_PRESET_VALUES.includes(qoderAutoRefresh);
   const zcodeAutoRefreshIsPreset = REFRESH_PRESET_VALUES.includes(zcodeAutoRefresh);
+  const t3codeAutoRefreshIsPreset = REFRESH_PRESET_VALUES.includes(t3codeAutoRefresh);
   const traeAutoRefreshIsPreset = REFRESH_PRESET_VALUES.includes(traeAutoRefresh);
   const traeSoloAutoRefreshIsPreset = REFRESH_PRESET_VALUES.includes(traeSoloAutoRefresh);
   const traeCnAutoRefreshIsPreset = REFRESH_PRESET_VALUES.includes(traeCnAutoRefresh);
@@ -3193,6 +3232,7 @@ export function useSettingsPageController() {
   useEscClose(releaseHistoryOpen, handleCloseReleaseHistory);
 
   const openMenuBarQuotaModal = (mode: 'enable' | 'edit') => {
+    setMenuBarQuotaDraftLayout(menuBarQuotaLayout);
     setMenuBarQuotaDraftPlatform(menuBarQuotaPlatform);
     setMenuBarAntigravityMetricDraft(menuBarAntigravityMetric);
     setMenuBarQuotaDraftShowPrefix(menuBarShowAccountPrefix);
@@ -3205,6 +3245,7 @@ export function useSettingsPageController() {
   };
 
   const handleConfirmMenuBarQuotaModal = () => {
+    setMenuBarQuotaLayout(menuBarQuotaDraftLayout);
     setMenuBarQuotaPlatform(menuBarQuotaDraftPlatform);
     setMenuBarAntigravityMetric(menuBarAntigravityMetricDraft);
     setMenuBarShowAccountPrefix(menuBarQuotaDraftShowPrefix);
@@ -3432,6 +3473,7 @@ export function useSettingsPageController() {
     languageOptions,
     loadGeneralConfig,
     loadUpdateSettings,
+    menuBarQuotaDraftLayout,
     menuBarQuotaDraftPlatform,
     menuBarAntigravityAccounts: antigravityAccounts,
     menuBarAntigravityMetricDraft,
@@ -3606,6 +3648,7 @@ export function useSettingsPageController() {
     setMinimaxCodeQuotaAlertThreshold,
     setMinimaxCodeQuotaAlertThresholdCustomMode,
     setLanguage,
+    setMenuBarQuotaDraftLayout,
     setMenuBarQuotaDraftPlatform,
     setMenuBarAntigravityMetricDraft,
     setMenuBarQuotaDraftShowPrefix,
@@ -3679,6 +3722,15 @@ export function useSettingsPageController() {
     setZcodeAppPath,
     setZcodeAutoRefresh,
     setZcodeAutoRefreshCustomMode,
+    setT3codeAppPath,
+    setT3codeAppUiInjectionEnabled,
+    setT3codeAutoRefresh,
+    setT3codeAutoRefreshCustomMode,
+    t3codeAppPath,
+    t3codeAppUiInjectionEnabled,
+    t3codeAutoRefresh,
+    t3codeAutoRefreshCustomMode,
+    t3codeAutoRefreshIsPreset,
     setZedAppPath,
     setZedAutoRefresh,
     setZedAutoRefreshCustomMode,

@@ -99,7 +99,7 @@ fn with_launch_visibility_budget<T>(
     }
 }
 
-fn check_launch_visibility_budget(stage: &str) -> Result<(), String> {
+pub(crate) fn check_launch_visibility_budget(stage: &str) -> Result<(), String> {
     if launch_visibility_budget().is_some_and(|budget| std::time::Instant::now() >= budget.deadline)
     {
         return Err(format!("{LAUNCH_VISIBILITY_TIMEOUT}: stage={stage}"));
@@ -108,6 +108,13 @@ fn check_launch_visibility_budget(stage: &str) -> Result<(), String> {
 }
 
 fn configure_launch_visibility_connection(connection: &Connection) -> Result<(), String> {
+    configure_launch_visibility_connection_with_busy_limit(connection, Duration::from_millis(250))
+}
+
+pub(crate) fn configure_launch_visibility_connection_with_busy_limit(
+    connection: &Connection,
+    busy_limit: Duration,
+) -> Result<(), String> {
     let Some(budget) = launch_visibility_budget() else {
         return Ok(());
     };
@@ -126,7 +133,7 @@ fn configure_launch_visibility_connection(connection: &Connection) -> Result<(),
             budget
                 .deadline
                 .saturating_duration_since(std::time::Instant::now())
-                .min(Duration::from_millis(250)),
+                .min(busy_limit),
         )
         .map_err(|error| format!("SQLite launch repair busy timeout: {error}"))?;
     Ok(())

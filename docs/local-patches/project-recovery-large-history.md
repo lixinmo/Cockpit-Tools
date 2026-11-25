@@ -29,6 +29,28 @@ The fork preserves the operation deadlines and the recovery path on timeout.
 - Account-state preparation precedes the generic project planner. A later
   deferred maintenance result does not undo its already committed account state.
 
+## Upstream v1.5.1 review (2026-11-26)
+
+Upstream `20dce1be` supplies both pieces of SSH switching that the fork
+reconnected in v1.4.2. The upstream identity module now transfers the saved
+on/off flags for configured hosts, and Desktop startup uses the shared alias
+lookup. Migrated profiles read their authoritative SQLite settings. Legacy
+profiles continue through the JSON path. A locked or unsupported SQLite
+store defers SSH preparation and leaves the legacy JSON alone.
+
+The fork applies its existing launch deadline to the new SQLite settings
+transaction, retaining the upstream 150 ms maximum busy wait. A timed-out
+write rolls back before Desktop startup. The legacy project scan still uses
+the saved-ID fallback after a full scan times out. Quick history repair now
+uses upstream's check for existing plain or compressed rollouts and checks
+its deadline while examining those paths.
+
+The isolated release suite passed 70 fixture tests with the optional live
+profile preview skipped. They cover SQLite and legacy SSH preferences,
+rollback of an interrupted settings write, stale JSON beside a locked
+SQLite store, the 3,500-thread round trip and large state files. All 13
+Python project-repair tests also passed.
+
 ## Upstream v1.4.2 review (2026-11-22)
 
 Upstream `ccac8637` restores verified local chats without a project when

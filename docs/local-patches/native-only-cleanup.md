@@ -257,3 +257,26 @@ The executable SHA-256 is
 The builder removed the project compilation directory (at least 3.8 GiB),
 frontend dependencies (225 MiB), frontend output (18 MiB), and build scratch.
 The installed App remains v1.4.0. Installation and launch were outside this run.
+
+## Upstream v1.5.1 integration (2026-11-26)
+
+The upstream baseline is `20dce1be`, including v1.5.0 and v1.5.1. Two fixes
+from the previous integration are now provided by upstream:
+
+- Native automatic Responses and search routes honor preferred, regular and
+  backup membership before protocol preference. The fork's extra tier sort
+  from `2e19ac3d` was removed.
+- Account switches and startup use upstream's SSH auto-connect preferences,
+  including the newer Desktop SQLite store. The fork-specific calls used to
+  reconnect these paths in v1.4.2 have been retired. The fork still applies
+  its project-recovery deadline and rollback checks to the SQLite work.
+
+The fork keeps the saved-thread-ID lookup after a full project scan times out,
+the three-attempt same-account HTTP connection-setup retry and subscription
+Credits admission for the actual credential. The upstream network-error
+budget governs request recovery after a failure reaches the gateway. Credits
+and import previews share upstream quota fetching and identity checks.
+
+Personal builds still produce the Intel App locally. Manual Linux cloud builds
+pick up the upstream protocol-parity check and AppImage Wayland packaging fix.
+The upstream build guard checks that the production frontend assets exist.

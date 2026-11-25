@@ -400,6 +400,74 @@ fn scoped_ssh_preferences_follow_the_outgoing_account_to_the_next_launch() {
 }
 
 #[test]
+fn sqlite_ssh_preferences_drive_startup_and_follow_the_next_account() {
+    let f = Fixture::new();
+    let legacy = json!({
+        "codex-managed-remote-connections": [{"hostId":"stale","alias":"stale"}],
+        "remote-connection-auto-connect-by-host-id": {"stale":true}
+    });
+    f.write(&legacy);
+    let outgoing = "electron-account-remote-preference:remote-connection-auto-connect-by-host-id:old";
+    let incoming = "electron-account-remote-preference:remote-connection-auto-connect-by-host-id:new";
+    let db = desktop_state::desktop_settings_fixture(
+        f.home(),
+        &[
+            ("electron-renderer-content-owner", json!("old")),
+            ("codex-managed-remote-connections", json!([
+                {"hostId":"ssh-on","alias":"enabled"}, {"hostId":"ssh-off","alias":"disabled"}
+            ])),
+            (outgoing, json!({"ssh-on":true,"ssh-off":false,"cloud-old":true})),
+            (incoming, json!({"ssh-on":false,"ssh-off":true,"cloud-new":true})),
+        ],
+    );
+    prepare(f.home(), Some("new")).unwrap();
+    let read = |key: &str| -> Value {
+        let stored: String = db
+            .query_row(
+                "SELECT value FROM settings WHERE scope = 'global' AND key = ?1",
+                [key],
+                |row| row.get(0),
+            )
+            .unwrap();
+        serde_json::from_str(&stored).unwrap()
+    };
+    assert_eq!(read(incoming), json!({"ssh-on":true,"ssh-off":false,"cloud-new":true}));
+    assert_eq!(read(outgoing), json!({"ssh-on":true,"ssh-off":false,"cloud-old":true}));
+    assert_eq!(read("electron-renderer-content-owner"), "old");
+    assert_eq!(f.state(), legacy);
+    let startup: Value =
+        serde_json::from_slice(&fs::read(f.home().join("codex-app/config.json")).unwrap()).unwrap();
+    assert_eq!(startup["remoteConnections"], json!([{"sshAlias":"enabled","projects":[]}]));
+    assert!(!prepare(f.home(), Some("new")).unwrap());
+}
+
+#[test]
+fn sqlite_ssh_preferences_roll_back_when_the_launch_deadline_expires_during_write() {
+    let f = Fixture::new();
+    let outgoing = identity::scoped_auto_connect_key("old");
+    let incoming = identity::scoped_auto_connect_key("new");
+    let db = desktop_state::desktop_settings_fixture(f.home(), &[
+        (identity::RENDERER_OWNER, json!("old")),
+        (identity::CONNECTIONS, json!([{"hostId":"ssh", "alias":"example"}])),
+        (&outgoing, json!({"ssh":true})),
+    ]);
+    // Keep the settings transaction in progress while its deadline expires.
+    db.execute_batch("CREATE TRIGGER slow_insert AFTER INSERT ON settings BEGIN
+        SELECT sum(x) FROM (WITH RECURSIVE n(x) AS (VALUES(0) UNION ALL
+            SELECT x+1 FROM n WHERE x<2000000) SELECT x FROM n); END;").unwrap();
+    let result = super::super::super::with_launch_visibility_budget(
+        std::time::Duration::from_millis(50), || prepare(f.home(), Some("new")),
+    );
+    assert!(result.unwrap_err().contains(LAUNCH_VISIBILITY_TIMEOUT));
+    let inherited: bool = db.query_row(
+        "SELECT EXISTS(SELECT 1 FROM settings WHERE scope='global' AND key=?1)",
+        [&incoming], |row| row.get(0),
+    ).unwrap();
+    assert!(!inherited);
+    assert!(!f.home().join("codex-app/config.json").exists());
+}
+
+#[test]
 fn ssh_startup_removes_disabled_owned_aliases_and_preserves_user_configuration() {
     let f = Fixture::new();
     let config_path = f.home().join("codex-app/config.json");

@@ -95,7 +95,13 @@ async fn native_credits_image_pool_does_not_expand_to_conversation_catalog() {
 
 #[tokio::test]
 async fn native_credits_per_account_denial_survives_complete_pool_exhaustion() {
-    let source = account(0.0);
+    let mut source = account(0.0);
+    let quota = source.quota.as_mut().unwrap();
+    let raw = quota.raw_data.as_mut().unwrap();
+    raw["plan_type"] = json!("team");
+    raw["credits"] = json!({"has_credits": true, "balance": null});
+    // The upstream scheduler can use the workspace's paid balance.
+    assert!(quota_has_usable_credits(quota));
     let mut host = host(Policy::PreferRegular, &[source.clone()]);
     host.collection_override
         .as_mut()

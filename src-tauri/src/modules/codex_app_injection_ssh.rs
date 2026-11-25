@@ -2,6 +2,7 @@
 //! No new-document hooks: reconnect happens only after a verified auth write.
 use super::*;
 use crate::models::ssh_server::SshServer;
+use crate::modules::ssh_server_desktop_state as desktop_state;
 use crate::modules::ssh_server_identity as identity;
 
 #[path = "codex_app_ssh_transport.rs"]
@@ -11,9 +12,7 @@ const SCRIPT: &str = include_str!("codex_app_ssh_reconnect.js");
 const REFRESH_TIMEOUT: Duration = Duration::from_secs(40);
 
 fn current(account: &CodexAccount) -> bool {
-    codex_account::get_current_account().is_some_and(|active| {
-        active.id == account.id && active.token_generation == account.token_generation
-    })
+    crate::modules::ssh_server::is_current_sync_account(account)
 }
 
 async fn resolve_endpoint(
@@ -66,14 +65,22 @@ enum DesktopAvailability {
     Ready(u16),
 }
 
+fn profile_binding_matches(binding: Option<&str>, expected: &str) -> bool {
+    if crate::modules::codex_instance::is_api_service_bind_account_id(expected) {
+        return binding.map(str::trim) == Some(expected);
+    }
+    bind_account_id_value(binding).as_deref() == Some(expected)
+}
+
 fn ensure_current_target(account: &CodexAccount) -> Result<(), String> {
     if !current(account) {
         return Err("ssh_sync_superseded".into());
     }
     let settings = crate::modules::codex_instance::load_default_settings()?;
-    if bind_account_id_value(settings.bind_account_id.as_deref()).as_deref()
-        != Some(account.id.as_str())
-    {
+    if !profile_binding_matches(
+        settings.bind_account_id.as_deref(),
+        crate::modules::ssh_server::sync_binding_id(account),
+    ) {
         return Err("profile_binding_changed".into());
     }
     Ok(())
@@ -201,9 +208,15 @@ async fn try_refresh(
     if pages.is_empty() {
         return Ok(RefreshAttempt::Waiting("desktop_page"));
     }
-    let raw = fs::read(profile.join(".codex-global-state.json"))
-        .map_err(|_| "profile_state_unavailable")?;
-    let state = serde_json::from_slice(&raw).map_err(|_| "profile_state_invalid")?;
+    let profile = profile.to_path_buf();
+    let state = match tokio::task::spawn_blocking(move || desktop_state::load(&profile))
+        .await
+        .map_err(|_| "profile_state_unavailable")?
+    {
+        Ok(state) => state,
+        Err(desktop_state::BUSY) => return Ok(RefreshAttempt::Waiting(desktop_state::BUSY)),
+        Err(error) => return Err(error.into()),
+    };
     if let Some(stage) = pending_preferences(&state, expected_owner) {
         return Ok(RefreshAttempt::Waiting(stage));
     }
@@ -274,4 +287,34 @@ pub(super) async fn refresh(
     })
     .await;
     result.map_err(|_| format!("{waiting_on}_timeout"))?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn api_service_profile_binding_can_be_refreshed() {
+        let binding = crate::modules::codex_instance::CODEX_API_SERVICE_BIND_ACCOUNT_ID;
+        assert_eq!(bind_account_id_value(Some(binding)), None);
+        assert!(profile_binding_matches(Some(binding), binding));
+        assert!(profile_binding_matches(Some(&format!(" {binding} ")), binding));
+    }
+
+    #[test]
+    fn account_profile_binding_accepts_its_provider_gateway() {
+        assert!(profile_binding_matches(Some("account-one"), "account-one"));
+        assert!(profile_binding_matches(Some("__provider_gateway__:account-one"), "account-one"));
+    }
+
+    #[test]
+    fn changed_or_missing_profile_binding_is_rejected() {
+        let service = crate::modules::codex_instance::CODEX_API_SERVICE_BIND_ACCOUNT_ID;
+        assert!(!profile_binding_matches(Some("account-one"), service));
+        assert!(!profile_binding_matches(Some(service), "account-one"));
+        assert!(!profile_binding_matches(Some("account-two"), "account-one"));
+        assert!(!profile_binding_matches(Some("__provider_gateway__:__api_service__"), service));
+        assert!(!profile_binding_matches(None, service));
+        assert!(!profile_binding_matches(Some(" "), service));
+    }
 }

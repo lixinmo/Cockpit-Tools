@@ -10,6 +10,8 @@
 //! directory is configured. Existing fixtures use temporary files and databases.
 #![allow(dead_code)]
 
+// The harness imports the visibility module's production items at the crate root.
+use crate as codex_session_visibility;
 use rusqlite::{Connection, OpenFlags};
 use std::{collections::HashSet, ffi::OsStr, fs, path::{Path, PathBuf}, sync::Mutex, time::Duration};
 
@@ -19,8 +21,12 @@ pub mod atomic_write;
 #[path = "../../../src-tauri/src/modules/ssh_server_identity.rs"]
 pub mod ssh_server_identity;
 
+#[path = "../../../src-tauri/src/modules/ssh_server_desktop_state.rs"]
+pub mod ssh_server_desktop_state;
+
 pub mod modules {
     pub use crate::atomic_write;
+    pub use crate::ssh_server_desktop_state;
     pub use crate::ssh_server_identity;
 
     pub mod logger {

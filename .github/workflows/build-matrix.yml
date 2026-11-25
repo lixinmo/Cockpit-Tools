@@ -158,6 +158,11 @@ jobs:
           const {measureState} = require('./scripts/ci/cloud-build-state-cache.cjs');
           console.log(JSON.stringify({stage: 'restored_build_state', ...measureState(process.cwd(), process.env.CLOUD_CACHE_PLATFORM)}));
           NODE
+      - name: Verify Codex protocol parity on Linux
+        if: matrix.label == 'linux-x86_64'
+        run: |
+          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib parity22_ --no-run
+          node scripts/check_codex_protocol_parity.cjs
       - name: Native gateway capability, chat bridge and Credits regressions
         if: runner.os == 'macOS' && inputs.native_probe_only != true && inputs.native_probe != true
         env:
@@ -169,6 +174,7 @@ jobs:
       - name: Build selected application
         if: inputs.native_probe_only != true
         env:
+          LINUXDEPLOY_EXCLUDED_LIBRARIES: ${{ runner.os == 'Linux' && 'libwayland-*' || '' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CLOUD_BUILD_TARGET: ${{ matrix.target }}
 
