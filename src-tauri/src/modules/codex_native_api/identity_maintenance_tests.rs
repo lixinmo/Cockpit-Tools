@@ -256,7 +256,8 @@ fn oversized_legacy_archive_auto_slims_on_open_and_salvages_recent_history() {
             .unwrap();
         }
 
-        // Seed one valid legacy completed turn and one valid legacy partial turn.
+        // On-open migration applies retention against the current clock.
+        let created = timestamp();
         let valid_item = serde_json::to_vec(&json!({"type":"message","role":"user","content":"salvaged turn"})).unwrap();
         let valid_digest = format!("{:x}", Sha256::digest(&valid_item));
         let valid_compressed = zstd::stream::encode_all(valid_item.as_slice(), 1).unwrap();
@@ -268,14 +269,14 @@ fn oversized_legacy_archive_auto_slims_on_open_and_salvages_recent_history() {
         .unwrap();
         conn.execute(
             "INSERT INTO native_rebuild_history_v1(caller,response,thread,account,generation,manifest,parameters,created)
-             VALUES('caller','salvaged-resp','thread','a','gen',?1,'{\"instructions\":\"kept\"}',100)",
-            params![valid_manifest],
+             VALUES('caller','salvaged-resp','thread','a','gen',?1,'{\"instructions\":\"kept\"}',?2)",
+            params![valid_manifest, created],
         )
         .unwrap();
         conn.execute(
             "INSERT INTO native_partial_history_v1(caller,response,thread,session,account,owner,manifest,parameters,bytes,created)
-             VALUES('caller','salvaged-partial','thread','session','a','owner-a',?1,NULL,32,100)",
-            params![valid_manifest],
+             VALUES('caller','salvaged-partial','thread','session','a','owner-a',?1,NULL,32,?2)",
+            params![valid_manifest, created],
         )
         .unwrap();
         conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);").unwrap();

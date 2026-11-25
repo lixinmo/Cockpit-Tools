@@ -280,3 +280,38 @@ and import previews share upstream quota fetching and identity checks.
 Personal builds still produce the Intel App locally. Manual Linux cloud builds
 pick up the upstream protocol-parity check and AppImage Wayland packaging fix.
 The upstream build guard checks that the production frontend assets exist.
+
+The Intel release-profile App test binary passed 380 selected Native cases;
+three opt-in cases were skipped. These covered the upstream regular/backup
+routing fixture, Credits, network recovery, checkpoint replay,
+new provider paths and all 23 Rust regressions in the 22-item protocol audit.
+The standalone retry, Credits and project recovery suites passed 18, 30 and 70
+cases respectively. The real-profile recovery preview was excluded. The 13
+Python repair cases and six upstream frontend packaging guard cases passed.
+
+Across the frontend run and focused rechecks, all 2,438 frontend cases passed.
+Two key-vault UI tests needed the real Gemini model predicate after upstream
+added the Gemini CLI action. The settings-page fixture also uses the upstream
+components with a CommonJS stylesheet hook on Node 20. All 129 build and
+publication tests passed across the initial run and a separate recheck of the
+publication fixtures that timed out under concurrent compilation. Locale
+validation and the unmodified Chromium sidebar/drag-and-drop smoke test passed.
+
+In the upstream database-slimming fixture, both supposedly recent turns had a
+creation time of 100 seconds after the Unix epoch. The seven-day retention
+rule correctly removed them. Only the fixture timestamps were changed. In an
+isolated build using the production migration module, SQLite initialization
+and App dependencies, the original fixture reproduced the failure and all ten
+maintenance tests passed with the correction. Production retention and App
+inputs were unchanged by this fixture repair.
+
+`npm run build:app:local` produced the 162 MiB bundle at
+`.local-app-output/Cockpit Tools.app` using the production source in
+`22e2153209dd089d283bf66dbea9706813d10d13`. The package reports v1.5.1
+and contains one x86_64 executable, with a verified ad-hoc signature and no
+Go executable. The main executable SHA-256 is
+`d0be58d72714d01d26a40175f295a0b9deaad188c68e3e73c49f1a025f8ca360`.
+The build verified the embedded frontend and cleaned its intermediate files
+(target reached 4.1 GiB, npm dependencies 226 MiB and frontend output 19 MiB).
+The installed App was still v1.4.2 after verification. This build was staged
+without installing or launching it.
